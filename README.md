@@ -531,3 +531,5 @@ Important:
 8. Optional manager alerts.
 9. Optional audit log.
 10. Optional CRM integrations.
+
+# pulsebot
