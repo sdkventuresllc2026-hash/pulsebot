@@ -54,6 +54,7 @@ const commands = [
   new SlashCommandBuilder().setName('weekly').setDescription("This week's leaderboard"),
   new SlashCommandBuilder().setName('blitz').setDescription('All-time leaderboard for this blitz'),
   new SlashCommandBuilder().setName('master').setDescription('Master leaderboard across approved blitzes'),
+  new SlashCommandBuilder().setName('markets').setDescription('Market board (today + this week)'),
   new SlashCommandBuilder().setName('mydeals').setDescription('Your deal stats and ranks'),
   new SlashCommandBuilder().setName('share').setDescription('Screenshot-friendly weekly production card'),
   new SlashCommandBuilder().setName('remove-last').setDescription('Remove your most recent deal log'),
@@ -88,8 +89,68 @@ const commands = [
     )
     .addSubcommand((s) =>
       s
+        .setName('add-market')
+        .setDescription('Create or update a market')
+        .addStringOption((o) =>
+          o
+            .setName('market_name')
+            .setDescription('Market display name (e.g. New Haven CT)')
+            .setRequired(true)
+            .setMaxLength(80),
+        )
+        .addStringOption((o) =>
+          o
+            .setName('market_id')
+            .setDescription('Optional market id (slug). Defaults from market name.')
+            .setRequired(false)
+            .setMaxLength(80),
+        )
+        .addStringOption((o) =>
+          o
+            .setName('isp')
+            .setDescription('Optional ISP label')
+            .setRequired(false)
+            .setMaxLength(80),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('connect-channel')
+        .setDescription('Connect a channel to a market')
+        .addStringOption((o) =>
+          o
+            .setName('market_id')
+            .setDescription('Market id to map this channel to')
+            .setRequired(true)
+            .setMaxLength(80),
+        )
+        .addChannelOption((o) =>
+          o
+            .setName('channel')
+            .setDescription('Channel to connect (defaults to current channel)')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('market-status')
+        .setDescription('Show market mapping for one channel')
+        .addChannelOption((o) =>
+          o
+            .setName('channel')
+            .setDescription('Channel to inspect (defaults to current channel)')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false),
+        ),
+    )
+    .addSubcommand((s) =>
+      s.setName('list-markets').setDescription('List markets and mapped channels'),
+    )
+    .addSubcommand((s) =>
+      s
         .setName('remove-channel')
-        .setDescription('Remove an approved deal channel')
+        .setDescription('Remove an approved deal channel and market mapping')
         .addChannelOption((o) =>
           o
             .setName('channel')
@@ -99,6 +160,7 @@ const commands = [
         ),
     )
     .addSubcommand((s) => s.setName('list-channels').setDescription('List approved deal channels'))
+    .addSubcommand((s) => s.setName('status').setDescription('Show Pulse runtime and storage status'))
     .addSubcommand((s) => s.setName('stats').setDescription('Show admin deal stats'))
     .addSubcommand((s) => s.setName('export-csv').setDescription('Export active deal logs to CSV')),
 

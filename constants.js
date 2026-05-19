@@ -22,6 +22,17 @@ exports.COLORS = Object.freeze({
   danger: 0xed4245,
 });
 
+exports.GAMIFICATION_CONFIG = Object.freeze({
+  dailyRepMilestones: [1, 2, 3, 5, 10],
+  weeklyRepMilestones: [10, 25, 50],
+  allTimeRepMilestones: [1, 10, 25, 50, 100],
+  teamDailyMilestones: [10, 25, 50, 100],
+  teamWeeklyMilestones: [25, 50, 100, 200],
+  quietHoursForComeback: 3,
+  earlyHourCutoff: 9,
+  lateHourCutoff: 19,
+});
+
 /**
  * Hype pools — competitive sales tone, not corny.
  * index.js calls pickRandom() from storage.js on these arrays.

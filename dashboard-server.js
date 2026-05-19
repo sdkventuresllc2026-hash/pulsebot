@@ -14,6 +14,7 @@ const {
   aggregateTeamWeekly,
 } = require('./stats');
 const { SPEED_LABELS, SPEEDS } = require('./constants');
+const { inferMarketForLog, listMarkets } = require('./deal-channels');
 
 function activeDealLogs(data) {
   return (data.logs || [])
@@ -23,6 +24,7 @@ function activeDealLogs(data) {
 }
 
 function sanitizeLogForApi(l) {
+  const inferredMarket = inferMarketForLog(l);
   return {
     id: l.id,
     timestamp: l.timestamp,
@@ -33,10 +35,23 @@ function sanitizeLogForApi(l) {
     speed: l.speed,
     speedLabel: SPEED_LABELS[l.speed] || l.speed,
     blitzName: l.blitzName,
+    marketId: inferredMarket.marketId,
+    marketName: inferredMarket.marketName,
     channelName: l.channelName,
     weekId: l.weekId,
     sourceMessageId: l.sourceMessageId || '',
   };
+}
+
+function aggregateByMarket(logs) {
+  const by = new Map();
+  for (const log of logs) {
+    const market = inferMarketForLog(log);
+    const key = market.marketId || `unassigned:${market.marketName}`;
+    if (!by.has(key)) by.set(key, { marketId: market.marketId, marketName: market.marketName, total: 0 });
+    by.get(key).total += 1;
+  }
+  return [...by.values()].sort((a, b) => b.total - a.total || a.marketName.localeCompare(b.marketName));
 }
 
 function authMiddleware(secret) {
@@ -86,6 +101,13 @@ function startDashboard() {
           allTime: logs.length,
         },
         teamsThisWeek: teamsWeek,
+        marketsThisWeek: aggregateByMarket(weekLogs),
+        marketsToday: aggregateByMarket(todayLogs),
+        activeMarkets: listMarkets().filter((m) => m.active !== false).map((m) => ({
+          marketId: m.marketId,
+          marketName: m.marketName,
+          channelIds: m.channelIds || [],
+        })),
         topRepsToday: topToday,
       });
     } catch (e) {

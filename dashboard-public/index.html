@@ -107,6 +107,10 @@
     <div class="cards" id="cards"></div>
     <h2>Teams this week</h2>
     <div class="teams" id="teams"></div>
+    <h2>Markets this week</h2>
+    <div class="teams" id="marketsWeek"></div>
+    <h2>Markets today</h2>
+    <div class="teams" id="marketsToday"></div>
     <h2>Top reps today</h2>
     <table>
       <thead><tr><th>#</th><th>Rep</th><th>Deals</th></tr></thead>
@@ -126,7 +130,6 @@
       <thead>
         <tr>
           <th>When</th><th>Rep</th><th>Speed</th><th>Team</th>
-          <th>Customer</th><th>Phone</th><th>Address</th>
         </tr>
       </thead>
       <tbody id="logs"></tbody>
@@ -176,6 +179,14 @@
         teams.innerHTML = entries.length
           ? entries.map(([n, c]) => `<span class="pill">${escapeHtml(n)} — ${c}</span>`).join('')
           : '<span class="muted">No team data yet</span>';
+        const mw = document.getElementById('marketsWeek');
+        mw.innerHTML = (ov.marketsThisWeek || []).length
+          ? ov.marketsThisWeek.map((m) => `<span class="pill">${escapeHtml(m.marketName)} — ${m.total}</span>`).join('')
+          : '<span class="muted">No market data this week</span>';
+        const mt = document.getElementById('marketsToday');
+        mt.innerHTML = (ov.marketsToday || []).length
+          ? ov.marketsToday.map((m) => `<span class="pill">${escapeHtml(m.marketName)} — ${m.total}</span>`).join('')
+          : '<span class="muted">No market data today</span>';
 
         const tb = document.getElementById('topToday');
         tb.innerHTML = (ov.topRepsToday || []).map((r, i) =>
@@ -192,11 +203,8 @@
             <td>${escapeHtml(l.displayName || '')}</td>
             <td>${escapeHtml(l.speedLabel || l.speed)}</td>
             <td>${escapeHtml(l.blitzName || '')}</td>
-            <td>${escapeHtml(l.customerName || '—')}</td>
-            <td>${escapeHtml(l.customerPhone || '—')}</td>
-            <td>${escapeHtml(l.customerAddress || '—')}</td>
           </tr>`;
-        }).join('') || '<tr><td colspan="7" class="muted">No logs for this scope</td></tr>';
+        }).join('') || '<tr><td colspan="4" class="muted">No logs for this scope</td></tr>';
       } catch (e) {
         if (e.message !== 'no key') showErr(e.message);
       }

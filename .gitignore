@@ -6,4 +6,6 @@ approved-blitz-channels.json
 leaderboard.json.bak.*
 leaderboard.json.corrupt.*.bak
 *.log
+admin-actions.log
+backups/
 .DS_Store

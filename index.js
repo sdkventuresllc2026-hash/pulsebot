@@ -19,18 +19,41 @@ const {
   PermissionsBitField,
 } = require('discord.js');
 
-const { SPEEDS, SPEED_LABELS, COLORS } = require('./constants');
-const { readLeaderboard, mutate, appendSingleDealLog, appendMessageLogsBatch } = require('./storage');
+const { SPEEDS, SPEED_LABELS, COLORS, GAMIFICATION_CONFIG } = require('./constants');
+const { DATA_PATH, readLeaderboard, mutate, appendSingleDealLog, appendMessageLogsBatch } = require('./storage');
 const { startDashboard } = require('./dashboard-server');
 const { parseDealMessage } = require('./deal-parser');
 const {
   isApprovedDealChannel,
   approveDealChannel,
   unapproveDealChannel,
+  addMarket,
+  listMarkets,
+  marketForChannel,
+  connectChannelToMarket,
+  removeChannelFromMarket,
+  inferMarketForLog,
   listApprovedDealChannels,
   approvedBlitzNameForChannel,
+  channelApprovalDiagnostics,
+  normalizeMarketId,
+  APPROVED_CHANNELS_PATH,
 } = require('./deal-channels');
-const { buildPremiumDealConfirmation, buildPhase4HypeLine } = require('./premium-confirmation');
+const { buildPremiumDealConfirmation, selectHypeLine } = require('./premium-confirmation');
+const {
+  ensureGamificationState,
+  rememberLineId,
+  markMilestoneOnce,
+  deriveLeaderboardMovement,
+  buildLeaderboardContext,
+} = require('./gamification-engine');
+const {
+  createTimestampedBackup,
+  appendActionLog,
+  collectStartupHealth,
+  formatHealthReport,
+  buildAdminStatusSnapshot,
+} = require('./ops-safety');
 const {
   getTimeZone,
   filterToday,
@@ -74,6 +97,14 @@ function canUseAdminMember(userId, member) {
 
 async function denyAdmin(interaction) {
   await interaction.reply({ content: 'Permission denied. Administrators only.', ephemeral: true });
+}
+
+async function safeAppendActionLog(entry) {
+  try {
+    await appendActionLog(entry);
+  } catch (err) {
+    console.error('[Pulse][ActionLogError]', err.message || err);
+  }
 }
 
 function leaderboardEmbed({ title, rows, timeframeLabel, blitzFilter }) {
@@ -164,12 +195,119 @@ function currentBlitzName(interaction) {
   return approvedBlitzNameForChannel(interaction.channel) || blitzFromChannelName(interaction.channel?.name);
 }
 
+function marketIdentityForChannel(channel) {
+  const market = marketForChannel(channel);
+  if (market) {
+    return {
+      marketId: market.marketId,
+      marketName: market.marketName,
+      assigned: true,
+    };
+  }
+  return {
+    marketId: null,
+    marketName: 'Unassigned',
+    assigned: false,
+  };
+}
+
+function inferMarketIdentityForLog(log) {
+  return inferMarketForLog(log);
+}
+
+function logsForCurrentMarket(logs, interaction) {
+  const market = marketForChannel(interaction.channel);
+  if (market) {
+    return logs.filter((log) => inferMarketIdentityForLog(log).marketId === market.marketId);
+  }
+  return logs.filter((log) => logMatchesCurrentBlitz(log, interaction));
+}
+
+function aggregateMarkets(logs) {
+  const byMarket = new Map();
+  for (const log of logs) {
+    const market = inferMarketIdentityForLog(log);
+    const key = market.marketId || 'unassigned';
+    if (!byMarket.has(key)) {
+      byMarket.set(key, {
+        marketId: market.marketId,
+        marketName: market.marketName,
+        total: 0,
+      });
+    }
+    byMarket.get(key).total += 1;
+  }
+  return [...byMarket.values()].sort((a, b) => b.total - a.total || a.marketName.localeCompare(b.marketName));
+}
+
 function isPhase3ApprovedChannel(interaction) {
   return isApprovedDealChannel(interaction.channel);
 }
 
 async function replyOutsideBlitz(interaction) {
   await interaction.reply({ content: PHASE3_OUTSIDE_CHANNEL_MSG, ephemeral: true });
+}
+
+function logChannelRejectionDiagnostics(source, channel, actorId) {
+  const diag = channelApprovalDiagnostics(channel);
+  console.warn(
+    '[Pulse][ChannelRejected]',
+    JSON.stringify({
+      source,
+      actorId,
+      channelId: diag.channelId,
+      channelName: diag.channelName,
+      idApproved: diag.idApproved,
+      idDisabled: diag.idDisabled,
+      matchedByName: diag.matchedByName,
+      nameSubstringFallbackEnabled: diag.nameSubstringFallbackEnabled,
+      matchedNameSubstrings: diag.matchedNameSubstrings,
+      approvedChannels: diag.approvedChannels,
+      envControls: diag.envControls,
+      controlFiles: {
+        dataPath: DATA_PATH,
+        approvedChannelsPath: APPROVED_CHANNELS_PATH,
+      },
+    }),
+  );
+}
+
+async function backupAndLogAction({
+  action,
+  actorId,
+  actorName,
+  targetFilePath,
+  details = {},
+}) {
+  let backup = {
+    ok: false,
+    reason: 'backup_not_attempted',
+    sourcePath: targetFilePath,
+    backupPath: null,
+  };
+  try {
+    backup = await createTimestampedBackup(targetFilePath, action);
+  } catch (err) {
+    backup = {
+      ok: false,
+      reason: 'backup_error',
+      sourcePath: targetFilePath,
+      backupPath: null,
+    };
+    console.error(`[Pulse][BackupError] ${action}:`, err.message || err);
+  }
+  await safeAppendActionLog({
+    action,
+    actorId,
+    actorName: actorName || 'Unknown',
+    backup: backup.ok ? backup.backupPath : null,
+    backupStatus: backup.ok ? 'created' : backup.reason,
+    details,
+  });
+  if (!backup.ok) {
+    console.warn(`[Pulse][BackupWarning] ${action} backup skipped: ${backup.reason}`);
+  }
+  return backup;
 }
 
 function logMatchesCurrentBlitz(log, interaction) {
@@ -199,7 +337,7 @@ function formatPhase3SpeedBreakdown(speeds) {
     .filter(([, count]) => count > 0)
     .map(([speed, count]) => `${count}x ${PHASE3_SPEED_LABELS[speed] || speed}`);
 
-  return parts.length ? parts.join(' | ') : 'â€”';
+  return parts.length ? parts.join(' | ') : '-';
 }
 
 function phase3Rows(logs) {
@@ -241,15 +379,21 @@ function withCompetitionRanks(rows) {
   });
 }
 
+function dealCountLabel(n) {
+  return `${n} ${n === 1 ? 'deal' : 'deals'}`;
+}
+
 function formatPhase3Leaderboard({ title, rows, totalDeals }) {
   if (!rows.length) return 'No deals logged yet.';
 
-  const lines = [`ðŸ† ${title}`, ''];
+  const lines = [title, ''];
   for (const row of withCompetitionRanks(rows).slice(0, 10)) {
-    lines.push(`${row.rank}. ${row.displayName} â€” ${row.total} deals`);
+    lines.push(`${row.rank}. ${row.displayName} - ${dealCountLabel(row.total)}`);
     lines.push(`   ${formatPhase3SpeedBreakdown(row.speeds)}`);
     lines.push('');
   }
+  lines.push(buildLeaderboardContext(rows));
+  lines.push('');
   lines.push(`Total Deals: ${totalDeals}`);
   return lines.join('\n').trim();
 }
@@ -257,18 +401,20 @@ function formatPhase3Leaderboard({ title, rows, totalDeals }) {
 function formatPhase3Master(rows, totalDeals) {
   if (!rows.length) return 'No deals logged yet.';
 
-  const lines = ['ðŸ† Master Leaderboard', ''];
+  const lines = ['Master Leaderboard', ''];
   for (const row of withCompetitionRanks(rows).slice(0, 10)) {
     const blitzLine = Object.entries(row.blitzCounts)
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([name, count]) => `${name}: ${count}`)
       .join(' | ');
 
-    lines.push(`${row.rank}. ${row.displayName} â€” ${row.total} deals`);
+    lines.push(`${row.rank}. ${row.displayName} - ${dealCountLabel(row.total)}`);
     lines.push(`   ${blitzLine}`);
     lines.push(`   ${formatPhase3SpeedBreakdown(row.speeds)}`);
     lines.push('');
   }
+  lines.push(buildLeaderboardContext(rows));
+  lines.push('');
   lines.push(`Total Deals: ${totalDeals}`);
   return lines.join('\n').trim();
 }
@@ -279,6 +425,7 @@ function competitionRankForUser(rows, userId) {
 
 async function handlePhase3Leaderboard(interaction, { timeframe, label }) {
   if (!isPhase3ApprovedChannel(interaction)) {
+    logChannelRejectionDiagnostics(`/${interaction.commandName}`, interaction.channel, interaction.user.id);
     await replyOutsideBlitz(interaction);
     return;
   }
@@ -286,13 +433,14 @@ async function handlePhase3Leaderboard(interaction, { timeframe, label }) {
   await interaction.deferReply();
   const data = await readLeaderboard();
   const allLogs = approvedDealLogs(activeDealLogs(data));
-  const blitzLogs = allLogs.filter((log) => logMatchesCurrentBlitz(log, interaction));
-  const logs = filterPhase3Timeframe(blitzLogs, timeframe, data);
-  const blitzName = titleCaseBlitzName(currentBlitzName(interaction));
+  const scopedLogs = logsForCurrentMarket(allLogs, interaction);
+  const logs = filterPhase3Timeframe(scopedLogs, timeframe, data);
+  const market = marketForChannel(interaction.channel);
+  const heading = market?.marketName || titleCaseBlitzName(currentBlitzName(interaction));
 
   await interaction.editReply({
     content: formatPhase3Leaderboard({
-      title: `${blitzName} ${label} Leaderboard`,
+      title: `${heading} ${label} Leaderboard`,
       rows: phase3Rows(logs),
       totalDeals: logs.length,
     }),
@@ -302,6 +450,7 @@ async function handlePhase3Leaderboard(interaction, { timeframe, label }) {
 
 async function handlePhase3Master(interaction) {
   if (!isPhase3ApprovedChannel(interaction)) {
+    logChannelRejectionDiagnostics(`/${interaction.commandName}`, interaction.channel, interaction.user.id);
     await replyOutsideBlitz(interaction);
     return;
   }
@@ -318,6 +467,7 @@ async function handlePhase3Master(interaction) {
 
 async function handlePhase3MyDeals(interaction) {
   if (!isPhase3ApprovedChannel(interaction)) {
+    logChannelRejectionDiagnostics(`/${interaction.commandName}`, interaction.channel, interaction.user.id);
     await replyOutsideBlitz(interaction);
     return;
   }
@@ -327,13 +477,14 @@ async function handlePhase3MyDeals(interaction) {
   const userId = interaction.user.id;
   const allLogs = approvedDealLogs(activeDealLogs(data));
   const userLogs = allLogs.filter((log) => log.userId === userId);
-  const blitzLogs = allLogs.filter((log) => logMatchesCurrentBlitz(log, interaction));
-  const userBlitzLogs = blitzLogs.filter((log) => log.userId === userId);
+  const marketLogs = logsForCurrentMarket(allLogs, interaction);
+  const userMarketLogs = marketLogs.filter((log) => log.userId === userId);
   const todayUserLogs = filterPhase3Timeframe(userLogs, 'daily', data);
   const weekUserLogs = filterPhase3Timeframe(userLogs, 'weekly', data);
-  const blitzRank = competitionRankForUser(phase3Rows(blitzLogs), userId);
+  const marketRank = competitionRankForUser(phase3Rows(marketLogs), userId);
   const overallRank = competitionRankForUser(phase3Rows(allLogs), userId);
-  const blitzName = titleCaseBlitzName(currentBlitzName(interaction));
+  const market = marketForChannel(interaction.channel);
+  const marketName = market?.marketName || titleCaseBlitzName(currentBlitzName(interaction));
 
   await interaction.editReply({
     content: [
@@ -341,15 +492,15 @@ async function handlePhase3MyDeals(interaction) {
       '',
       `Today: ${todayUserLogs.length}`,
       `This Week: ${weekUserLogs.length}`,
-      `This Blitz: ${userBlitzLogs.length}`,
+      `This Market: ${userMarketLogs.length}`,
       `All-Time: ${userLogs.length}`,
       '',
       'Speed Breakdown:',
-      formatPhase3SpeedBreakdown(speedCountsForLogs(userBlitzLogs)),
+      formatPhase3SpeedBreakdown(speedCountsForLogs(userMarketLogs)),
       '',
       'Current Rank:',
-      blitzRank ? `#${blitzRank} in ${blitzName}` : `â€” in ${blitzName}`,
-      overallRank ? `#${overallRank} overall` : 'â€” overall',
+      marketRank ? `#${marketRank} in ${marketName}` : `- in ${marketName}`,
+      overallRank ? `#${overallRank} overall` : '- overall',
     ].join('\n'),
     embeds: [],
   });
@@ -388,30 +539,83 @@ function buildLogConfirmationCtx({
     dealsTodayBefore,
     rankTodayAfter: rankUser(rowsTodayAfter, userId),
     rankTodayBefore: rankUser(rowsTodayBefore, userId),
+    rowsTodayBefore,
     rowsTodayAfter,
     hasCustomerOnFile: !!hasCustomerOnFile,
   };
 }
 
-const REP_DAILY_MILESTONES = [
-  { count: 1, bankCount: 'first' },
-  { count: 3, bankCount: 3 },
-  { count: 5, bankCount: 5 },
-  { count: 8, bankCount: 8 },
-  { count: 10, bankCount: 10 },
-  { count: 15, bankCount: 15 },
-  { count: 20, bankCount: 20 },
-];
-const BLITZ_DAILY_MILESTONES = [10, 25, 50, 75, 100];
-
-function ensureGamificationState(data) {
-  data.gamification = data.gamification && typeof data.gamification === 'object' ? data.gamification : {};
-  data.gamification.dailyMilestones =
-    data.gamification.dailyMilestones && typeof data.gamification.dailyMilestones === 'object'
-      ? data.gamification.dailyMilestones
-      : {};
-  return data.gamification;
+function mostRecentUserLog(data, userId) {
+  const logs = activeDealLogs(data).filter((l) => l.userId === userId);
+  if (!logs.length) return null;
+  return logs.reduce((latest, current) =>
+    String(current.timestamp || '').localeCompare(String(latest.timestamp || '')) > 0 ? current : latest,
+  );
 }
+
+function selectPrimaryDealLine({ ctx, dataBefore, dataAfter, now, tz }) {
+  try {
+    const game = ensureGamificationState(dataAfter);
+    const recentLineIds = game.recentLineIds || [];
+    const userId = ctx.userId;
+    const displayName = ctx.displayName;
+    const dealAllBefore = activeDealLogs(dataBefore).filter((l) => l.userId === userId).length;
+    const dealAllAfter = activeDealLogs(dataAfter).filter((l) => l.userId === userId).length;
+    const bestBefore = bestDayEver(activeDealLogs(dataBefore), userId);
+    const movement = deriveLeaderboardMovement({
+      beforeRows: ctx.rowsTodayBefore || [],
+      afterRows: ctx.rowsTodayAfter || [],
+      userId,
+    });
+    const lastBefore = mostRecentUserLog(dataBefore, userId);
+    const quietMs = GAMIFICATION_CONFIG.quietHoursForComeback * 60 * 60 * 1000;
+    const comeback =
+      lastBefore && Number.isFinite(Date.parse(lastBefore.timestamp))
+        ? now.getTime() - Date.parse(lastBefore.timestamp) >= quietMs
+        : false;
+    const hour = localHour(now, tz);
+
+    const eventOrder = [];
+    if (dealAllBefore === 0 && dealAllAfter > 0) eventOrder.push('first_ever');
+    if (ctx.dealsTodayBefore === 0 && ctx.dealsTodayAfter > 0) eventOrder.push('first_today');
+    if (ctx.dealsTodayAfter === 2) eventOrder.push('second_today');
+    if (ctx.dealsTodayAfter === 3) eventOrder.push('hat_trick');
+    if (ctx.dealsTodayAfter === 5) eventOrder.push('five_day');
+    if (ctx.dealsTodayAfter === 10) eventOrder.push('ten_day');
+    if (ctx.dealsTodayAfter > bestBefore) eventOrder.push('personal_best');
+    if (comeback) eventOrder.push('comeback');
+    if (movement.tookFirst) eventOrder.push('took_first');
+    if (movement.enteredTop3) eventOrder.push('entered_top3');
+    if (movement.passedRepName) eventOrder.push('passed_rep');
+    if (movement.oneAwayFromFirst) eventOrder.push('one_away_first');
+    if (hour >= GAMIFICATION_CONFIG.lateHourCutoff) eventOrder.push('late_night');
+    if (hour <= GAMIFICATION_CONFIG.earlyHourCutoff) eventOrder.push('early_morning');
+    eventOrder.push('fallback');
+
+    for (const event of eventOrder) {
+      const picked = selectHypeLine({
+        event,
+        recentLineIds,
+        values: {
+          rep: displayName,
+          otherRep: movement.passedRepName || '',
+          count: ctx.dealsTodayAfter,
+          team: ctx.blitzName,
+        },
+      });
+      if (picked?.text) return picked;
+    }
+  } catch (err) {
+    console.error('Primary hype selection failed:', err.message || err);
+  }
+  return null;
+}
+
+const REP_DAILY_MILESTONES = GAMIFICATION_CONFIG.dailyRepMilestones;
+const REP_WEEKLY_MILESTONES = GAMIFICATION_CONFIG.weeklyRepMilestones;
+const REP_ALLTIME_MILESTONES = GAMIFICATION_CONFIG.allTimeRepMilestones;
+const TEAM_DAILY_MILESTONES = GAMIFICATION_CONFIG.teamDailyMilestones;
+const TEAM_WEEKLY_MILESTONES = GAMIFICATION_CONFIG.teamWeeklyMilestones;
 
 function localHour(date, timeZone) {
   const hour = new Intl.DateTimeFormat('en-US', {
@@ -456,23 +660,31 @@ function leadStatus(rows, userId) {
   };
 }
 
-function phase4LeadMessages({ dataBefore, dataAfter, date, userId, displayName, blitzCtx }) {
-  const beforeRows = phase3Rows(dailyBlitzLogs(dataBefore, date, blitzCtx));
-  const afterRows = phase3Rows(dailyBlitzLogs(dataAfter, date, blitzCtx));
-  const before = leadStatus(beforeRows, userId);
-  const after = leadStatus(afterRows, userId);
+function weeklyUserCount(data, userId, weekId) {
+  return activeDealLogs(data).filter((log) => log.userId === userId && log.weekId === weekId).length;
+}
 
-  if (after.topTotal <= 1) return [];
-  if (after.isSoleLeader && !before.isSoleLeader && before.topTotal > 0) {
-    return [buildPhase4HypeLine('newLeader', { rep: displayName, count: after.userTotal })];
-  }
-  if (after.isTiedLeader && !before.isTiedLeader) {
-    return [buildPhase4HypeLine('tied', { rep: displayName, count: after.userTotal })];
-  }
-  if (!after.isSoleLeader && !after.isTiedLeader && after.userTotal === after.topTotal - 1) {
-    return [buildPhase4HypeLine('oneAway', { rep: displayName })];
-  }
-  return [];
+function allTimeUserCount(data, userId) {
+  return activeDealLogs(data).filter((log) => log.userId === userId).length;
+}
+
+function weeklyTeamCount(data, blitzCtx, weekId) {
+  return activeDealLogs(data).filter((log) => log.weekId === weekId && logMatchesBlitzContext(log, blitzCtx)).length;
+}
+
+function rememberLine(game, picked) {
+  if (picked?.id) rememberLineId(game, picked.id);
+}
+
+function pickEventLine(game, event, values) {
+  const picked = selectHypeLine({
+    event,
+    values,
+    recentLineIds: game.recentLineIds || [],
+  });
+  if (!picked) return null;
+  rememberLine(game, picked);
+  return picked.text;
 }
 
 async function buildPhase4Messages({
@@ -485,55 +697,107 @@ async function buildPhase4Messages({
   speeds,
   now,
   tz,
+  primaryLineId = null,
   suppressPersonalHype = false,
 }) {
   const date = fmtDateInTz(now, tz);
   const blitz = titleCaseBlitzName(blitzName);
   const blitzCtx = { channelId, blitzName };
-  const messages = [];
+  const messages = new Set();
+  const nowHour = localHour(now, tz);
+  const weekId = dataAfter.metadata.weekId;
+
   const userBefore = dailyUserCount(dataBefore, date, userId);
   const userAfter = dailyUserCount(dataAfter, date, userId);
-  const blitzBefore = dailyBlitzLogs(dataBefore, date, blitzCtx).length;
-  const blitzAfter = dailyBlitzLogs(dataAfter, date, blitzCtx).length;
-  const repCandidates = REP_DAILY_MILESTONES.filter(
-    (milestone) => userBefore < milestone.count && userAfter >= milestone.count,
-  );
-  const blitzCandidates = BLITZ_DAILY_MILESTONES.filter((count) => blitzBefore < count && blitzAfter >= count);
+  const userWeekBefore = weeklyUserCount(dataBefore, userId, weekId);
+  const userWeekAfter = weeklyUserCount(dataAfter, userId, weekId);
+  const userAllBefore = allTimeUserCount(dataBefore, userId);
+  const userAllAfter = allTimeUserCount(dataAfter, userId);
+  const teamDailyBefore = dailyBlitzLogs(dataBefore, date, blitzCtx).length;
+  const teamDailyAfter = dailyBlitzLogs(dataAfter, date, blitzCtx).length;
+  const teamWeekBefore = weeklyTeamCount(dataBefore, blitzCtx, weekId);
+  const teamWeekAfter = weeklyTeamCount(dataAfter, blitzCtx, weekId);
 
-  if (repCandidates.length || blitzCandidates.length) {
-    await mutate(async (data) => {
-      const game = ensureGamificationState(data);
+  const beforeRows = phase3Rows(dailyBlitzLogs(dataBefore, date, blitzCtx));
+  const afterRows = phase3Rows(dailyBlitzLogs(dataAfter, date, blitzCtx));
+  const movement = deriveLeaderboardMovement({ beforeRows, afterRows, userId });
 
-      for (const milestone of repCandidates) {
-        const key = milestoneKey(date, 'rep', userId, milestone.bankCount);
-        if (game.dailyMilestones[key]) continue;
-        game.dailyMilestones[key] = new Date().toISOString();
+  await mutate(async (data) => {
+    const game = ensureGamificationState(data);
+    if (primaryLineId) rememberLineId(game, primaryLineId);
+
+    for (const count of REP_DAILY_MILESTONES) {
+      if (userBefore < count && userAfter >= count) {
+        const key = milestoneKey(date, 'rep.daily', userId, count);
+        if (!markMilestoneOnce(game.dailyMilestones, key)) continue;
         if (!suppressPersonalHype) {
-          messages.push(buildPhase4HypeLine('repDaily', { rep: displayName, count: milestone.bankCount }));
+          const event = count >= 10 ? 'ten_day' : count >= 5 ? 'five_day' : count >= 3 ? 'hat_trick' : count === 2 ? 'second_today' : 'first_today';
+          const line = pickEventLine(game, event, { rep: displayName, count });
+          if (line) messages.add(line);
         }
       }
-
-      for (const count of blitzCandidates) {
-        const key = milestoneKey(date, 'blitz', channelId || blitz, count);
-        if (game.dailyMilestones[key]) continue;
-        game.dailyMilestones[key] = new Date().toISOString();
-        messages.push(buildPhase4HypeLine('blitzDaily', { blitz, count }));
-      }
-
-      return data;
-    });
-  }
-
-  if (localHour(now, tz) >= 19) {
-    for (let i = 0; i < speeds.length; i += 1) {
-      messages.push(buildPhase4HypeLine('lateClock', { rep: displayName }));
     }
-  }
 
-  if (!suppressPersonalHype) {
-    messages.push(...phase4LeadMessages({ dataBefore, dataAfter, date, userId, displayName, blitzCtx }));
-  }
-  return messages.filter(Boolean);
+    for (const count of REP_WEEKLY_MILESTONES) {
+      if (userWeekBefore < count && userWeekAfter >= count) {
+        const key = milestoneKey(String(weekId), 'rep.weekly', userId, count);
+        if (!markMilestoneOnce(game.weeklyMilestones, key)) continue;
+        const line = pickEventLine(game, 'weekly_milestone', { rep: displayName, count });
+        if (line) messages.add(line);
+      }
+    }
+
+    for (const count of REP_ALLTIME_MILESTONES) {
+      if (userAllBefore < count && userAllAfter >= count) {
+        const key = milestoneKey('all', 'rep.alltime', userId, count);
+        if (!markMilestoneOnce(game.allTimeMilestones, key)) continue;
+        const event = count === 1 ? 'first_ever' : 'alltime_milestone';
+        const line = pickEventLine(game, event, { rep: displayName, count });
+        if (line) messages.add(line);
+      }
+    }
+
+    for (const count of TEAM_DAILY_MILESTONES) {
+      if (teamDailyBefore < count && teamDailyAfter >= count) {
+        const key = milestoneKey(date, 'team.daily', channelId || blitz, count);
+        if (!markMilestoneOnce(game.teamMilestones, key)) continue;
+        const line = pickEventLine(game, count >= 50 ? 'team_milestone_high' : 'team_milestone', {
+          team: blitz,
+          count,
+        });
+        if (line) messages.add(line);
+      }
+    }
+
+    for (const count of TEAM_WEEKLY_MILESTONES) {
+      if (teamWeekBefore < count && teamWeekAfter >= count) {
+        const key = milestoneKey(String(weekId), 'team.weekly', channelId || blitz, count);
+        if (!markMilestoneOnce(game.teamMilestones, key)) continue;
+        const line = pickEventLine(game, 'team_milestone', { team: blitz, count });
+        if (line) messages.add(line);
+      }
+    }
+
+    if (!suppressPersonalHype) {
+      if (movement.tookFirst) messages.add(pickEventLine(game, 'took_first', { rep: displayName }) || '');
+      else if (movement.enteredTop3) messages.add(pickEventLine(game, 'entered_top3', { rep: displayName }) || '');
+      else if (movement.passedRepName) {
+        messages.add(pickEventLine(game, 'passed_rep', { rep: displayName, otherRep: movement.passedRepName }) || '');
+      } else if (movement.oneAwayFromFirst) {
+        messages.add(pickEventLine(game, 'one_away_first', { rep: displayName }) || '');
+      }
+    }
+
+    if (nowHour >= GAMIFICATION_CONFIG.lateHourCutoff) {
+      messages.add(pickEventLine(game, 'late_night', { rep: displayName }) || '');
+    } else if (nowHour <= GAMIFICATION_CONFIG.earlyHourCutoff) {
+      messages.add(pickEventLine(game, 'early_morning', { rep: displayName }) || '');
+    }
+
+    return data;
+  });
+
+  return [...messages].filter(Boolean).slice(0, 3);
 }
 
 async function postPhase4Messages(channel, messages) {
@@ -546,8 +810,12 @@ async function postPhase4Messages(channel, messages) {
 }
 
 async function postPhase4Gamification(channel, ctx) {
-  const messages = await buildPhase4Messages(ctx);
-  await postPhase4Messages(channel, messages);
+  try {
+    const messages = await buildPhase4Messages(ctx);
+    await postPhase4Messages(channel, messages);
+  } catch (err) {
+    console.error('Gamification pipeline failed (log already saved):', err.message || err);
+  }
 }
 
 function parseTextAdminCommand(content) {
@@ -594,9 +862,26 @@ async function handleTextAdminCommand(message) {
   }
 
   if (parsed.action === 'remove') {
+    await backupAndLogAction({
+      action: 'admin-remove-channel',
+      actorId: message.author.id,
+      actorName: member?.displayName || message.author.username,
+      targetFilePath: APPROVED_CHANNELS_PATH,
+      details: { source: 'text-command', channelId: message.channel.id },
+    });
     unapproveDealChannel(message.channel.id);
+    const marketRemoval = removeChannelFromMarket(message.channel.id);
+    await safeAppendActionLog({
+      action: 'admin-remove-channel.completed',
+      actorId: message.author.id,
+      actorName: member?.displayName || message.author.username,
+      details: { source: 'text-command', channelId: message.channel.id, marketRemoved: marketRemoval.removed },
+    });
     await message.reply({
-      content: `Removed <#${message.channel.id}> from approved deal channels.`,
+      content: [
+        `Removed <#${message.channel.id}> from approved deal channels.`,
+        marketRemoval.removed ? `Removed market mapping from ${marketRemoval.market.marketName}.` : null,
+      ].filter(Boolean).join('\n'),
       allowedMentions: { parse: [] },
     }).catch(() => {});
     return true;
@@ -660,6 +945,14 @@ async function confirmSingleDealLog({
     tz,
     hasCustomerOnFile,
   });
+  const primary = selectPrimaryDealLine({
+    ctx,
+    dataBefore: appendResult.dataBefore,
+    dataAfter: appendResult.data,
+    now,
+    tz,
+  });
+  if (primary?.text) ctx.primaryLine = primary.text;
 
   await editConfirmation({
     content: buildPremiumDealConfirmation(ctx),
@@ -676,7 +969,8 @@ async function confirmSingleDealLog({
     speeds,
     now,
     tz,
-    suppressPersonalHype: true,
+    primaryLineId: primary?.id || null,
+    suppressPersonalHype: false,
   });
   return true;
 }
@@ -712,7 +1006,10 @@ async function handleDuplicatePrompt({ promptMessage, userId, onNewDeal }) {
   } catch {
     if (!processed) {
       processed = true;
-      await promptMessage.edit({ content: 'Duplicate check expired.', components: [], embeds: [] }).catch(() => {});
+      // Keep channels clean when duplicate prompts timeout.
+      await promptMessage.delete().catch(async () => {
+        await promptMessage.edit({ content: 'Duplicate check timed out. No deal logged.', components: [], embeds: [] }).catch(() => {});
+      });
     }
   }
 }
@@ -724,6 +1021,7 @@ async function handleLog(interaction) {
   }
 
   if (!isApprovedDealChannel(interaction.channel)) {
+    logChannelRejectionDiagnostics('/log', interaction.channel, interaction.user.id);
     await interaction.reply({ content: PHASE3_OUTSIDE_CHANNEL_MSG, ephemeral: true });
     return;
   }
@@ -740,6 +1038,13 @@ async function handleLog(interaction) {
   const now = new Date();
   const channel = interaction.channel;
   const blitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel?.name);
+  const marketIdentity = marketIdentityForChannel(channel);
+  if (!marketIdentity.assigned) {
+    console.warn(
+      '[Pulse][UnassignedMarket] deal log allowed without market mapping',
+      JSON.stringify({ channelId: channel?.id || null, channelName: channel?.name || null, userId: interaction.user.id }),
+    );
+  }
 
   const member = interaction.member;
   const displayName = member?.displayName || interaction.user.globalName || interaction.user.username;
@@ -761,6 +1066,8 @@ async function handleLog(interaction) {
     channelId: channel?.id || null,
     channelName: channel?.name || null,
     blitzName,
+    marketId: marketIdentity.marketId,
+    marketName: marketIdentity.marketName,
     weekId: data.metadata.weekId,
     ...(customerName && { customerName }),
     ...(customerPhone && { customerPhone }),
@@ -826,6 +1133,14 @@ async function handleLog(interaction) {
     tz,
     hasCustomerOnFile,
   });
+  const primary = selectPrimaryDealLine({
+    ctx,
+    dataBefore: snapshotBefore,
+    dataAfter: data,
+    now,
+    tz,
+  });
+  if (primary?.text) ctx.primaryLine = primary.text;
 
   const content = buildPremiumDealConfirmation(ctx);
   await interaction.editReply({ content, embeds: [] });
@@ -839,7 +1154,8 @@ async function handleLog(interaction) {
     speeds: [speed],
     now,
     tz,
-    suppressPersonalHype: true,
+    primaryLineId: primary?.id || null,
+    suppressPersonalHype: false,
   });
 }
 
@@ -956,6 +1272,14 @@ async function handleUndo(interaction) {
   await interaction.deferReply();
   const uid = interaction.user.id;
 
+  await backupAndLogAction({
+    action: 'remove-last',
+    actorId: uid,
+    actorName: interaction.member?.displayName || interaction.user.username,
+    targetFilePath: DATA_PATH,
+    details: { command: '/remove-last' },
+  });
+
   let removedLog = null;
   await mutate(async (d) => {
     for (let i = d.logs.length - 1; i >= 0; i--) {
@@ -973,6 +1297,18 @@ async function handleUndo(interaction) {
     await interaction.followUp({ content: 'Nothing to undo.', ephemeral: true });
     return;
   }
+
+  await safeAppendActionLog({
+    action: 'remove-last.completed',
+    actorId: uid,
+    actorName: interaction.member?.displayName || interaction.user.username,
+    details: {
+      removedLogId: removedLog.id,
+      removedSpeed: removedLog.correctedSpeed || removedLog.speed,
+      removedTimestamp: removedLog.timestamp,
+      channelId: removedLog.channelId || null,
+    },
+  });
 
   await interaction.editReply({
     embeds: [
@@ -1153,11 +1489,31 @@ async function handleAdminRemoveChannel(interaction) {
     }
 
     await button.deferUpdate().catch(() => {});
+    await backupAndLogAction({
+      action: 'admin-remove-channel',
+      actorId: interaction.user.id,
+      actorName: interaction.member?.displayName || interaction.user.username,
+      targetFilePath: APPROVED_CHANNELS_PATH,
+      details: { source: '/admin remove-channel', channelId: channel.id },
+    });
     const removed = unapproveDealChannel(channel.id);
+    const marketRemoval = removeChannelFromMarket(channel.id);
+    await safeAppendActionLog({
+      action: 'admin-remove-channel.completed',
+      actorId: interaction.user.id,
+      actorName: interaction.member?.displayName || interaction.user.username,
+      details: {
+        source: '/admin remove-channel',
+        channelId: channel.id,
+        removed,
+        marketRemoved: marketRemoval.removed,
+      },
+    });
     await interaction.editReply({
-      content: removed
-        ? `Removed <#${channel.id}> from approved deal channels.`
-        : `<#${channel.id}> was not approved.`,
+      content: [
+        removed ? `Removed <#${channel.id}> from approved deal channels.` : `<#${channel.id}> was not approved.`,
+        marketRemoval.removed ? `Removed market mapping from ${marketRemoval.market.marketName}.` : null,
+      ].filter(Boolean).join('\n'),
       components: [],
     }).catch(() => {});
   } catch {
@@ -1179,6 +1535,164 @@ async function handleAdminListChannels(interaction) {
     content: channels.length
       ? ['Approved deal channels:', ...channels.map((c) => `• <#${c.id}> — ${c.blitzName}`)].join('\n')
       : 'No approved deal channels found. Use /admin add-channel.',
+  });
+}
+
+async function handleAdminAddMarket(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    const marketName = interaction.options.getString('market_name', true);
+    const marketIdRaw = interaction.options.getString('market_id');
+    const isp = interaction.options.getString('isp');
+    const result = addMarket({
+      marketName,
+      marketId: marketIdRaw,
+      isp,
+      createdBy: interaction.user.id,
+    });
+    await interaction.editReply({
+      content: [
+        result.alreadyExists ? 'Market updated.' : 'Market created.',
+        `Market: ${result.market.marketName}`,
+        `Market ID: ${result.market.marketId}`,
+        `ISP: ${result.market.isp || '—'}`,
+      ].join('\n'),
+    });
+  } catch (err) {
+    await interaction.editReply({ content: `Could not add market: ${err.message || err}` });
+  }
+}
+
+async function handleAdminListMarkets(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  const markets = listMarkets();
+  if (!markets.length) {
+    await interaction.editReply({ content: 'No markets configured yet. Use /admin add-market.' });
+    return;
+  }
+  await interaction.editReply({
+    content: [
+      'Markets',
+      '',
+      ...markets.map((m) => {
+        const channels = (m.channelIds || []).map((id) => `<#${id}>`).join(', ') || 'No channels';
+        return `• ${m.marketName} (${m.marketId})\n  ISP: ${m.isp || '—'}\n  Channels: ${channels}`;
+      }),
+    ].join('\n'),
+  });
+}
+
+async function handleAdminConnectChannel(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  const channel = optionChannelOrCurrent(interaction);
+  const marketId = normalizeMarketId(interaction.options.getString('market_id', true));
+  try {
+    const result = connectChannelToMarket({
+      channel,
+      marketId,
+      connectedBy: interaction.user.id,
+    });
+    await interaction.editReply({
+      content: [
+        `Connected <#${channel.id}> to ${result.market.marketName} (${result.market.marketId}).`,
+        result.removedFrom ? `Removed old mapping from: ${result.removedFrom}` : null,
+      ].filter(Boolean).join('\n'),
+    });
+  } catch (err) {
+    await interaction.editReply({ content: `Could not connect channel: ${err.message || err}` });
+  }
+}
+
+async function handleAdminMarketStatus(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  const channel = optionChannelOrCurrent(interaction);
+  const market = marketForChannel(channel);
+  await interaction.editReply({
+    content: [
+      `Channel: <#${channel?.id || interaction.channelId}>`,
+      market
+        ? `Market: ${market.marketName} (${market.marketId})`
+        : 'Market: Unassigned',
+    ].join('\n'),
+  });
+}
+
+async function handleMarkets(interaction) {
+  await interaction.deferReply();
+  const data = await readLeaderboard();
+  const logs = approvedDealLogs(activeDealLogs(data));
+  const today = filterToday(logs, getTimeZone());
+  const week = filterByWeekId(logs, data.metadata.weekId);
+  const todayRows = aggregateMarkets(today);
+  const weekRows = aggregateMarkets(week);
+  const weekMap = new Map(weekRows.map((r) => [r.marketId || `name:${r.marketName}`, r]));
+  const todayMap = new Map(todayRows.map((r) => [r.marketId || `name:${r.marketName}`, r]));
+  const keys = new Set([...weekMap.keys(), ...todayMap.keys()]);
+  const rows = [...keys].map((k) => {
+    const w = weekMap.get(k);
+    const t = todayMap.get(k);
+    return {
+      marketName: w?.marketName || t?.marketName || 'Unassigned',
+      week: w?.total || 0,
+      today: t?.total || 0,
+    };
+  }).sort((a, b) => b.week - a.week || b.today - a.today || a.marketName.localeCompare(b.marketName));
+
+  const lines = ['Pulse Market Board', ''];
+  for (let i = 0; i < rows.length; i += 1) {
+    const r = rows[i];
+    lines.push(`${i + 1}. ${r.marketName} - ${r.week} week / ${r.today} today`);
+  }
+  lines.push('');
+  lines.push(`Company Total This Week: ${week.length}`);
+  lines.push(`Company Total Today: ${today.length}`);
+
+  await interaction.editReply({ content: lines.join('\n') });
+}
+
+async function handleAdminStatus(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  const data = await readLeaderboard();
+  const approvedChannelsCount = approvedChannelsForGuild(interaction.guild).filter((c) => c.active).length;
+  const snapshot = buildAdminStatusSnapshot(data, {
+    approvedChannelsCount,
+    tz: getTimeZone(),
+  });
+
+  await interaction.editReply({
+    content: [
+      'Pulse Bot Status',
+      '',
+      `Bot online: ${client.isReady() ? 'yes' : 'no'}`,
+      `Current weekId: ${snapshot.weekId == null ? 'unknown' : snapshot.weekId}`,
+      `Total logged deals: ${snapshot.totalDeals}`,
+      `Today's deals: ${snapshot.todayDeals}`,
+      `This week's deals: ${snapshot.weeklyDeals}`,
+      `Approved blitz channels: ${snapshot.approvedChannelsCount}`,
+      `Storage mode: ${snapshot.storageMode}`,
+      `Last weekly reset: ${snapshot.lastWeeklyResetAt || 'not recorded'}`,
+      `Timezone: ${snapshot.timezone}`,
+    ].join('\n'),
   });
 }
 
@@ -1231,9 +1745,14 @@ async function handleAdminExportCsv(interaction) {
 
 async function handleAdmin(interaction) {
   const subcommand = interaction.options.getSubcommand();
+  if (subcommand === 'add-market') return handleAdminAddMarket(interaction);
+  if (subcommand === 'list-markets') return handleAdminListMarkets(interaction);
+  if (subcommand === 'connect-channel') return handleAdminConnectChannel(interaction);
+  if (subcommand === 'market-status') return handleAdminMarketStatus(interaction);
   if (subcommand === 'add-channel') return handleAdminAddChannel(interaction);
   if (subcommand === 'remove-channel') return handleAdminRemoveChannel(interaction);
   if (subcommand === 'list-channels') return handleAdminListChannels(interaction);
+  if (subcommand === 'status') return handleAdminStatus(interaction);
   if (subcommand === 'stats') return handleAdminStats(interaction);
   if (subcommand === 'export-csv') return handleAdminExportCsv(interaction);
   return interaction.reply({ content: 'Unknown admin command.', ephemeral: true });
@@ -1287,11 +1806,31 @@ async function handleUnapproveBlitz(interaction) {
   }
   await interaction.deferReply({ ephemeral: true });
 
+  await backupAndLogAction({
+    action: 'unapprove-blitz',
+    actorId: interaction.user.id,
+    actorName: interaction.member?.displayName || interaction.user.username,
+    targetFilePath: APPROVED_CHANNELS_PATH,
+    details: { source: 'legacy-unapprove', channelId: interaction.channelId },
+  });
   const removed = unapproveDealChannel(interaction.channelId);
+  const marketRemoval = removeChannelFromMarket(interaction.channelId);
+  await safeAppendActionLog({
+    action: 'unapprove-blitz.completed',
+    actorId: interaction.user.id,
+    actorName: interaction.member?.displayName || interaction.user.username,
+    details: {
+      source: 'legacy-unapprove',
+      channelId: interaction.channelId,
+      removed,
+      marketRemoved: marketRemoval.removed,
+    },
+  });
   await interaction.editReply({
-    content: removed
-      ? 'This channel is no longer an approved blitz channel.'
-      : 'This channel was not approved.',
+    content: [
+      removed ? 'This channel is no longer an approved blitz channel.' : 'This channel was not approved.',
+      marketRemoval.removed ? `Market mapping removed from ${marketRemoval.market.marketName}.` : null,
+    ].filter(Boolean).join('\n'),
   });
 }
 
@@ -1319,6 +1858,14 @@ async function handleResetWeekly(interaction) {
   await interaction.deferReply();
   const archivePath = path.join(__dirname, 'leaderboard_archive.json');
   const tz = getTimeZone();
+
+  await backupAndLogAction({
+    action: 'reset-weekly',
+    actorId: interaction.user.id,
+    actorName: interaction.member?.displayName || interaction.user.username,
+    targetFilePath: DATA_PATH,
+    details: { command: '/reset-weekly' },
+  });
 
   let archiveEntry = null;
 
@@ -1355,6 +1902,8 @@ async function handleResetWeekly(interaction) {
     await fs.writeFile(archivePath, JSON.stringify(existing, null, 2), 'utf8');
 
     d.metadata.weekId = currentWeekId + 1;
+    d.metadata.lastWeeklyResetAt = archiveEntry.archivedAt;
+    d.metadata.lastWeeklyResetBy = interaction.user.id;
     d.weeklyArchive = Array.isArray(d.weeklyArchive) ? d.weeklyArchive : [];
     d.weeklyArchive.push({ weekId: currentWeekId, archivedAt: archiveEntry.archivedAt });
 
@@ -1376,6 +1925,18 @@ async function handleResetWeekly(interaction) {
         ),
     ],
   });
+
+  await safeAppendActionLog({
+    action: 'reset-weekly.completed',
+    actorId: interaction.user.id,
+    actorName: interaction.member?.displayName || interaction.user.username,
+    details: {
+      previousWeekId: archiveEntry.weekId,
+      newWeekId: archiveEntry.weekId + 1,
+      archivePath,
+      archivedAt: archiveEntry.archivedAt,
+    },
+  });
 }
 
 const client = new Client({
@@ -1387,7 +1948,7 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`Pulse online as ${client.user.tag}`);
   try {
     startDashboard();
@@ -1415,6 +1976,13 @@ client.on('messageCreate', async (message) => {
     const now = new Date();
     const channel = message.channel;
     const blitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel.name);
+    const marketIdentity = marketIdentityForChannel(channel);
+    if (!marketIdentity.assigned) {
+      console.warn(
+        '[Pulse][UnassignedMarket] natural log allowed without market mapping',
+        JSON.stringify({ channelId: channel.id, channelName: channel.name, userId: message.author.id }),
+      );
+    }
     const displayName = member.displayName || message.author.globalName || message.author.username;
     const userId = message.author.id;
     const baseTime = now.getTime();
@@ -1430,6 +1998,8 @@ client.on('messageCreate', async (message) => {
       channelId: channel.id,
       channelName: channel.name,
       blitzName,
+      marketId: marketIdentity.marketId,
+      marketName: marketIdentity.marketName,
       weekId: data.metadata.weekId,
     });
 
@@ -1518,6 +2088,14 @@ client.on('messageCreate', async (message) => {
       tz,
       hasCustomerOnFile: false,
     });
+    const primary = selectPrimaryDealLine({
+      ctx,
+      dataBefore: result.dataBefore,
+      dataAfter: result.data,
+      now,
+      tz,
+    });
+    if (primary?.text) ctx.primaryLine = primary.text;
     const content = buildPremiumDealConfirmation(ctx);
     await message.reply({ content, allowedMentions: { parse: [] } }).catch((err) => {
       console.error('Natural log reply failed:', err.message || err);
@@ -1532,7 +2110,8 @@ client.on('messageCreate', async (message) => {
       speeds: parsed.speeds,
       now,
       tz,
-      suppressPersonalHype: true,
+      primaryLineId: primary?.id || null,
+      suppressPersonalHype: false,
     });
   } catch (e) {
     console.error(e);
@@ -1568,6 +2147,9 @@ client.on('interactionCreate', async (interaction) => {
         break;
       case 'master':
         await handlePhase3Master(interaction);
+        break;
+      case 'markets':
+        await handleMarkets(interaction);
         break;
       case 'mydeals':
         await handlePhase3MyDeals(interaction);
@@ -1605,9 +2187,25 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-if (!token) {
-  console.error('Missing DISCORD_TOKEN in .env');
-  process.exit(1);
+async function startBot() {
+  try {
+    const health = await collectStartupHealth();
+    console.log(formatHealthReport(health));
+  } catch (err) {
+    console.error('Pulse startup health check failed:', err.message || err);
+  }
+
+  if (!token) {
+    console.error('Missing DISCORD_TOKEN in .env');
+    process.exit(1);
+  }
+
+  try {
+    await client.login(token);
+  } catch (err) {
+    console.error('Pulse login failed:', err.message || err);
+    process.exit(1);
+  }
 }
 
-client.login(token);
+startBot();
