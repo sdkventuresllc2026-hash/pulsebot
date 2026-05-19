@@ -1,0 +1,43 @@
+---
+**PULSE — v1.0** · Deal logger & leaderboard
+---
+
+**What it is**
+Pulse tracks **fiber deals you close** — no points, **rank = total deals**. Everything saves to the team’s leaderboard file on the bot host.
+
+**How to use it (3 rules)**
+• **Log in the right channel** — team / “blitz” name comes from the **channel name**, so log where your squad actually posts.
+• **One `/log` = one closed deal** — don’t spam; double‑taps within a few seconds get blocked on purpose.
+• **Wrong log?** Use `/undo-last` — only removes **your** most recent log.
+
+---
+
+**Commands**
+
+**/log** — Log a deal (pick speed: 200MB → 2GIG). You’ll see today / week counts, rank today, and sometimes hype lines.
+
+**/today** — Today’s leaderboard (deals + speed breakdown + streak when it applies).
+
+**/weekly** — This week’s board (same idea).
+
+**/leaderboard** — Pick **timeframe**: Today · Weekly · All‑time. Optional **blitz** filter = team name text match.
+
+**/my-stats** — Your today / week / all‑time, speed mix, streak, best day ever, ranks.
+
+**/share** — Clean **screenshot card** for weekly production (good for stories / group chat).
+
+**/undo-last** — Deletes **only your** last log. Use if you mis‑clicked.
+
+---
+
+**Admins only**
+**/export** — Download all logs as CSV‑style text.
+**/reset-weekly** — Archives this week’s totals, then **starts a fresh weekly board** (all‑time history stays).
+
+---
+
+**Tips**
+• Type **`/`** in Discord anytime — every command shows a short built‑in description.
+• If the bot is **offline**, logs won’t save until it’s back on — that’s normal for a bot that runs on a PC unless it’s hosted 24/7.
+
+**Pulse v1.0** · Fiber sales team · Rank by deals · Keep stacking.

@@ -1,0 +1,9 @@
+node_modules/
+.env
+leaderboard.json
+leaderboard_archive.json
+approved-blitz-channels.json
+leaderboard.json.bak.*
+leaderboard.json.corrupt.*.bak
+*.log
+.DS_Store

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pulse — Dashboard</title>
+  <style>
+    :root {
+      --bg: #1e1f22;
+      --panel: #2b2d31;
+      --text: #f2f3f5;
+      --muted: #b5bac1;
+      --accent: #5865f2;
+      --ok: #57f287;
+      --border: #3f4147;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+    h1 { font-size: 1.15rem; margin: 0; font-weight: 650; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    input[type="password"], input[type="text"], select {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.45rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 0.85rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    main { padding: 1rem 1.25rem 2rem; max-width: 1200px; margin: 0 auto; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+    }
+    .card span { display: block; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .card strong { font-size: 1.35rem; }
+    h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td { padding: 0.55rem 0.65rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    tr:last-child td { border-bottom: none; }
+    .muted { color: var(--muted); }
+    .err { color: #ed4245; margin-top: 0.5rem; font-size: 0.9rem; }
+    .teams { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.35rem; }
+    .pill {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.55rem;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pulse dashboard</h1>
+    <div class="row">
+      <label class="muted" for="key">Key</label>
+      <input id="key" type="password" autocomplete="off" placeholder="DASHBOARD_SECRET" style="min-width:200px" />
+      <button type="button" id="saveKey">Save in browser</button>
+    </div>
+  </header>
+  <main>
+    <p class="muted" style="margin-top:0">Production snapshot from <code>leaderboard.json</code>. Same data the bot uses.</p>
+    <div id="err" class="err" hidden></div>
+    <div class="cards" id="cards"></div>
+    <h2>Teams this week</h2>
+    <div class="teams" id="teams"></div>
+    <h2>Top reps today</h2>
+    <table>
+      <thead><tr><th>#</th><th>Rep</th><th>Deals</th></tr></thead>
+      <tbody id="topToday"></tbody>
+    </table>
+    <div class="row" style="margin-top:1rem">
+      <label class="muted" for="scope">Log scope</label>
+      <select id="scope">
+        <option value="week" selected>This week</option>
+        <option value="today">Today</option>
+        <option value="all">All-time</option>
+      </select>
+      <button type="button" id="reload">Refresh</button>
+    </div>
+    <h2>Recent logs</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>When</th><th>Rep</th><th>Speed</th><th>Team</th>
+          <th>Customer</th><th>Phone</th><th>Address</th>
+        </tr>
+      </thead>
+      <tbody id="logs"></tbody>
+    </table>
+  </main>
+  <script>
+    const KEY_STORAGE = 'pulse_dashboard_key';
+    const keyInput = document.getElementById('key');
+    const err = document.getElementById('err');
+    keyInput.value = sessionStorage.getItem(KEY_STORAGE) || '';
+
+    document.getElementById('saveKey').onclick = () => {
+      sessionStorage.setItem(KEY_STORAGE, keyInput.value.trim());
+      loadAll();
+    };
+
+    function showErr(msg) {
+      err.hidden = !msg;
+      err.textContent = msg || '';
+    }
+
+    async function api(path) {
+      const key = (keyInput.value || sessionStorage.getItem(KEY_STORAGE) || '').trim();
+      if (!key) {
+        showErr('Enter your dashboard key (same as DASHBOARD_SECRET) and click Save.');
+        throw new Error('no key');
+      }
+      const r = await fetch(path, { headers: { 'X-Pulse-Key': key } });
+      const j = r.headers.get('content-type')?.includes('json') ? await r.json() : {};
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      return j;
+    }
+
+    async function loadAll() {
+      showErr('');
+      try {
+        const ov = await api('/api/overview');
+        document.getElementById('cards').innerHTML = `
+          <div class="card"><span>Today (all reps)</span><strong>${ov.counts.today}</strong></div>
+          <div class="card"><span>This week</span><strong>${ov.counts.week}</strong></div>
+          <div class="card"><span>All-time logs</span><strong>${ov.counts.allTime}</strong></div>
+          <div class="card"><span>Active week id</span><strong>${ov.weekId}</strong></div>
+          <div class="card"><span>Timezone</span><strong style="font-size:0.95rem">${ov.timeZone}</strong></div>
+        `;
+        const teams = document.getElementById('teams');
+        const entries = Object.entries(ov.teamsThisWeek || {});
+        teams.innerHTML = entries.length
+          ? entries.map(([n, c]) => `<span class="pill">${escapeHtml(n)} — ${c}</span>`).join('')
+          : '<span class="muted">No team data yet</span>';
+
+        const tb = document.getElementById('topToday');
+        tb.innerHTML = (ov.topRepsToday || []).map((r, i) =>
+          `<tr><td>${i + 1}</td><td>${escapeHtml(r.displayName)}</td><td>${r.total}</td></tr>`
+        ).join('') || '<tr><td colspan="3" class="muted">No deals today</td></tr>';
+
+        const scope = document.getElementById('scope').value;
+        const logData = await api('/api/logs?limit=150&scope=' + encodeURIComponent(scope));
+        const lg = document.getElementById('logs');
+        lg.innerHTML = (logData.logs || []).map((l) => {
+          const when = escapeHtml((l.date || '').slice(0, 10) + ' ' + (l.timestamp || '').slice(11, 19));
+          return `<tr>
+            <td>${when}</td>
+            <td>${escapeHtml(l.displayName || '')}</td>
+            <td>${escapeHtml(l.speedLabel || l.speed)}</td>
+            <td>${escapeHtml(l.blitzName || '')}</td>
+            <td>${escapeHtml(l.customerName || '—')}</td>
+            <td>${escapeHtml(l.customerPhone || '—')}</td>
+            <td>${escapeHtml(l.customerAddress || '—')}</td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="7" class="muted">No logs for this scope</td></tr>';
+      } catch (e) {
+        if (e.message !== 'no key') showErr(e.message);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    document.getElementById('reload').onclick = loadAll;
+    document.getElementById('scope').onchange = loadAll;
+    loadAll();
+  </script>
+</body>
+</html>

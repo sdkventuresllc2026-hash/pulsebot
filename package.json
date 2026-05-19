@@ -1,0 +1,21 @@
+{
+  "name": "pulse-discord-bot",
+  "version": "1.0.0",
+  "description": "Pulse — deal logging and leaderboard bot for fiber sales teams (discord.js v14)",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js",
+    "check": "node --check index.js && node --check deploy-commands.js && node --check storage.js && node --check deal-parser.js && node --check deal-channels.js && node --check dashboard-server.js && node --check premium-confirmation.js && node --check stats.js && node --check constants.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2"
+  }
+}
