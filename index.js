@@ -2831,11 +2831,23 @@ async function startBot() {
   }
 
   if (process.env.RAILWAY_ENVIRONMENT && !process.env.PULSE_DATA_DIR?.trim()) {
-    console.error(
-      '[Pulse][FATAL] Railway deploy without PULSE_DATA_DIR — leaderboard will reset every deploy.',
-    );
-    console.error('[Pulse][FATAL] Add a volume at /data and set PULSE_DATA_DIR=/data, then redeploy.');
-    process.exit(1);
+    const fsSync = require('fs');
+    const dataMount = '/data';
+    if (fsSync.existsSync(dataMount) && fsSync.statSync(dataMount).isDirectory()) {
+      process.env.PULSE_DATA_DIR = dataMount;
+      console.warn(
+        '[Pulse] PULSE_DATA_DIR was not in Railway Variables — using volume mount at /data. Add PULSE_DATA_DIR=/data in Variables to silence this.',
+      );
+    } else {
+      console.error(
+        '[Pulse][FATAL] Railway deploy without PULSE_DATA_DIR — leaderboard will reset every deploy.',
+      );
+      console.error('[Pulse][FATAL] Add a volume at /data and set PULSE_DATA_DIR=/data, then redeploy.');
+      console.error(
+        `[Pulse][FATAL] Debug: service=${process.env.RAILWAY_SERVICE_NAME || '(unknown)'} · /data exists=${fsSync.existsSync(dataMount)}`,
+      );
+      process.exit(1);
+    }
   }
 
   try {

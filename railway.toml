@@ -3,7 +3,8 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "npm start"
+# Ensures data dir even if the dashboard variable was missed (volume must still mount at /data)
+startCommand = "PULSE_DATA_DIR=/data npm start"
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
