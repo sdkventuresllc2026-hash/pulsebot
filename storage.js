@@ -104,24 +104,11 @@ async function appendSingleDealLog({
   channelId,
   buildLogEntry,
   sourceMessageId = null,
-  skipDuplicateCheck = false,
-  nowMs = Date.now(),
 }) {
   return enqueueWrite(async () => {
     const data = await readLeaderboard();
     if (sourceMessageId != null && data.logs.some((l) => l.sourceMessageId === sourceMessageId)) {
       return { duplicateMessage: true };
-    }
-    if (
-      !skipDuplicateCheck &&
-      isPossibleDuplicateLog(data.logs, {
-        userId,
-        channelId,
-        speed,
-        nowMs,
-      })
-    ) {
-      return { possibleDuplicate: true };
     }
 
     const dataBefore = structuredClone(data);
@@ -135,23 +122,6 @@ async function appendSingleDealLog({
     await writeLeaderboard(next);
     return { ok: true, dataBefore, data: next };
   });
-}
-
-function isPossibleDuplicateLog(logs, { userId, channelId, speed, nowMs = Date.now(), windowMs = 10000 }) {
-  if (!userId || !channelId || !speed) return false;
-  for (let i = logs.length - 1; i >= 0; i--) {
-    const l = logs[i];
-    if (!l || l.removed || l.removedAt || l.deletedAt || l.voidedAt) continue;
-    const t = Date.parse(l.timestamp);
-    if (Number.isNaN(t)) continue;
-    const age = nowMs - t;
-    if (age > windowMs) break;
-    if (age < 0) continue;
-    if (l.userId === userId && l.channelId === channelId && (l.correctedSpeed || l.speed) === speed) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function pickRandom(arr) {
@@ -217,5 +187,4 @@ async function backfillLogMarketTags(inferMarketForLog) {
 
 exports.backfillLogMarketTags = backfillLogMarketTags;
 exports.defaultData = defaultData;
-exports.isPossibleDuplicateLog = isPossibleDuplicateLog;
 exports.pickRandom = pickRandom;

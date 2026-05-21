@@ -148,14 +148,10 @@ function detectTextLogIntent(raw) {
 }
 
 /**
- * Quick channel log: speed shorthand only (e.g. 1g, 1gig, 2x 500).
- * Mixed speeds or multi-product lines require /log.
+ * Quick channel log: any valid speed shorthand line (e.g. 1g, 2x 1g, 1g 2g 500).
  */
 function isQuickNaturalLog(parsed) {
-  if (!parsed?.ok || !parsed.speeds?.length) return false;
-  if (parsed.speeds.length === 1) return true;
-  const first = parsed.speeds[0];
-  return parsed.speeds.every((s) => s === first);
+  return !!(parsed?.ok && parsed.speeds?.length);
 }
 
 module.exports = {

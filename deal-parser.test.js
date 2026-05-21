@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseDealMessage, detectTextLogIntent, isQuickNaturalLog } = require('./deal-parser');
-const { isPossibleDuplicateLog } = require('./storage');
 
 test('2 Gig variants', () => {
   for (const s of ['2g', '2G', '2 gb', '2GB', '2gb', '2 gig', '2 gigs', '2gig', '2 gbps', '2gbps', '2000', '2000 mbps', '2000mbps']) {
@@ -86,33 +85,15 @@ test('detectTextLogIntent flags full log phrases only', () => {
   assert.equal(detectTextLogIntent('1gig'), null);
 });
 
-test('isQuickNaturalLog allows shorthand not mixed-product lines', () => {
+test('isQuickNaturalLog allows multi-deal shorthand lines', () => {
   assert.equal(isQuickNaturalLog(parseDealMessage('1g')), true);
   assert.equal(isQuickNaturalLog(parseDealMessage('2x 1g')), true);
-  assert.equal(isQuickNaturalLog(parseDealMessage('1g, 2g')), false);
-  assert.equal(isQuickNaturalLog(parseDealMessage('1g 2g 500')), false);
+  assert.equal(isQuickNaturalLog(parseDealMessage('1g, 2g')), true);
+  assert.equal(isQuickNaturalLog(parseDealMessage('1g 2g 500')), true);
 });
 
 test('uncertain stays strict', () => {
   assert.equal(parseDealMessage('1 g').ok, false);
   assert.equal(parseDealMessage('gig').ok, false);
   assert.equal(parseDealMessage('2x500').ok, false);
-});
-
-test('duplicate detection is user channel speed scoped', () => {
-  const nowMs = Date.now();
-  const logs = [
-    {
-      userId: 'rep-1',
-      channelId: 'channel-1',
-      speed: '1gig',
-      timestamp: new Date(nowMs - 9000).toISOString(),
-    },
-  ];
-
-  assert.equal(isPossibleDuplicateLog(logs, { userId: 'rep-1', channelId: 'channel-1', speed: '1gig', nowMs }), true);
-  assert.equal(isPossibleDuplicateLog(logs, { userId: 'rep-1', channelId: 'channel-2', speed: '1gig', nowMs }), false);
-  assert.equal(isPossibleDuplicateLog(logs, { userId: 'rep-2', channelId: 'channel-1', speed: '1gig', nowMs }), false);
-  assert.equal(isPossibleDuplicateLog(logs, { userId: 'rep-1', channelId: 'channel-1', speed: '2gig', nowMs }), false);
-  assert.equal(isPossibleDuplicateLog(logs, { userId: 'rep-1', channelId: 'channel-1', speed: '1gig', nowMs: nowMs + 11000 }), false);
 });

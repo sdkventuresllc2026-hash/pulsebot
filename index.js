@@ -122,13 +122,11 @@ const token = process.env.DISCORD_TOKEN;
 const recentLogReplies = new Set();
 const logReplyClaims = new Set();
 
-function logReplyKeys({ messageId, interactionId, userId, channelId, speeds }) {
+/** Only dedupe the same Discord message/interaction — not repeat speeds (reps catch up in bursts). */
+function logReplyKeys({ messageId, interactionId }) {
   const keys = [];
   if (messageId) keys.push(`msg:${messageId}`);
   if (interactionId) keys.push(`int:${interactionId}`);
-  const speedKey =
-    speeds?.length === 1 ? speeds[0] : speeds?.length ? speeds.join('+') : 'unknown';
-  if (userId && channelId) keys.push(`deal:${userId}:${channelId}:${speedKey}`);
   return keys;
 }
 
@@ -1185,27 +1183,6 @@ async function handleTextAdminCommand(message) {
   return false;
 }
 
-function duplicatePromptComponents(id) {
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`dup_new:${id}`)
-        .setLabel('New Deal')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`dup_ignore:${id}`)
-        .setLabel('Duplicate')
-        .setStyle(ButtonStyle.Secondary),
-    ),
-  ];
-}
-
-function canResolveDuplicate(buttonInteraction, userId) {
-  if (buttonInteraction.user.id === userId) return true;
-  if (isAdmin(buttonInteraction.user.id)) return true;
-  return !!buttonInteraction.memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-}
-
 async function confirmSingleDealLog({
   appendResult,
   channel,
@@ -1258,45 +1235,6 @@ async function confirmSingleDealLog({
     confirmationHype: hypeLine,
   });
   return true;
-}
-
-async function handleDuplicatePrompt({ promptMessage, userId, onNewDeal }) {
-  let processed = false;
-  try {
-    const button = await promptMessage.awaitMessageComponent({
-      componentType: ComponentType.Button,
-      time: 30000,
-      filter: async (i) => {
-        const matches = i.customId.startsWith('dup_new:') || i.customId.startsWith('dup_ignore:');
-        if (!matches) return false;
-        if (canResolveDuplicate(i, userId)) return true;
-        await i.reply({ content: 'Only the rep or an Administrator can answer this.', ephemeral: true }).catch(() => {});
-        return false;
-      },
-    });
-
-    if (processed) return;
-    processed = true;
-
-    if (button.customId.startsWith('dup_ignore:')) {
-      await button.update({ content: 'Duplicate ignored.', components: [], embeds: [] }).catch(() => {});
-      return;
-    }
-
-    await button.deferUpdate().catch(() => {});
-    await onNewDeal().catch(async (err) => {
-      console.error('Duplicate prompt New Deal failed:', err.message || err);
-      await promptMessage.edit({ content: 'Pulse hit an error.', components: [], embeds: [] }).catch(() => {});
-    });
-  } catch {
-    if (!processed) {
-      processed = true;
-      // Keep channels clean when duplicate prompts timeout.
-      await promptMessage.delete().catch(async () => {
-        await promptMessage.edit({ content: 'Duplicate check timed out. No deal logged.', components: [], embeds: [] }).catch(() => {});
-      });
-    }
-  }
 }
 
 async function handleLog(interaction) {
@@ -1360,15 +1298,10 @@ async function handleLog(interaction) {
   });
 
   const hasCustomerOnFile = !!(customerName || customerPhone || customerAddress);
-  const replyKeys = logReplyKeys({
-    interactionId: interaction.id,
-    userId,
-    channelId: channel?.id || null,
-    speeds: [speed],
-  });
+  const replyKeys = logReplyKeys({ interactionId: interaction.id });
   if (!tryClaimLogReply(replyKeys)) {
     await interaction.editReply({
-      content: '_Deal already logged (duplicate request)._',
+      content: '_Already handled (same command)._',
       embeds: [],
       components: [],
     });
@@ -1380,46 +1313,7 @@ async function handleLog(interaction) {
     speed,
     channelId: channel?.id || null,
     buildLogEntry,
-    skipDuplicateCheck: !isApprovedDealChannel(channel),
-    nowMs: now.getTime(),
   });
-
-  if (appendResult.possibleDuplicate) {
-    const promptId = `${interaction.id}:${Date.now()}`;
-    await interaction.editReply({
-      content: 'Possible duplicate. Log it?',
-      embeds: [],
-      components: duplicatePromptComponents(promptId),
-    });
-    const promptMessage = await interaction.fetchReply();
-    await handleDuplicatePrompt({
-      promptMessage,
-      userId,
-      onNewDeal: async () => {
-        const newDealResult = await appendSingleDealLog({
-          userId,
-          speed,
-          channelId: channel?.id || null,
-          buildLogEntry,
-          skipDuplicateCheck: true,
-          nowMs: now.getTime(),
-        });
-        await confirmSingleDealLog({
-          appendResult: newDealResult,
-          channel,
-          userId,
-          displayName,
-          blitzName,
-          speeds: [speed],
-          now,
-          tz,
-          hasCustomerOnFile,
-          editConfirmation: (payload) => promptMessage.edit(payload),
-        });
-      },
-    });
-    return;
-  }
 
   await confirmSingleDealLog({
     appendResult,
@@ -2551,12 +2445,7 @@ client.on('messageCreate', async (message) => {
 
     if (parsed.speeds.length === 1) {
       const speed = parsed.speeds[0];
-      const replyKeys = logReplyKeys({
-        messageId: message.id,
-        userId,
-        channelId: channel.id,
-        speeds: [speed],
-      });
+      const replyKeys = logReplyKeys({ messageId: message.id });
       if (!tryClaimLogReply(replyKeys)) return;
 
       recentLogReplies.add(message.id);
@@ -2568,47 +2457,9 @@ client.on('messageCreate', async (message) => {
         channelId: channel.id,
         sourceMessageId: message.id,
         buildLogEntry: (data) => buildLogEntry(data, speed, 0),
-        nowMs: now.getTime(),
       });
 
       if (appendResult.duplicateMessage) return;
-
-      if (appendResult.possibleDuplicate) {
-        const promptId = `${message.id}:${Date.now()}`;
-        const promptMessage = await message.reply({
-          content: 'Possible duplicate. Log it?',
-          components: duplicatePromptComponents(promptId),
-          allowedMentions: { parse: [] },
-        });
-        await handleDuplicatePrompt({
-          promptMessage,
-          userId,
-          onNewDeal: async () => {
-            const newDealResult = await appendSingleDealLog({
-              userId,
-              speed,
-              channelId: channel.id,
-              sourceMessageId: message.id,
-              buildLogEntry: (data) => buildLogEntry(data, speed, 0),
-              skipDuplicateCheck: true,
-              nowMs: now.getTime(),
-            });
-            await confirmSingleDealLog({
-              appendResult: newDealResult,
-              channel,
-              userId,
-              displayName,
-              blitzName,
-              speeds: [speed],
-              now,
-              tz,
-              hasCustomerOnFile: false,
-              editConfirmation: (payload) => promptMessage.edit(payload),
-            });
-          },
-        });
-        return;
-      }
 
       await confirmSingleDealLog({
         appendResult,
@@ -2626,12 +2477,7 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    const batchKeys = logReplyKeys({
-      messageId: message.id,
-      userId,
-      channelId: channel.id,
-      speeds: parsed.speeds,
-    });
+    const batchKeys = logReplyKeys({ messageId: message.id });
     if (!tryClaimLogReply(batchKeys)) return;
     recentLogReplies.add(message.id);
     setTimeout(() => recentLogReplies.delete(message.id), 120_000);

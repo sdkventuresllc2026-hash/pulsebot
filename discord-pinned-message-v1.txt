@@ -7,7 +7,7 @@ Pulse tracks **fiber deals you close** — no points, **rank = total deals**. Ev
 
 **How to use it (3 rules)**
 • **Log in the right channel** — team / “blitz” name comes from the **channel name**, so log where your squad actually posts.
-• **Quick log (no slash):** type **`1g`**, **`1gig`**, **`500`**, or **`2x 1g`** — Pulse logs it automatically.
+• **Quick log (no slash):** type **`1g`**, **`1gig`**, **`500`**, **`2x 1g`**, or **`1g 2g 500`** (several deals in one message) — Pulse logs each automatically.
 • **Leaderboards (no slash):** type **`lb`**, **`daily`**, **`weekly`**, **`master`**, **`mydeals`**, **`quarter`**, **`markets`** in chat.
 • **Wrong log?** **`/remove-last`** — only removes **your** most recent log.
 
