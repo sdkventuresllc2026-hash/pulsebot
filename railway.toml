@@ -1,0 +1,9 @@
+# Pulse — run on Railway only (1 replica; mount a volume at /data)
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm start"
+numReplicas = 1
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

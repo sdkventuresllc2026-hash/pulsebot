@@ -3,6 +3,9 @@
  * Edit speeds and hype messages here without touching core logic.
  */
 
+/** Bump when deploying — if Discord logs don't match, an old bot is still running. */
+exports.PULSE_BUILD = '2026-05-21e';
+
 /** Fixed speed choices (values must match slash-command choices). */
 exports.SPEEDS = Object.freeze(['200mb', '300mb', '500mb', '1gig', '2gig']);
 
@@ -31,6 +34,24 @@ exports.GAMIFICATION_CONFIG = Object.freeze({
   quietHoursForComeback: 3,
   earlyHourCutoff: 9,
   lateHourCutoff: 19,
+});
+
+/** Door-to-door day quarters (local hour, 24h). See day-quarters.js */
+exports.SALES_QUARTER_HOURS = Object.freeze({
+  dayStart: 12,
+  q1End: 15,
+  q2End: 17,
+  q3End: 20,
+  q4End: 21,
+});
+
+/** Shown when reps need slash for full log / fixes */
+exports.SLASH_HINTS = Object.freeze({
+  log:
+    'Quick log: type **`1g`**, **`1gig`**, **`500`**, or **`2x 1g`**. Full log + customer info → **`/log`**',
+  undo: 'Use **`/remove-last`** or **`/correction`**',
+  needSlashLog:
+    'Mixed speeds in one message → use **`/log`** (pick speed). Quick single-speed: type **`1g`** or **`500`**.',
 });
 
 /**

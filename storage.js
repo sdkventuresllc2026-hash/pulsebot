@@ -9,8 +9,9 @@
 const fs = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
+const { dataPath } = require('./paths');
 
-const DATA_PATH = path.join(__dirname, 'leaderboard.json');
+const DATA_PATH = dataPath('leaderboard.json');
 
 const defaultData = () => ({
   metadata: {
@@ -192,6 +193,29 @@ async function appendMessageLogsBatch({ messageId, userId, speeds, buildLogEntry
 }
 
 exports.appendMessageLogsBatch = appendMessageLogsBatch;
+
+/**
+ * Tag historical logs with marketId from channel mapping or *-deals channel names.
+ * @param {(log: object) => { marketId: string|null, marketName: string }} inferMarketForLog
+ */
+async function backfillLogMarketTags(inferMarketForLog) {
+  let updated = 0;
+  await mutate((data) => {
+    for (const log of data.logs) {
+      if (!log || log.removed || log.removedAt || log.deletedAt || log.voidedAt) continue;
+      const inferred = inferMarketForLog(log);
+      if (!inferred?.marketId) continue;
+      if (log.marketId === inferred.marketId && log.marketName === inferred.marketName) continue;
+      log.marketId = inferred.marketId;
+      log.marketName = inferred.marketName;
+      updated += 1;
+    }
+    return data;
+  });
+  return updated;
+}
+
+exports.backfillLogMarketTags = backfillLogMarketTags;
 exports.defaultData = defaultData;
 exports.isPossibleDuplicateLog = isPossibleDuplicateLog;
 exports.pickRandom = pickRandom;

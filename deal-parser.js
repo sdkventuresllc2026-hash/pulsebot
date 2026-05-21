@@ -139,8 +139,29 @@ function parseDealMessage(raw) {
   return { ok: true, speeds: all };
 }
 
+/** Full log phrases — use /log or speed shorthand */
+function detectTextLogIntent(raw) {
+  const t = String(raw || '').trim().toLowerCase();
+  if (/^(?:pulse\s+)?(?:log|logged|close|closed|sale|sold)\b/.test(t)) return 'log';
+  if (/^(?:undo|remove[- ]?last|correction|fix)\b/.test(t)) return 'undo';
+  return null;
+}
+
+/**
+ * Quick channel log: speed shorthand only (e.g. 1g, 1gig, 2x 500).
+ * Mixed speeds or multi-product lines require /log.
+ */
+function isQuickNaturalLog(parsed) {
+  if (!parsed?.ok || !parsed.speeds?.length) return false;
+  if (parsed.speeds.length === 1) return true;
+  const first = parsed.speeds[0];
+  return parsed.speeds.every((s) => s === first);
+}
+
 module.exports = {
   parseDealMessage,
+  detectTextLogIntent,
+  isQuickNaturalLog,
   matchSpeedSlice,
   tryMatchSpeed,
   parseChunk,

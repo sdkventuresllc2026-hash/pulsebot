@@ -16,6 +16,19 @@ const speedChoices = SPEEDS.map((s) => ({
   value: s,
 }));
 
+/** Autocomplete-enabled market picker (assign, connect, delete, edit). */
+function marketIdOption(required = true) {
+  return (o) => {
+    let opt = o
+      .setName('market_id')
+      .setDescription('Pick from list or type market id / name')
+      .setMaxLength(80)
+      .setAutocomplete(true);
+    if (required) opt = opt.setRequired(true);
+    return opt;
+  };
+}
+
 const commands = [
   new SlashCommandBuilder()
     .setName('log')
@@ -47,13 +60,55 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('leaderboard')
-    .setDescription('Current blitz leaderboard'),
+    .setDescription('Blitz leaderboard for this channel')
+    .addStringOption((o) =>
+      o
+        .setName('period')
+        .setDescription('Time period (default: all-time)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Today', value: 'daily' },
+          { name: 'This Week', value: 'week' },
+          { name: 'All-Time', value: 'alltime' },
+        ),
+    ),
 
-  new SlashCommandBuilder().setName('lb').setDescription('Current blitz leaderboard'),
-  new SlashCommandBuilder().setName('daily').setDescription("Today's leaderboard for this blitz"),
-  new SlashCommandBuilder().setName('weekly').setDescription("This week's leaderboard"),
-  new SlashCommandBuilder().setName('blitz').setDescription('All-time leaderboard for this blitz'),
-  new SlashCommandBuilder().setName('master').setDescription('Master leaderboard across approved blitzes'),
+  new SlashCommandBuilder()
+    .setName('lb')
+    .setDescription('Blitz leaderboard (alias)')
+    .addStringOption((o) =>
+      o
+        .setName('period')
+        .setDescription('Time period (default: all-time)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Today', value: 'daily' },
+          { name: 'This Week', value: 'week' },
+          { name: 'All-Time', value: 'alltime' },
+        ),
+    ),
+
+  new SlashCommandBuilder().setName('daily').setDescription("Today's blitz leaderboard"),
+  new SlashCommandBuilder().setName('weekly').setDescription("This week's blitz leaderboard"),
+  new SlashCommandBuilder().setName('blitz').setDescription('All-time blitz leaderboard'),
+  new SlashCommandBuilder()
+    .setName('master')
+    .setDescription('Master leaderboard across all approved blitzes')
+    .addStringOption((o) =>
+      o
+        .setName('period')
+        .setDescription('Time period (default: all-time)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'This Week', value: 'week' },
+          { name: 'This Month', value: 'month' },
+          { name: 'All-Time', value: 'alltime' },
+        ),
+    ),
+  new SlashCommandBuilder()
+    .setName('quarter')
+    .setDescription('Current sales quarter (Q1–Q4) + culture check-in'),
+
   new SlashCommandBuilder().setName('markets').setDescription('Market board (today + this week)'),
   new SlashCommandBuilder().setName('mydeals').setDescription('Your deal stats and ranks'),
   new SlashCommandBuilder().setName('share').setDescription('Screenshot-friendly weekly production card'),
@@ -115,15 +170,21 @@ const commands = [
     )
     .addSubcommand((s) =>
       s
+        .setName('edit-market')
+        .setDescription('Rename a market or update ISP label')
+        .addStringOption(marketIdOption(true))
+        .addStringOption((o) =>
+          o.setName('market_name').setDescription('New display name').setRequired(false).setMaxLength(80),
+        )
+        .addStringOption((o) =>
+          o.setName('isp').setDescription('New ISP label (optional)').setRequired(false).setMaxLength(80),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
         .setName('connect-channel')
         .setDescription('Connect a channel to a market')
-        .addStringOption((o) =>
-          o
-            .setName('market_id')
-            .setDescription('Market id to map this channel to')
-            .setRequired(true)
-            .setMaxLength(80),
-        )
+        .addStringOption(marketIdOption(true))
         .addChannelOption((o) =>
           o
             .setName('channel')
@@ -149,6 +210,18 @@ const commands = [
     )
     .addSubcommand((s) =>
       s
+        .setName('delete-market')
+        .setDescription('Delete a market from Pulse (unmap channels)')
+        .addStringOption(marketIdOption(true))
+        .addBooleanOption((o) =>
+          o
+            .setName('delete_discord_role')
+            .setDescription('Also delete the Pulse market Discord role')
+            .setRequired(false),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
         .setName('remove-channel')
         .setDescription('Remove an approved deal channel and market mapping')
         .addChannelOption((o) =>
@@ -159,10 +232,47 @@ const commands = [
             .setRequired(false),
         ),
     )
+    .addSubcommand((s) =>
+      s
+        .setName('assign-rep')
+        .setDescription('Assign a rep to one market (hides other market channels)')
+        .addUserOption((o) =>
+          o.setName('rep').setDescription('Rep to assign').setRequired(true),
+        )
+        .addStringOption(marketIdOption(true)),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('unassign-rep')
+        .setDescription('Remove all Pulse market roles from a rep')
+        .addUserOption((o) =>
+          o.setName('rep').setDescription('Rep to unassign').setRequired(true),
+        ),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('sync-permissions')
+        .setDescription('Re-lock all market channels (hide from other markets)'),
+    )
     .addSubcommand((s) => s.setName('list-channels').setDescription('List approved deal channels'))
     .addSubcommand((s) => s.setName('status').setDescription('Show Pulse runtime and storage status'))
     .addSubcommand((s) => s.setName('stats').setDescription('Show admin deal stats'))
     .addSubcommand((s) => s.setName('export-csv').setDescription('Export active deal logs to CSV')),
+
+  new SlashCommandBuilder()
+    .setName('assign-rep')
+    .setDescription('Assign a rep to a market (admin)')
+    .addUserOption((o) => o.setName('rep').setDescription('Rep to assign').setRequired(true))
+    .addStringOption(marketIdOption(true)),
+
+  new SlashCommandBuilder()
+    .setName('unassign-rep')
+    .setDescription('Remove Pulse market roles from a rep (admin)')
+    .addUserOption((o) => o.setName('rep').setDescription('Rep to unassign').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('sync-permissions')
+    .setDescription('Re-lock all market channels to market roles (admin)'),
 
   new SlashCommandBuilder()
     .setName('reset-weekly')

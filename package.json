@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node index.js",
     "deploy": "node deploy-commands.js",
-    "check": "node --check index.js && node --check deploy-commands.js && node --check storage.js && node --check deal-parser.js && node --check deal-channels.js && node --check dashboard-server.js && node --check premium-confirmation.js && node --check stats.js && node --check constants.js",
-    "test": "node --test"
+    "check": "node --check index.js && node --check deploy-commands.js && node --check storage.js && node --check paths.js && node --check deal-parser.js && node --check deal-channels.js && node --check dashboard-server.js && node --check premium-confirmation.js && node --check stats.js && node --check constants.js",
+    "test": "node --test --test-concurrency=1"
   },
   "engines": {
     "node": ">=18.0.0"

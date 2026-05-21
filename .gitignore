@@ -8,4 +8,5 @@ leaderboard.json.corrupt.*.bak
 *.log
 admin-actions.log
 backups/
+.pulse-bot.lock
 .DS_Store

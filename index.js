@@ -19,12 +19,26 @@ const {
   PermissionsBitField,
 } = require('discord.js');
 
-const { SPEEDS, SPEED_LABELS, COLORS, GAMIFICATION_CONFIG } = require('./constants');
-const { DATA_PATH, readLeaderboard, mutate, appendSingleDealLog, appendMessageLogsBatch } = require('./storage');
+const { SPEEDS, SPEED_LABELS, COLORS, GAMIFICATION_CONFIG, SLASH_HINTS, PULSE_BUILD } = require('./constants');
+const {
+  DATA_PATH,
+  readLeaderboard,
+  mutate,
+  appendSingleDealLog,
+  appendMessageLogsBatch,
+  backfillLogMarketTags,
+} = require('./storage');
 const { startDashboard } = require('./dashboard-server');
-const { parseDealMessage } = require('./deal-parser');
+const { parseDealMessage, detectTextLogIntent, isQuickNaturalLog } = require('./deal-parser');
+const { parseLeaderboardTextIntent } = require('./leaderboard-text');
 const {
   isApprovedDealChannel,
+  resolveDealChannel,
+  ensureDealChannelRegistered,
+  isApprovedDealChannelId,
+  channelNameMatchesDealRules,
+  getApprovedChannelRules,
+  listApprovedDealChannels,
   approveDealChannel,
   unapproveDealChannel,
   addMarket,
@@ -33,13 +47,42 @@ const {
   connectChannelToMarket,
   removeChannelFromMarket,
   inferMarketForLog,
-  listApprovedDealChannels,
   approvedBlitzNameForChannel,
   channelApprovalDiagnostics,
   normalizeMarketId,
+  ensureDefaultMarkets,
+  deleteMarket,
+  renameMarket,
   APPROVED_CHANNELS_PATH,
 } = require('./deal-channels');
-const { buildPremiumDealConfirmation, selectHypeLine } = require('./premium-confirmation');
+const { buildMarketAutocompleteChoices } = require('./market-autocomplete');
+const { acquireProcessLock } = require('./process-lock');
+const {
+  buildPremiumDealConfirmation,
+  buildDealHypeLine,
+  selectHypeLine,
+  PERSONAL_EVENTS,
+  hypeTextsSimilar,
+} = require('./premium-confirmation');
+const {
+  formatQuarterHeader,
+  formatQuarterStatus,
+  getSalesQuarter,
+} = require('./day-quarters');
+const {
+  applyMarketChannelLock,
+  assignRepToMarket,
+  unassignRepFromMarkets,
+  syncAllMarketChannelPermissions,
+  ensureMarketRole,
+  deleteMarketRole,
+} = require('./market-access');
+const {
+  formatPhase3SpeedBreakdown,
+  formatPhase3Leaderboard,
+  formatPhase3Master,
+} = require('./leaderboard-format');
+const { compactJoin } = require('./message-format');
 const {
   ensureGamificationState,
   rememberLineId,
@@ -53,11 +96,13 @@ const {
   collectStartupHealth,
   formatHealthReport,
   buildAdminStatusSnapshot,
+  runStartupMaintenance,
 } = require('./ops-safety');
 const {
   getTimeZone,
   filterToday,
   filterByWeekId,
+  filterByCalendarMonth,
   blitzFromChannelName,
   aggregateUsers,
   primaryBlitz,
@@ -68,9 +113,34 @@ const {
   aggregateTeamWeekly,
   fmtDateInTz,
   getWeekWindow,
+  leaderboardDateHeader,
 } = require('./stats');
 
 const token = process.env.DISCORD_TOKEN;
+
+/** Prevent double replies (messageCreate twice, slash + text, or second bot token). */
+const recentLogReplies = new Set();
+const logReplyClaims = new Set();
+
+function logReplyKeys({ messageId, interactionId, userId, channelId, speeds }) {
+  const keys = [];
+  if (messageId) keys.push(`msg:${messageId}`);
+  if (interactionId) keys.push(`int:${interactionId}`);
+  const speedKey =
+    speeds?.length === 1 ? speeds[0] : speeds?.length ? speeds.join('+') : 'unknown';
+  if (userId && channelId) keys.push(`deal:${userId}:${channelId}:${speedKey}`);
+  return keys;
+}
+
+function tryClaimLogReply(keys) {
+  if (!keys.length) return true;
+  if (keys.some((k) => logReplyClaims.has(k))) return false;
+  for (const k of keys) {
+    logReplyClaims.add(k);
+    setTimeout(() => logReplyClaims.delete(k), 180_000);
+  }
+  return true;
+}
 const adminIds = (process.env.ADMIN_IDS || '')
   .split(',')
   .map((s) => s.trim())
@@ -88,6 +158,10 @@ function canUseAdminCommands(interaction) {
   return false;
 }
 
+function marketAccessOpts() {
+  return { managerRoleId: managerRoleId || undefined };
+}
+
 function canUseAdminMember(userId, member) {
   if (isAdmin(userId)) return true;
   if (member?.permissions?.has(PermissionsBitField.Flags.Administrator)) return true;
@@ -96,7 +170,14 @@ function canUseAdminMember(userId, member) {
 }
 
 async function denyAdmin(interaction) {
+  if (interaction.deferred || interaction.replied) return;
   await interaction.reply({ content: 'Permission denied. Administrators only.', ephemeral: true });
+}
+
+async function safeDeferEphemeral(interaction) {
+  if (interaction.deferred || interaction.replied) return false;
+  await interaction.deferReply({ ephemeral: true });
+  return true;
 }
 
 async function safeAppendActionLog(entry) {
@@ -151,15 +232,18 @@ function logsForTimeframe(data, timeframe) {
   return logs;
 }
 
-const PHASE3_OUTSIDE_CHANNEL_MSG = 'This channel is not connected to a blitz leaderboard.';
-const PHASE3_SPEED_ORDER = ['1gig', '2gig', '500mb', '300mb', '200mb'];
-const PHASE3_SPEED_LABELS = {
-  '1gig': '1 Gig',
-  '2gig': '2 Gig',
-  '500mb': '500 Mbps',
-  '300mb': '300 Mbps',
-  '200mb': '200 Mbps',
-};
+function dealChannelHint(guild) {
+  const channels = listApprovedDealChannels();
+  const listed = channels
+    .slice(0, 6)
+    .map((c) => (guild?.channels?.cache?.has(c.id) ? `<#${c.id}>` : `#${c.name}`))
+    .join(', ');
+  const markets = listMarkets();
+  if (markets.length) {
+    return markets.map((m) => `**${m.marketName}** (\`#${m.marketId}\` or \`#${m.marketId}-deals\`)`).join(' · ');
+  }
+  return '**virginia** / **greenville** (or `virginia-deals`, `greenville-deals`)';
+}
 
 function activeDealLogs(data) {
   return (data.logs || [])
@@ -215,12 +299,20 @@ function inferMarketIdentityForLog(log) {
   return inferMarketForLog(log);
 }
 
-function logsForCurrentMarket(logs, interaction) {
-  const market = marketForChannel(interaction.channel);
+function logsForCurrentMarketChannel(logs, channel) {
+  const market = marketForChannel(channel);
   if (market) {
     return logs.filter((log) => inferMarketIdentityForLog(log).marketId === market.marketId);
   }
-  return logs.filter((log) => logMatchesCurrentBlitz(log, interaction));
+  const blitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel?.name);
+  return logs.filter((log) => {
+    if (log.channelId && channel?.id && log.channelId === channel.id) return true;
+    return titleCaseBlitzName(log.blitzName || log.channelName) === titleCaseBlitzName(blitzName);
+  });
+}
+
+function logsForCurrentMarket(logs, interaction) {
+  return logsForCurrentMarketChannel(logs, interaction.channel);
 }
 
 function aggregateMarkets(logs) {
@@ -245,7 +337,14 @@ function isPhase3ApprovedChannel(interaction) {
 }
 
 async function replyOutsideBlitz(interaction) {
-  await interaction.reply({ content: PHASE3_OUTSIDE_CHANNEL_MSG, ephemeral: true });
+  const chName = interaction.channel?.name || 'this channel';
+  await interaction.reply({
+    content: compactJoin([
+      `**#${chName}** is not a deal-log channel.`,
+      `Use leaderboard commands in ${dealChannelHint(interaction.guild)}.`,
+    ]),
+    ephemeral: true,
+  });
 }
 
 function logChannelRejectionDiagnostics(source, channel, actorId) {
@@ -320,7 +419,19 @@ function logMatchesCurrentBlitz(log, interaction) {
 function filterPhase3Timeframe(logs, timeframe, data) {
   if (timeframe === 'daily') return filterToday(logs, getTimeZone());
   if (timeframe === 'weekly') return filterByWeekId(logs, data.metadata.weekId);
+  if (timeframe === 'monthly') return filterByCalendarMonth(logs, getTimeZone());
   return logs;
+}
+
+const LEADERBOARD_PERIOD_LABELS = {
+  daily: 'Today',
+  weekly: 'This Week',
+  monthly: 'This Month',
+  alltime: 'All-Time',
+};
+
+function phase3PeriodLabel(timeframe) {
+  return LEADERBOARD_PERIOD_LABELS[timeframe] || 'All-Time';
 }
 
 function speedCountsForLogs(logs) {
@@ -329,15 +440,6 @@ function speedCountsForLogs(logs) {
     speeds[log.speed] = (speeds[log.speed] || 0) + 1;
   }
   return speeds;
-}
-
-function formatPhase3SpeedBreakdown(speeds) {
-  const parts = PHASE3_SPEED_ORDER
-    .map((speed) => [speed, speeds[speed] || 0])
-    .filter(([, count]) => count > 0)
-    .map(([speed, count]) => `${count}x ${PHASE3_SPEED_LABELS[speed] || speed}`);
-
-  return parts.length ? parts.join(' | ') : '-';
 }
 
 function phase3Rows(logs) {
@@ -379,46 +481,6 @@ function withCompetitionRanks(rows) {
   });
 }
 
-function dealCountLabel(n) {
-  return `${n} ${n === 1 ? 'deal' : 'deals'}`;
-}
-
-function formatPhase3Leaderboard({ title, rows, totalDeals }) {
-  if (!rows.length) return 'No deals logged yet.';
-
-  const lines = [title, ''];
-  for (const row of withCompetitionRanks(rows).slice(0, 10)) {
-    lines.push(`${row.rank}. ${row.displayName} - ${dealCountLabel(row.total)}`);
-    lines.push(`   ${formatPhase3SpeedBreakdown(row.speeds)}`);
-    lines.push('');
-  }
-  lines.push(buildLeaderboardContext(rows));
-  lines.push('');
-  lines.push(`Total Deals: ${totalDeals}`);
-  return lines.join('\n').trim();
-}
-
-function formatPhase3Master(rows, totalDeals) {
-  if (!rows.length) return 'No deals logged yet.';
-
-  const lines = ['Master Leaderboard', ''];
-  for (const row of withCompetitionRanks(rows).slice(0, 10)) {
-    const blitzLine = Object.entries(row.blitzCounts)
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([name, count]) => `${name}: ${count}`)
-      .join(' | ');
-
-    lines.push(`${row.rank}. ${row.displayName} - ${dealCountLabel(row.total)}`);
-    lines.push(`   ${blitzLine}`);
-    lines.push(`   ${formatPhase3SpeedBreakdown(row.speeds)}`);
-    lines.push('');
-  }
-  lines.push(buildLeaderboardContext(rows));
-  lines.push('');
-  lines.push(`Total Deals: ${totalDeals}`);
-  return lines.join('\n').trim();
-}
-
 function competitionRankForUser(rows, userId) {
   return withCompetitionRanks(rows).find((row) => row.userId === userId)?.rank || null;
 }
@@ -437,32 +499,223 @@ async function handlePhase3Leaderboard(interaction, { timeframe, label }) {
   const logs = filterPhase3Timeframe(scopedLogs, timeframe, data);
   const market = marketForChannel(interaction.channel);
   const heading = market?.marketName || titleCaseBlitzName(currentBlitzName(interaction));
+  const hour = localHour(new Date(), getTimeZone());
+  const showQuarter = timeframe === 'alltime';
 
   await interaction.editReply({
     content: formatPhase3Leaderboard({
-      title: `${heading} ${label} Leaderboard`,
+      title: `${heading} · ${label}`,
       rows: phase3Rows(logs),
       totalDeals: logs.length,
+      dateHeader: leaderboardDateHeader(timeframe),
+      quarterHeader: showQuarter ? formatQuarterHeader(hour) : null,
     }),
     embeds: [],
   });
 }
 
-async function handlePhase3Master(interaction) {
+async function handlePhase3Master(interaction, period = 'alltime') {
   if (!isPhase3ApprovedChannel(interaction)) {
     logChannelRejectionDiagnostics(`/${interaction.commandName}`, interaction.channel, interaction.user.id);
     await replyOutsideBlitz(interaction);
     return;
   }
 
+  const timeframe = period === 'week' ? 'weekly' : period === 'month' ? 'monthly' : 'alltime';
+
   await interaction.deferReply();
   const data = await readLeaderboard();
-  const logs = approvedDealLogs(activeDealLogs(data));
+  const allLogs = approvedDealLogs(activeDealLogs(data));
+  const logs = filterPhase3Timeframe(allLogs, timeframe, data);
+  const hour = localHour(new Date(), getTimeZone());
+  const showQuarter = period === 'alltime';
 
   await interaction.editReply({
-    content: formatPhase3Master(phase3Rows(logs), logs.length),
+    content: formatPhase3Master(
+      phase3Rows(logs),
+      logs.length,
+      phase3PeriodLabel(timeframe),
+      showQuarter ? formatQuarterHeader(hour) : null,
+      leaderboardDateHeader(timeframe),
+    ),
     embeds: [],
   });
+}
+
+async function handleQuarter(interaction) {
+  await interaction.deferReply();
+  const hour = localHour(new Date(), getTimeZone());
+  await interaction.editReply({
+    content: formatQuarterStatus(hour),
+    embeds: [],
+  });
+}
+
+function buildMarketsBoardContent(data) {
+  const logs = approvedDealLogs(activeDealLogs(data));
+  const today = filterToday(logs, getTimeZone());
+  const week = filterByWeekId(logs, data.metadata.weekId);
+  const todayRows = aggregateMarkets(today);
+  const weekRows = aggregateMarkets(week);
+  const weekMap = new Map(weekRows.map((r) => [r.marketId || `name:${r.marketName}`, r]));
+  const todayMap = new Map(todayRows.map((r) => [r.marketId || `name:${r.marketName}`, r]));
+  const keys = new Set([...weekMap.keys(), ...todayMap.keys()]);
+  const rows = [...keys]
+    .map((k) => {
+      const w = weekMap.get(k);
+      const t = todayMap.get(k);
+      return {
+        marketName: w?.marketName || t?.marketName || 'Unassigned',
+        week: w?.total || 0,
+        today: t?.total || 0,
+      };
+    })
+    .sort((a, b) => b.week - a.week || b.today - a.today || a.marketName.localeCompare(b.marketName));
+
+  const lines = ['**Market Board**'];
+  for (let i = 0; i < rows.length; i += 1) {
+    const r = rows[i];
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
+    lines.push(`${medal} **${r.marketName}** · **${r.week}** week · **${r.today}** today`);
+  }
+  lines.push(`**${week.length}** week · **${today.length}** today company-wide`);
+  return compactJoin(lines);
+}
+
+function buildMyDealsContent(channel, userId, data) {
+  const allLogs = approvedDealLogs(activeDealLogs(data));
+  const userLogs = allLogs.filter((log) => log.userId === userId);
+  const marketLogs = logsForCurrentMarketChannel(allLogs, channel);
+  const userMarketLogs = marketLogs.filter((log) => log.userId === userId);
+  const todayUserLogs = filterPhase3Timeframe(userLogs, 'daily', data);
+  const weekUserLogs = filterPhase3Timeframe(userLogs, 'weekly', data);
+  const marketRank = competitionRankForUser(phase3Rows(marketLogs), userId);
+  const overallRank = competitionRankForUser(phase3Rows(allLogs), userId);
+  const market = marketForChannel(channel);
+  const marketName = market?.marketName || titleCaseBlitzName(approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel?.name));
+
+  return compactJoin([
+    '**Your Deals**',
+    `Today **${todayUserLogs.length}** · Week **${weekUserLogs.length}** · Market **${userMarketLogs.length}** · All-time **${userLogs.length}**`,
+    formatPhase3SpeedBreakdown(speedCountsForLogs(userMarketLogs)),
+    marketRank
+      ? `**#${marketRank}** ${marketName}${overallRank ? ` · **#${overallRank}** overall` : ''}`
+      : `_No rank in ${marketName} yet_`,
+  ]);
+}
+
+async function buildTextLeaderboardContent(channel, intent, data) {
+  const hour = localHour(new Date(), getTimeZone());
+
+  if (intent.cmd === 'quarter') return formatQuarterStatus(hour);
+  if (intent.cmd === 'markets') return buildMarketsBoardContent(data);
+  if (intent.cmd === 'mydeals') return null;
+
+  if (intent.cmd === 'master') {
+    const period = intent.period || 'alltime';
+    const timeframe = period === 'week' ? 'weekly' : period === 'month' ? 'monthly' : 'alltime';
+    const allLogs = approvedDealLogs(activeDealLogs(data));
+    const logs = filterPhase3Timeframe(allLogs, timeframe, data);
+    return formatPhase3Master(
+      phase3Rows(logs),
+      logs.length,
+      phase3PeriodLabel(timeframe),
+      period === 'alltime' ? formatQuarterHeader(hour) : null,
+      leaderboardDateHeader(timeframe),
+    );
+  }
+
+  if (intent.cmd === 'blitz') {
+    const timeframe = intent.timeframe || 'alltime';
+    const allLogs = approvedDealLogs(activeDealLogs(data));
+    const dealCh = resolveDealChannel(channel) || channel;
+    const scopedLogs = logsForCurrentMarketChannel(allLogs, dealCh);
+    const logs = filterPhase3Timeframe(scopedLogs, timeframe, data);
+    const market = marketForChannel(dealCh);
+    const heading =
+      market?.marketName ||
+      titleCaseBlitzName(approvedBlitzNameForChannel(dealCh) || blitzFromChannelName(dealCh?.name));
+    return formatPhase3Leaderboard({
+      title: `${heading} · ${phase3PeriodLabel(timeframe)}`,
+      rows: phase3Rows(logs),
+      totalDeals: logs.length,
+      dateHeader: leaderboardDateHeader(timeframe),
+      quarterHeader: timeframe === 'alltime' ? formatQuarterHeader(hour) : null,
+    });
+  }
+
+  return null;
+}
+
+async function resolveDealChannelForMessage(message) {
+  let ch = message.channel;
+  if (!ch) return null;
+  if (ch.partial) {
+    ch = await ch.fetch().catch(() => ch);
+  }
+  if (typeof ch.isThread === 'function' && ch.isThread()) {
+    if (ch.parent) return ch.parent;
+    if (ch.parentId && message.guild) {
+      const cached = message.guild.channels.cache.get(ch.parentId);
+      if (cached) return cached;
+      const fetched = await message.guild.channels.fetch(ch.parentId).catch(() => null);
+      if (fetched) return fetched;
+    }
+  }
+  return resolveDealChannel(ch) || ch;
+}
+
+function messageChannelIsDealApproved(message, dealChannel) {
+  const reg = ensureDealChannelRegistered(dealChannel || message.channel, message.author.id);
+  if (reg.ok) return true;
+  if (isApprovedDealChannel(dealChannel || message.channel)) return true;
+  if (isApprovedDealChannelId(message.channel?.id)) return true;
+  if (isApprovedDealChannelId(message.channel?.parentId)) return true;
+  if (isApprovedDealChannelId(dealChannel?.id)) return true;
+  return false;
+}
+
+async function handleTextLeaderboard(message, intent) {
+  const dealChannel = await resolveDealChannelForMessage(message);
+  if (!messageChannelIsDealApproved(message, dealChannel)) {
+    const chName = message.channel?.name || 'this channel';
+    const mapped = marketForChannel(dealChannel || message.channel);
+    console.warn(
+      '[Pulse] Text leaderboard rejected',
+      JSON.stringify({
+        channelId: message.channel?.id,
+        parentId: message.channel?.parentId,
+        dealChannelId: dealChannel?.id,
+        channelName: message.channel?.name,
+        mappedMarket: mapped?.marketId || null,
+      }),
+    );
+    await message
+      .reply({
+        content: compactJoin([
+          `**#${chName}** is not a deal-log channel.`,
+          mapped
+            ? `Market **${mapped.marketName}** is configured — try \`lb\` again (channel link was refreshed).`
+            : `Use a channel named for a market (e.g. ${dealChannelHint(message.guild)}) or \`/admin add-channel\` here.`,
+          'Keywords: `lb` `daily` `weekly` `master` (no slash).',
+        ]),
+        allowedMentions: { parse: [] },
+      })
+      .catch(() => {});
+    return;
+  }
+
+  const data = await readLeaderboard();
+
+  if (intent.cmd === 'mydeals') {
+    const content = buildMyDealsContent(dealChannel || message.channel, message.author.id, data);
+    await message.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
+    return;
+  }
+
+  const content = await buildTextLeaderboardContent(dealChannel || message.channel, intent, data);
+  if (!content) return;
+  await message.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
 }
 
 async function handlePhase3MyDeals(interaction) {
@@ -488,20 +741,15 @@ async function handlePhase3MyDeals(interaction) {
 
   await interaction.editReply({
     content: [
-      'Your Deals',
-      '',
-      `Today: ${todayUserLogs.length}`,
-      `This Week: ${weekUserLogs.length}`,
-      `This Market: ${userMarketLogs.length}`,
-      `All-Time: ${userLogs.length}`,
-      '',
-      'Speed Breakdown:',
+      '**Your Deals**',
+      `Today **${todayUserLogs.length}** · Week **${weekUserLogs.length}** · Market **${userMarketLogs.length}** · All-time **${userLogs.length}**`,
       formatPhase3SpeedBreakdown(speedCountsForLogs(userMarketLogs)),
-      '',
-      'Current Rank:',
-      marketRank ? `#${marketRank} in ${marketName}` : `- in ${marketName}`,
-      overallRank ? `#${overallRank} overall` : '- overall',
-    ].join('\n'),
+      marketRank
+        ? `**#${marketRank}** ${marketName}${overallRank ? ` · **#${overallRank}** overall` : ''}`
+        : `_No rank in ${marketName} yet_`,
+    ]
+      .filter(Boolean)
+      .join('\n'),
     embeds: [],
   });
 }
@@ -590,6 +838,7 @@ function selectPrimaryDealLine({ ctx, dataBefore, dataAfter, now, tz }) {
     if (movement.oneAwayFromFirst) eventOrder.push('one_away_first');
     if (hour >= GAMIFICATION_CONFIG.lateHourCutoff) eventOrder.push('late_night');
     if (hour <= GAMIFICATION_CONFIG.earlyHourCutoff) eventOrder.push('early_morning');
+    eventOrder.push(getSalesQuarter(hour));
     eventOrder.push('fallback');
 
     for (const event of eventOrder) {
@@ -603,7 +852,7 @@ function selectPrimaryDealLine({ ctx, dataBefore, dataAfter, now, tz }) {
           team: ctx.blitzName,
         },
       });
-      if (picked?.text) return picked;
+      if (picked?.text) return { ...picked, event };
     }
   } catch (err) {
     console.error('Primary hype selection failed:', err.message || err);
@@ -687,6 +936,14 @@ function pickEventLine(game, event, values) {
   return picked.text;
 }
 
+function eventFromMilestoneCount(count) {
+  if (count >= 10) return 'ten_day';
+  if (count >= 5) return 'five_day';
+  if (count >= 3) return 'hat_trick';
+  if (count === 2) return 'second_today';
+  return 'first_today';
+}
+
 async function buildPhase4Messages({
   dataBefore,
   dataAfter,
@@ -698,7 +955,9 @@ async function buildPhase4Messages({
   now,
   tz,
   primaryLineId = null,
+  primaryEvent = null,
   suppressPersonalHype = false,
+  confirmationHype = null,
 }) {
   const date = fmtDateInTz(now, tz);
   const blitz = titleCaseBlitzName(blitzName);
@@ -706,6 +965,8 @@ async function buildPhase4Messages({
   const messages = new Set();
   const nowHour = localHour(now, tz);
   const weekId = dataAfter.metadata.weekId;
+  const skipPersonal = suppressPersonalHype || !!primaryLineId || !!confirmationHype;
+  const skipEvent = (event) => skipPersonal && (event === primaryEvent || PERSONAL_EVENTS.has(event));
 
   const userBefore = dailyUserCount(dataBefore, date, userId);
   const userAfter = dailyUserCount(dataAfter, date, userId);
@@ -730,7 +991,7 @@ async function buildPhase4Messages({
       if (userBefore < count && userAfter >= count) {
         const key = milestoneKey(date, 'rep.daily', userId, count);
         if (!markMilestoneOnce(game.dailyMilestones, key)) continue;
-        if (!suppressPersonalHype) {
+        if (!skipPersonal) {
           const event = count >= 10 ? 'ten_day' : count >= 5 ? 'five_day' : count >= 3 ? 'hat_trick' : count === 2 ? 'second_today' : 'first_today';
           const line = pickEventLine(game, event, { rep: displayName, count });
           if (line) messages.add(line);
@@ -742,8 +1003,10 @@ async function buildPhase4Messages({
       if (userWeekBefore < count && userWeekAfter >= count) {
         const key = milestoneKey(String(weekId), 'rep.weekly', userId, count);
         if (!markMilestoneOnce(game.weeklyMilestones, key)) continue;
-        const line = pickEventLine(game, 'weekly_milestone', { rep: displayName, count });
-        if (line) messages.add(line);
+        if (!skipEvent('weekly_milestone')) {
+          const line = pickEventLine(game, 'weekly_milestone', { rep: displayName, count });
+          if (line) messages.add(line);
+        }
       }
     }
 
@@ -752,8 +1015,10 @@ async function buildPhase4Messages({
         const key = milestoneKey('all', 'rep.alltime', userId, count);
         if (!markMilestoneOnce(game.allTimeMilestones, key)) continue;
         const event = count === 1 ? 'first_ever' : 'alltime_milestone';
-        const line = pickEventLine(game, event, { rep: displayName, count });
-        if (line) messages.add(line);
+        if (!skipEvent(event)) {
+          const line = pickEventLine(game, event, { rep: displayName, count });
+          if (line) messages.add(line);
+        }
       }
     }
 
@@ -778,43 +1043,62 @@ async function buildPhase4Messages({
       }
     }
 
-    if (!suppressPersonalHype) {
-      if (movement.tookFirst) messages.add(pickEventLine(game, 'took_first', { rep: displayName }) || '');
-      else if (movement.enteredTop3) messages.add(pickEventLine(game, 'entered_top3', { rep: displayName }) || '');
-      else if (movement.passedRepName) {
-        messages.add(pickEventLine(game, 'passed_rep', { rep: displayName, otherRep: movement.passedRepName }) || '');
-      } else if (movement.oneAwayFromFirst) {
+    if (!skipPersonal) {
+      if (movement.tookFirst && primaryEvent !== 'took_first' && !skipEvent('took_first')) {
+        messages.add(pickEventLine(game, 'took_first', { rep: displayName }) || '');
+      } else if (movement.enteredTop3 && !skipEvent('entered_top3')) {
+        messages.add(pickEventLine(game, 'entered_top3', { rep: displayName }) || '');
+      } else if (movement.passedRepName && !skipEvent('passed_rep')) {
+        messages.add(
+          pickEventLine(game, 'passed_rep', { rep: displayName, otherRep: movement.passedRepName }) || '',
+        );
+      } else if (movement.oneAwayFromFirst && !skipEvent('one_away_first')) {
         messages.add(pickEventLine(game, 'one_away_first', { rep: displayName }) || '');
       }
     }
 
-    if (nowHour >= GAMIFICATION_CONFIG.lateHourCutoff) {
-      messages.add(pickEventLine(game, 'late_night', { rep: displayName }) || '');
-    } else if (nowHour <= GAMIFICATION_CONFIG.earlyHourCutoff) {
-      messages.add(pickEventLine(game, 'early_morning', { rep: displayName }) || '');
+    if (!skipPersonal) {
+      if (nowHour >= GAMIFICATION_CONFIG.lateHourCutoff && !skipEvent('late_night')) {
+        messages.add(pickEventLine(game, 'late_night', { rep: displayName }) || '');
+      } else if (nowHour <= GAMIFICATION_CONFIG.earlyHourCutoff && !skipEvent('early_morning')) {
+        messages.add(pickEventLine(game, 'early_morning', { rep: displayName }) || '');
+      }
     }
 
     return data;
   });
 
-  return [...messages].filter(Boolean).slice(0, 3);
+  return [...messages]
+    .filter(Boolean)
+    .filter((line) => !confirmationHype || !hypeTextsSimilar(line, confirmationHype))
+    .slice(0, 1);
 }
 
-async function postPhase4Messages(channel, messages) {
-  if (!channel || typeof channel.send !== 'function') return;
-  for (const message of messages) {
-    await channel.send({ content: message, allowedMentions: { parse: [] } }).catch((err) => {
-      console.error('Phase 4 gamification send failed:', err.message || err);
-    });
-  }
+function buildDealLogConfirmationPayload({ ctx, dataBefore, dataAfter, now, tz }) {
+  const movement = deriveLeaderboardMovement({
+    beforeRows: ctx.rowsTodayBefore || [],
+    afterRows: ctx.rowsTodayAfter || [],
+    userId: ctx.userId,
+  });
+  const primary = selectPrimaryDealLine({ ctx, dataBefore, dataAfter, now, tz });
+  const hypeLine = buildDealHypeLine({
+    picked: primary,
+    displayName: ctx.displayName,
+    movement,
+  });
+  return {
+    content: buildPremiumDealConfirmation({ ...ctx, hypeLine, pulseBuild: PULSE_BUILD }),
+    primary,
+    hypeLine,
+  };
 }
 
-async function postPhase4Gamification(channel, ctx) {
+/** Milestone tracking only — deal logs never get a second channel message. */
+async function recordGamificationAfterLog(ctx) {
   try {
-    const messages = await buildPhase4Messages(ctx);
-    await postPhase4Messages(channel, messages);
+    await buildPhase4Messages(ctx);
   } catch (err) {
-    console.error('Gamification pipeline failed (log already saved):', err.message || err);
+    console.error('Gamification state update failed (log already saved):', err.message || err);
   }
 }
 
@@ -945,21 +1229,20 @@ async function confirmSingleDealLog({
     tz,
     hasCustomerOnFile,
   });
-  const primary = selectPrimaryDealLine({
+  const { content, primary, hypeLine } = buildDealLogConfirmationPayload({
     ctx,
     dataBefore: appendResult.dataBefore,
     dataAfter: appendResult.data,
     now,
     tz,
   });
-  if (primary?.text) ctx.primaryLine = primary.text;
 
   await editConfirmation({
-    content: buildPremiumDealConfirmation(ctx),
+    content,
     embeds: [],
     components: [],
   });
-  await postPhase4Gamification(channel, {
+  await recordGamificationAfterLog({
     dataBefore: appendResult.dataBefore,
     dataAfter: appendResult.data,
     userId,
@@ -970,7 +1253,9 @@ async function confirmSingleDealLog({
     now,
     tz,
     primaryLineId: primary?.id || null,
-    suppressPersonalHype: false,
+    primaryEvent: primary?.event || null,
+    suppressPersonalHype: true,
+    confirmationHype: hypeLine,
   });
   return true;
 }
@@ -1022,7 +1307,7 @@ async function handleLog(interaction) {
 
   if (!isApprovedDealChannel(interaction.channel)) {
     logChannelRejectionDiagnostics('/log', interaction.channel, interaction.user.id);
-    await interaction.reply({ content: PHASE3_OUTSIDE_CHANNEL_MSG, ephemeral: true });
+    await replyOutsideBlitz(interaction);
     return;
   }
 
@@ -1075,6 +1360,21 @@ async function handleLog(interaction) {
   });
 
   const hasCustomerOnFile = !!(customerName || customerPhone || customerAddress);
+  const replyKeys = logReplyKeys({
+    interactionId: interaction.id,
+    userId,
+    channelId: channel?.id || null,
+    speeds: [speed],
+  });
+  if (!tryClaimLogReply(replyKeys)) {
+    await interaction.editReply({
+      content: '_Deal already logged (duplicate request)._',
+      embeds: [],
+      components: [],
+    });
+    return;
+  }
+
   const appendResult = await appendSingleDealLog({
     userId,
     speed,
@@ -1121,41 +1421,17 @@ async function handleLog(interaction) {
     return;
   }
 
-  const { dataBefore: snapshotBefore, data } = appendResult;
-
-  const ctx = buildLogConfirmationCtx({
+  await confirmSingleDealLog({
+    appendResult,
+    channel,
     userId,
     displayName,
     blitzName,
     speeds: [speed],
-    dataAfter: data,
-    dataBefore: snapshotBefore,
+    now,
     tz,
     hasCustomerOnFile,
-  });
-  const primary = selectPrimaryDealLine({
-    ctx,
-    dataBefore: snapshotBefore,
-    dataAfter: data,
-    now,
-    tz,
-  });
-  if (primary?.text) ctx.primaryLine = primary.text;
-
-  const content = buildPremiumDealConfirmation(ctx);
-  await interaction.editReply({ content, embeds: [] });
-  await postPhase4Gamification(channel, {
-    dataBefore: snapshotBefore,
-    dataAfter: data,
-    userId,
-    displayName,
-    blitzName,
-    channelId: channel?.id || null,
-    speeds: [speed],
-    now,
-    tz,
-    primaryLineId: primary?.id || null,
-    suppressPersonalHype: false,
+    editConfirmation: (payload) => interaction.editReply(payload),
   });
 }
 
@@ -1391,6 +1667,7 @@ async function handleAdminAddChannel(interaction) {
   }
 
   const blitzName = channelBlitzName(channel, interaction.options.getString('blitz_name'));
+  const registered = ensureDealChannelRegistered(channel, interaction.user.id);
   const result = approveDealChannel(channel, interaction.user.id, blitzName);
 
   await interaction.editReply({
@@ -1398,7 +1675,12 @@ async function handleAdminAddChannel(interaction) {
       result.alreadyApproved ? 'Deal channel already approved.' : 'Deal channel approved.',
       `Channel: <#${result.channel.id}>`,
       `Blitz: ${result.channel.blitzName}`,
-    ].join('\n'),
+      registered.ok && registered.market
+        ? `Linked to market **${registered.market.marketName}** (\`${registered.market.marketId}\`).`
+        : null,
+    ]
+      .filter(Boolean)
+      .join('\n'),
   });
 }
 
@@ -1554,12 +1836,21 @@ async function handleAdminAddMarket(interaction) {
       isp,
       createdBy: interaction.user.id,
     });
+    let roleNote = '';
+    try {
+      const roleId = await ensureMarketRole(interaction.guild, result.market);
+      roleNote = `Role: <@&${roleId}>`;
+    } catch (err) {
+      roleNote = `Role: not created (${err.message || err}). Bot needs **Manage Roles**.`;
+    }
     await interaction.editReply({
       content: [
         result.alreadyExists ? 'Market updated.' : 'Market created.',
         `Market: ${result.market.marketName}`,
         `Market ID: ${result.market.marketId}`,
         `ISP: ${result.market.isp || '—'}`,
+        roleNote,
+        '_Use `/admin assign-rep` so reps only see this market’s channels._',
       ].join('\n'),
     });
   } catch (err) {
@@ -1573,6 +1864,7 @@ async function handleAdminListMarkets(interaction) {
     return;
   }
   await interaction.deferReply({ ephemeral: true });
+  const bootstrapped = ensureDefaultMarkets(interaction.user.id);
   const markets = listMarkets();
   if (!markets.length) {
     await interaction.editReply({ content: 'No markets configured yet. Use /admin add-market.' });
@@ -1580,14 +1872,81 @@ async function handleAdminListMarkets(interaction) {
   }
   await interaction.editReply({
     content: [
+      bootstrapped.length ? `_Auto-registered ${bootstrapped.length} market(s) from *-deals channels._` : null,
       'Markets',
       '',
       ...markets.map((m) => {
         const channels = (m.channelIds || []).map((id) => `<#${id}>`).join(', ') || 'No channels';
-        return `• ${m.marketName} (${m.marketId})\n  ISP: ${m.isp || '—'}\n  Channels: ${channels}`;
+        const role = m.roleId ? `<@&${m.roleId}>` : '—';
+        const reps = Array.isArray(m.repUserIds) ? m.repUserIds.length : 0;
+        return `• ${m.marketName} (${m.marketId})\n  Role: ${role} · Reps: ${reps}\n  Channels: ${channels}`;
       }),
-    ].join('\n'),
+    ]
+      .filter(Boolean)
+      .join('\n'),
   });
+}
+
+async function handleAdminEditMarket(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  const marketQuery = interaction.options.getString('market_id', true);
+  const marketName = interaction.options.getString('market_name');
+  const isp = interaction.options.getString('isp');
+  if (!marketName && isp == null) {
+    await interaction.editReply({ content: 'Provide **market_name** and/or **isp** to update.' });
+    return;
+  }
+  try {
+    const market = renameMarket(marketQuery, { marketName, isp });
+    await interaction.editReply({
+      content: [
+        `Updated **${market.marketName}** (\`${market.marketId}\`).`,
+        `ISP: ${market.isp || '—'}`,
+      ].join('\n'),
+    });
+  } catch (err) {
+    const msg = err.code === 'MARKET_NOT_FOUND' ? err.message : `Could not edit market: ${err.message || err}`;
+    await interaction.editReply({ content: msg });
+  }
+}
+
+async function handleAdminDeleteMarket(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  if (!(await safeDeferEphemeral(interaction))) return;
+  const marketQuery = interaction.options.getString('market_id', true);
+  const removeRole = interaction.options.getBoolean('delete_discord_role') ?? false;
+  try {
+    const { market } = deleteMarket(marketQuery);
+    let roleNote = 'Discord role left in place.';
+    if (removeRole) {
+      try {
+        const removed = await deleteMarketRole(interaction.guild, market);
+        roleNote = removed
+          ? `Removed Discord role for **${market.marketName}**.`
+          : 'No Discord role on file for this market.';
+      } catch (err) {
+        roleNote = `Could not remove Discord role: ${err.message || err}`;
+      }
+    }
+    await interaction.editReply({
+      content: [
+        `Deleted market **${market.marketName}** (\`${market.marketId}\`).`,
+        'Channel mappings for this market were cleared.',
+        roleNote,
+        '_Reps still holding the old role will not see locked channels until you unassign or re-assign._',
+      ].join('\n'),
+    });
+  } catch (err) {
+    const msg = err.code === 'MARKET_NOT_FOUND' ? err.message : `Could not delete market: ${err.message || err}`;
+    await interaction.editReply({ content: msg });
+  }
 }
 
 async function handleAdminConnectChannel(interaction) {
@@ -1597,21 +1956,117 @@ async function handleAdminConnectChannel(interaction) {
   }
   await interaction.deferReply({ ephemeral: true });
   const channel = optionChannelOrCurrent(interaction);
-  const marketId = normalizeMarketId(interaction.options.getString('market_id', true));
+  const marketId = interaction.options.getString('market_id', true);
   try {
     const result = connectChannelToMarket({
       channel,
       marketId,
       connectedBy: interaction.user.id,
     });
+    let lockNote = '';
+    try {
+      const lock = await applyMarketChannelLock(
+        channel,
+        result.market,
+        interaction.guild,
+        client.user.id,
+        marketAccessOpts(),
+      );
+      lockNote = lock.ok
+        ? `Channel locked to <@&${lock.roleId}> (reps without this role cannot see it).`
+        : 'Channel lock failed.';
+    } catch (err) {
+      lockNote = `Channel lock failed: ${err.message || err}. Bot needs **Manage Channels** + **Manage Roles**.`;
+    }
     await interaction.editReply({
       content: [
         `Connected <#${channel.id}> to ${result.market.marketName} (${result.market.marketId}).`,
         result.removedFrom ? `Removed old mapping from: ${result.removedFrom}` : null,
+        lockNote,
       ].filter(Boolean).join('\n'),
     });
   } catch (err) {
-    await interaction.editReply({ content: `Could not connect channel: ${err.message || err}` });
+    const msg =
+      err.code === 'MARKET_NOT_FOUND' ? err.message : `Could not connect channel: ${err.message || err}`;
+    await interaction.editReply({ content: msg });
+  }
+}
+
+async function handleAdminAssignRep(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  if (!(await safeDeferEphemeral(interaction))) return;
+  const rep = interaction.options.getUser('rep', true);
+  const marketId = interaction.options.getString('market_id', true);
+  try {
+    const { market, roleId } = await assignRepToMarket(
+      interaction.guild,
+      rep.id,
+      marketId,
+      marketAccessOpts(),
+    );
+    await interaction.editReply({
+      content: [
+        `Assigned <@${rep.id}> to **${market.marketName}**.`,
+        `Role: <@&${roleId}>`,
+        'They can only see channels locked to this market (other market channels are hidden).',
+        '_Do not add reps to a generic role that can see all deal channels._',
+      ].join('\n'),
+    });
+  } catch (err) {
+    const msg =
+      err.code === 'MARKET_NOT_FOUND' ? err.message : `Could not assign rep: ${err.message || err}`;
+    await interaction.editReply({ content: msg });
+  }
+}
+
+async function handleAdminUnassignRep(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  if (!(await safeDeferEphemeral(interaction))) return;
+  const rep = interaction.options.getUser('rep', true);
+  try {
+    const { removed } = await unassignRepFromMarkets(interaction.guild, rep.id);
+    await interaction.editReply({
+      content: removed.length
+        ? `Removed <@${rep.id}> from ${removed.length} market role(s). They will no longer see locked market channels.`
+        : `<@${rep.id}> had no Pulse market roles.`,
+    });
+  } catch (err) {
+    await interaction.editReply({ content: `Could not unassign rep: ${err.message || err}` });
+  }
+}
+
+async function handleAdminSyncPermissions(interaction) {
+  if (!canUseAdminCommands(interaction)) {
+    await denyAdmin(interaction);
+    return;
+  }
+  if (!(await safeDeferEphemeral(interaction))) return;
+  try {
+    const results = await syncAllMarketChannelPermissions(
+      interaction.guild,
+      client.user.id,
+      marketAccessOpts(),
+    );
+    await interaction.editReply({
+      content: [
+        '**Market channel permissions synced.**',
+        `Locked **${results.ok}** channel(s).`,
+        results.failed.length
+          ? `Failed: ${results.failed.slice(0, 5).map((f) => f.channelId || f.marketId).join(', ')}${results.failed.length > 5 ? '…' : ''}`
+          : null,
+        '_Reps need `/admin assign-rep` — adding them to the server alone does not assign a market._',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    });
+  } catch (err) {
+    await interaction.editReply({ content: `Sync failed: ${err.message || err}` });
   }
 }
 
@@ -1654,14 +2109,13 @@ async function handleMarkets(interaction) {
     };
   }).sort((a, b) => b.week - a.week || b.today - a.today || a.marketName.localeCompare(b.marketName));
 
-  const lines = ['Pulse Market Board', ''];
+  const lines = ['**Market Board**'];
   for (let i = 0; i < rows.length; i += 1) {
     const r = rows[i];
-    lines.push(`${i + 1}. ${r.marketName} - ${r.week} week / ${r.today} today`);
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
+    lines.push(`${medal} **${r.marketName}** · **${r.week}** week · **${r.today}** today`);
   }
-  lines.push('');
-  lines.push(`Company Total This Week: ${week.length}`);
-  lines.push(`Company Total Today: ${today.length}`);
+  lines.push('', `**${week.length}** week · **${today.length}** today company-wide`);
 
   await interaction.editReply({ content: lines.join('\n') });
 }
@@ -1743,10 +2197,37 @@ async function handleAdminExportCsv(interaction) {
   });
 }
 
+function resolveAdminSubcommand(interaction) {
+  let sub = null;
+  try {
+    sub = interaction.options.getSubcommand(false);
+  } catch {
+    return null;
+  }
+  if (!sub) return null;
+  const aliases = {
+    assign_rep: 'assign-rep',
+    unassign_rep: 'unassign-rep',
+    sync_permissions: 'sync-permissions',
+    delete_market: 'delete-market',
+    edit_market: 'edit-market',
+  };
+  return aliases[sub] || sub;
+}
+
 async function handleAdmin(interaction) {
-  const subcommand = interaction.options.getSubcommand();
+  const subcommand = resolveAdminSubcommand(interaction);
+  console.log('[Pulse] /admin subcommand:', subcommand || '(none)');
+  if (!subcommand) {
+    return interaction.reply({
+      content: 'Pick an admin action from the list (e.g. **assign-rep**, **sync-permissions**).',
+      ephemeral: true,
+    });
+  }
   if (subcommand === 'add-market') return handleAdminAddMarket(interaction);
+  if (subcommand === 'edit-market') return handleAdminEditMarket(interaction);
   if (subcommand === 'list-markets') return handleAdminListMarkets(interaction);
+  if (subcommand === 'delete-market') return handleAdminDeleteMarket(interaction);
   if (subcommand === 'connect-channel') return handleAdminConnectChannel(interaction);
   if (subcommand === 'market-status') return handleAdminMarketStatus(interaction);
   if (subcommand === 'add-channel') return handleAdminAddChannel(interaction);
@@ -1755,7 +2236,14 @@ async function handleAdmin(interaction) {
   if (subcommand === 'status') return handleAdminStatus(interaction);
   if (subcommand === 'stats') return handleAdminStats(interaction);
   if (subcommand === 'export-csv') return handleAdminExportCsv(interaction);
-  return interaction.reply({ content: 'Unknown admin command.', ephemeral: true });
+  if (subcommand === 'assign-rep') return handleAdminAssignRep(interaction);
+  if (subcommand === 'unassign-rep') return handleAdminUnassignRep(interaction);
+  if (subcommand === 'sync-permissions') return handleAdminSyncPermissions(interaction);
+  console.warn('[Pulse] Unknown admin subcommand:', subcommand);
+  return interaction.reply({
+    content: `Unknown admin subcommand: \`${subcommand || 'none'}\`. Redeploy commands and restart the bot.`,
+    ephemeral: true,
+  });
 }
 
 async function handleExport(interaction) {
@@ -1944,18 +2432,51 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
   ],
   partials: [Partials.Channel],
 });
 
 client.once('ready', async () => {
-  console.log(`Pulse online as ${client.user.tag}`);
+  const appId = process.env.CLIENT_ID || client.application?.id || 'unknown';
+  console.log(
+    `Pulse online as ${client.user.tag} (pid ${process.pid}) · build ${PULSE_BUILD} · app ${appId} · ONE reply per log`,
+  );
+  const host = process.env.RAILWAY_ENVIRONMENT
+    ? `Railway (${process.env.RAILWAY_SERVICE_NAME || 'pulse'})`
+    : 'local';
+  const dataDir = require('./paths').getPulseDataDir();
+  console.log(`[Pulse] Host: ${host} · data dir: ${dataDir}`);
+  if (!process.env.RAILWAY_ENVIRONMENT) {
+    console.log('[Pulse] Production should run on Railway only — stop local npm start to avoid duplicate replies.');
+  }
+  const boot = ensureDefaultMarkets('startup');
+  if (boot.length) {
+    console.log(`[Pulse] Auto-registered markets: ${boot.map((m) => m.marketId).join(', ')}`);
+  }
   try {
     startDashboard();
   } catch (err) {
     console.error('Pulse dashboard failed to start:', err.message || err);
   }
+
+  for (const guild of client.guilds.cache.values()) {
+    syncAllMarketChannelPermissions(guild, client.user.id, marketAccessOpts())
+      .then((r) => {
+        if (r.ok) console.log(`[Pulse] Synced market locks on ${r.ok} channel(s) in ${guild.name}`);
+        if (r.failed.length) console.warn(`[Pulse] Market sync failures in ${guild.name}:`, r.failed.length);
+      })
+      .catch((err) => console.error(`[Pulse] Market permission sync failed (${guild.name}):`, err.message || err));
+  }
 });
+
+async function replySlashHint(message, hintKey) {
+  const text = SLASH_HINTS[hintKey];
+  if (!text) return;
+  await message
+    .reply({ content: text, allowedMentions: { parse: [] } })
+    .catch(() => {});
+}
 
 client.on('messageCreate', async (message) => {
   try {
@@ -1963,12 +2484,37 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (message.webhookId) return;
     if (typeof message.content !== 'string' || !message.content.trim()) return;
-    if (!message.channel || !('name' in message.channel) || !message.channel.name) return;
+    if (!message.channel) return;
+    const dealChannel = await resolveDealChannelForMessage(message);
+    if (!dealChannel || typeof dealChannel.name !== 'string' || !dealChannel.name) return;
     if (await handleTextAdminCommand(message)) return;
+
+    const boardIntent = parseLeaderboardTextIntent(message.content);
+    if (boardIntent) {
+      await handleTextLeaderboard(message, boardIntent);
+      return;
+    }
+
+    if (channelNameMatchesDealRules(dealChannel.name, getApprovedChannelRules())) {
+      ensureDealChannelRegistered(message.channel, message.author.id);
+    }
+
     if (!isApprovedDealChannel(message.channel)) return;
+
+    const logIntent = detectTextLogIntent(message.content);
+    if (logIntent) {
+      await replySlashHint(message, logIntent);
+      return;
+    }
 
     const parsed = parseDealMessage(message.content);
     if (!parsed.ok || !parsed.speeds.length) return;
+    if (recentLogReplies.has(message.id)) return;
+
+    if (!isQuickNaturalLog(parsed)) {
+      await replySlashHint(message, 'needSlashLog');
+      return;
+    }
 
     const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null));
 
@@ -2005,6 +2551,17 @@ client.on('messageCreate', async (message) => {
 
     if (parsed.speeds.length === 1) {
       const speed = parsed.speeds[0];
+      const replyKeys = logReplyKeys({
+        messageId: message.id,
+        userId,
+        channelId: channel.id,
+        speeds: [speed],
+      });
+      if (!tryClaimLogReply(replyKeys)) return;
+
+      recentLogReplies.add(message.id);
+      setTimeout(() => recentLogReplies.delete(message.id), 120_000);
+
       const appendResult = await appendSingleDealLog({
         userId,
         speed,
@@ -2069,6 +2626,16 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    const batchKeys = logReplyKeys({
+      messageId: message.id,
+      userId,
+      channelId: channel.id,
+      speeds: parsed.speeds,
+    });
+    if (!tryClaimLogReply(batchKeys)) return;
+    recentLogReplies.add(message.id);
+    setTimeout(() => recentLogReplies.delete(message.id), 120_000);
+
     const result = await appendMessageLogsBatch({
       messageId: message.id,
       userId,
@@ -2088,19 +2655,17 @@ client.on('messageCreate', async (message) => {
       tz,
       hasCustomerOnFile: false,
     });
-    const primary = selectPrimaryDealLine({
+    const { content, primary, hypeLine } = buildDealLogConfirmationPayload({
       ctx,
       dataBefore: result.dataBefore,
       dataAfter: result.data,
       now,
       tz,
     });
-    if (primary?.text) ctx.primaryLine = primary.text;
-    const content = buildPremiumDealConfirmation(ctx);
     await message.reply({ content, allowedMentions: { parse: [] } }).catch((err) => {
       console.error('Natural log reply failed:', err.message || err);
     });
-    await postPhase4Gamification(channel, {
+    await recordGamificationAfterLog({
       dataBefore: result.dataBefore,
       dataAfter: result.data,
       userId,
@@ -2111,7 +2676,9 @@ client.on('messageCreate', async (message) => {
       now,
       tz,
       primaryLineId: primary?.id || null,
-      suppressPersonalHype: false,
+      primaryEvent: primary?.event || null,
+      suppressPersonalHype: true,
+      confirmationHype: hypeLine,
     });
   } catch (e) {
     console.error(e);
@@ -2119,6 +2686,21 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    try {
+      const focused = interaction.options.getFocused(true);
+      if (focused.name !== 'market_id') {
+        await interaction.respond([]);
+        return;
+      }
+      await interaction.respond(buildMarketAutocompleteChoices(focused.value));
+    } catch (err) {
+      console.error('[Pulse] Autocomplete failed:', err.message || err);
+      await interaction.respond([]).catch(() => {});
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   try {
@@ -2127,6 +2709,18 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    const leaderboardPeriod = (raw) => {
+      const map = {
+        daily: { timeframe: 'daily', label: phase3PeriodLabel('daily') },
+        week: { timeframe: 'weekly', label: phase3PeriodLabel('weekly') },
+        weekly: { timeframe: 'weekly', label: phase3PeriodLabel('weekly') },
+        month: { timeframe: 'monthly', label: phase3PeriodLabel('monthly') },
+        monthly: { timeframe: 'monthly', label: phase3PeriodLabel('monthly') },
+        alltime: { timeframe: 'alltime', label: phase3PeriodLabel('alltime') },
+      };
+      return map[raw] || map.alltime;
+    };
+
     switch (interaction.commandName) {
       case 'log':
         await handleLog(interaction);
@@ -2134,19 +2728,37 @@ client.on('interactionCreate', async (interaction) => {
       case 'admin':
         await handleAdmin(interaction);
         break;
+      case 'assign-rep':
+        await handleAdminAssignRep(interaction);
+        break;
+      case 'unassign-rep':
+        await handleAdminUnassignRep(interaction);
+        break;
+      case 'sync-permissions':
+        await handleAdminSyncPermissions(interaction);
+        break;
       case 'lb':
-      case 'leaderboard':
+      case 'leaderboard': {
+        const cfg = leaderboardPeriod(interaction.options.getString('period') || 'alltime');
+        await handlePhase3Leaderboard(interaction, cfg);
+        break;
+      }
       case 'blitz':
-        await handlePhase3Leaderboard(interaction, { timeframe: 'alltime', label: 'Blitz' });
+        await handlePhase3Leaderboard(interaction, { timeframe: 'alltime', label: phase3PeriodLabel('alltime') });
         break;
       case 'daily':
-        await handlePhase3Leaderboard(interaction, { timeframe: 'daily', label: 'Daily' });
+        await handlePhase3Leaderboard(interaction, { timeframe: 'daily', label: phase3PeriodLabel('daily') });
         break;
       case 'weekly':
-        await handlePhase3Leaderboard(interaction, { timeframe: 'weekly', label: 'Weekly' });
+        await handlePhase3Leaderboard(interaction, { timeframe: 'weekly', label: phase3PeriodLabel('weekly') });
         break;
-      case 'master':
-        await handlePhase3Master(interaction);
+      case 'master': {
+        const period = interaction.options.getString('period') || 'alltime';
+        await handlePhase3Master(interaction, period);
+        break;
+      }
+      case 'quarter':
+        await handleQuarter(interaction);
         break;
       case 'markets':
         await handleMarkets(interaction);
@@ -2173,9 +2785,7 @@ client.on('interactionCreate', async (interaction) => {
     console.error(e);
     try {
       if (interaction.deferred) {
-        await interaction.editReply({ content: 'Pulse hit an error.', embeds: [] }).catch(async () => {
-          await interaction.followUp({ content: 'Pulse hit an error.', ephemeral: true }).catch(() => {});
-        });
+        await interaction.editReply({ content: 'Pulse hit an error.', embeds: [] }).catch(() => {});
       } else if (interaction.replied) {
         await interaction.followUp({ content: 'Pulse hit an error.', ephemeral: true }).catch(() => {});
       } else {
@@ -2188,6 +2798,26 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 async function startBot() {
+  const lock = acquireProcessLock();
+  if (!lock.ok) {
+    console.error(
+      `[Pulse] Another instance is already running (pid ${lock.pid}${lock.startedAt ? `, started ${lock.startedAt}` : ''}). Stop it before starting again.`,
+    );
+    process.exit(1);
+  }
+
+  try {
+    const maintenance = await runStartupMaintenance();
+    if (maintenance.backedUp.length) {
+      console.log(`[Pulse] Startup backups: ${maintenance.backedUp.join(', ')}`);
+    }
+    if (maintenance.pruned > 0) {
+      console.log(`[Pulse] Pruned ${maintenance.pruned} old backup file(s).`);
+    }
+  } catch (err) {
+    console.warn('[Pulse] Startup maintenance skipped:', err.message || err);
+  }
+
   try {
     const health = await collectStartupHealth();
     console.log(formatHealthReport(health));

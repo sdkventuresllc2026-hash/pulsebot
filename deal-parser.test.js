@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseDealMessage } = require('./deal-parser');
+const { parseDealMessage, detectTextLogIntent, isQuickNaturalLog } = require('./deal-parser');
 const { isPossibleDuplicateLog } = require('./storage');
 
 test('2 Gig variants', () => {
@@ -77,6 +77,20 @@ test('comma and and separators', () => {
   const r = parseDealMessage('1g, 2g');
   assert.equal(r.ok, true);
   assert.deepEqual(r.speeds, ['1gig', '2gig']);
+});
+
+test('detectTextLogIntent flags full log phrases only', () => {
+  assert.equal(detectTextLogIntent('log 1gig'), 'log');
+  assert.equal(detectTextLogIntent('leaderboard'), null);
+  assert.equal(detectTextLogIntent('lb'), null);
+  assert.equal(detectTextLogIntent('1gig'), null);
+});
+
+test('isQuickNaturalLog allows shorthand not mixed-product lines', () => {
+  assert.equal(isQuickNaturalLog(parseDealMessage('1g')), true);
+  assert.equal(isQuickNaturalLog(parseDealMessage('2x 1g')), true);
+  assert.equal(isQuickNaturalLog(parseDealMessage('1g, 2g')), false);
+  assert.equal(isQuickNaturalLog(parseDealMessage('1g 2g 500')), false);
 });
 
 test('uncertain stays strict', () => {

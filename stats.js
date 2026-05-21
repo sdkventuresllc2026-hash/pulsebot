@@ -72,6 +72,27 @@ function filterWeeklyByCalendarWeek(logs, timeZone = getTimeZone()) {
   return logs.filter((l) => logInYmdRange(l, startYmd, endYmdExclusive));
 }
 
+function getMonthWindow(date = new Date(), timeZone = getTimeZone()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date);
+  const y = parts.find((p) => p.type === 'year')?.value;
+  const m = parts.find((p) => p.type === 'month')?.value;
+  const startYmd = `${y}-${m}-01`;
+  const monthNum = Number(m);
+  const nextY = monthNum === 12 ? String(Number(y) + 1) : y;
+  const nextM = monthNum === 12 ? '01' : String(monthNum + 1).padStart(2, '0');
+  const endYmdExclusive = `${nextY}-${nextM}-01`;
+  return { startYmd, endYmdExclusive, timeZone };
+}
+
+function filterByCalendarMonth(logs, timeZone = getTimeZone()) {
+  const { startYmd, endYmdExclusive } = getMonthWindow(new Date(), timeZone);
+  return logs.filter((l) => logInYmdRange(l, startYmd, endYmdExclusive));
+}
+
 function blitzFromChannelName(channelName) {
   if (!channelName) return 'Unknown Team';
   return channelName.replace(/^#/, '').trim() || 'Unknown Team';
@@ -175,12 +196,59 @@ function aggregateTeamWeekly(logs) {
   return m;
 }
 
+function formatYmdLong(ymd, timeZone = getTimeZone()) {
+  const [Y, M, D] = ymd.split('-').map(Number);
+  const date = new Date(Date.UTC(Y, M - 1, D, 12, 0, 0));
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+function formatLeaderboardDailyDate(date = new Date(), timeZone = getTimeZone()) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+function formatLeaderboardWeekRange(date = new Date(), timeZone = getTimeZone()) {
+  const { startYmd, endYmdExclusive } = getWeekWindow(date, timeZone);
+  const endYmd = addDaysYmd(endYmdExclusive, -1, timeZone);
+  const start = formatYmdLong(startYmd, timeZone);
+  const end = formatYmdLong(endYmd, timeZone);
+  return start === end ? start : `${start} – ${end}`;
+}
+
+function formatLeaderboardMonthLabel(date = new Date(), timeZone = getTimeZone()) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+}
+
+/** Top-line date for scoped boards; null for all-time only. */
+function leaderboardDateHeader(timeframe, date = new Date(), timeZone = getTimeZone()) {
+  if (timeframe === 'daily') return formatLeaderboardDailyDate(date, timeZone);
+  if (timeframe === 'weekly') return formatLeaderboardWeekRange(date, timeZone);
+  if (timeframe === 'monthly') return formatLeaderboardMonthLabel(date, timeZone);
+  return null;
+}
+
 exports.getTimeZone = getTimeZone;
 exports.fmtDateInTz = fmtDateInTz;
 exports.getWeekWindow = getWeekWindow;
 exports.filterByWeekId = filterByWeekId;
 exports.filterToday = filterToday;
 exports.filterWeeklyByCalendarWeek = filterWeeklyByCalendarWeek;
+exports.getMonthWindow = getMonthWindow;
+exports.filterByCalendarMonth = filterByCalendarMonth;
 exports.blitzFromChannelName = blitzFromChannelName;
 exports.aggregateUsers = aggregateUsers;
 exports.primaryBlitz = primaryBlitz;
@@ -191,3 +259,7 @@ exports.bestDayEver = bestDayEver;
 exports.rankUser = rankUser;
 exports.aggregateTeamWeekly = aggregateTeamWeekly;
 exports.logInYmdRange = logInYmdRange;
+exports.leaderboardDateHeader = leaderboardDateHeader;
+exports.formatLeaderboardDailyDate = formatLeaderboardDailyDate;
+exports.formatLeaderboardWeekRange = formatLeaderboardWeekRange;
+exports.formatLeaderboardMonthLabel = formatLeaderboardMonthLabel;

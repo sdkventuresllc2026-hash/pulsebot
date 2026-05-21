@@ -5,8 +5,11 @@
 const fs = require('fs');
 const path = require('path');
 
+const { dataPath } = require('./paths');
+
 const DEFAULT_NAME_SUBSTRINGS = ['virginia-deals', 'greenville-deals'];
-const APPROVED_CHANNELS_PATH = path.join(__dirname, 'approved-blitz-channels.json');
+const APPROVED_CHANNELS_PATH =
+  process.env.PULSE_APPROVED_CHANNELS_PATH || dataPath('approved-blitz-channels.json');
 
 function normalizeMarketId(input) {
   return String(input || '')
@@ -14,6 +17,22 @@ function normalizeMarketId(input) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function marketIdFromDealsSubstring(substring) {
+  const base = String(substring || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-deals$/i, '');
+  return normalizeMarketId(base);
+}
+
+function displayNameFromMarketId(marketId) {
+  return String(marketId || '')
+    .split('-')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
 function readApprovedChannels() {
@@ -34,6 +53,16 @@ function writeApprovedChannels(data) {
   fs.writeFileSync(APPROVED_CHANNELS_PATH, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function buildDealNameSubstrings(stored) {
+  const subs = new Set(DEFAULT_NAME_SUBSTRINGS.map((s) => s.toLowerCase()));
+  for (const market of stored.markets || []) {
+    if (!market?.marketId) continue;
+    subs.add(String(market.marketId).toLowerCase());
+    subs.add(`${market.marketId}-deals`.toLowerCase());
+  }
+  return [...subs];
+}
+
 function getApprovedChannelRules() {
   const idsRaw = process.env.DEAL_LOG_CHANNEL_IDS || '';
   const stored = readApprovedChannels();
@@ -41,26 +70,91 @@ function getApprovedChannelRules() {
     ...idsRaw.split(',').map((s) => s.trim()).filter(Boolean),
     ...stored.channels.map((c) => c.id).filter(Boolean),
   ]);
+  for (const market of stored.markets || []) {
+    for (const channelId of market.channelIds || []) {
+      if (channelId) ids.add(String(channelId));
+    }
+  }
   const disabledIds = new Set(stored.disabledChannelIds.map((s) => String(s).trim()).filter(Boolean));
 
   const namesRaw = process.env.DEAL_LOG_CHANNEL_NAMES;
   let nameSubstrings;
   if (namesRaw == null || namesRaw.trim() === '') {
-    nameSubstrings = [...DEFAULT_NAME_SUBSTRINGS];
+    nameSubstrings = buildDealNameSubstrings(stored);
   } else {
     nameSubstrings = namesRaw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
   }
 
-  return { ids, disabledIds, nameSubstrings };
+  return { ids, disabledIds, nameSubstrings, markets: stored.markets };
+}
+
+function channelNameMatchesDealRules(channelName, rules) {
+  const lower = String(channelName || '').toLowerCase();
+  if (!lower) return false;
+  if (rules.nameSubstrings.some((sub) => sub && lower.includes(sub))) return true;
+  const slug = normalizeMarketId(channelName);
+  for (const market of rules.markets || []) {
+    if (!market?.marketId) continue;
+    if (slug === market.marketId || lower.includes(market.marketId)) return true;
+  }
+  return false;
+}
+
+/**
+ * Deal logs/leaderboards use the parent channel when the message is in a thread.
+ */
+function resolveDealChannel(channel) {
+  if (!channel) return null;
+  if (typeof channel.isThread === 'function' && channel.isThread() && channel.parent) {
+    return channel.parent;
+  }
+  return channel;
 }
 
 function isApprovedDealChannel(channel) {
-  if (!channel || typeof channel.name !== 'string') return false;
-  const { ids, disabledIds, nameSubstrings } = getApprovedChannelRules();
-  if (disabledIds.has(channel.id)) return false;
-  if (ids.has(channel.id)) return true;
-  const lower = channel.name.toLowerCase();
-  return nameSubstrings.some((sub) => sub && lower.includes(sub));
+  const target = resolveDealChannel(channel);
+  if (!target?.id) return false;
+  const rules = getApprovedChannelRules();
+  if (rules.disabledIds.has(target.id)) return false;
+  if (rules.ids.has(String(target.id))) return true;
+  if (marketForChannelId(target.id)) return true;
+  if (typeof target.name !== 'string') return false;
+  return channelNameMatchesDealRules(target.name, rules);
+}
+
+function isApprovedDealChannelId(channelId) {
+  const id = String(channelId || '').trim();
+  if (!id) return false;
+  const rules = getApprovedChannelRules();
+  if (rules.disabledIds.has(id)) return false;
+  if (rules.ids.has(id)) return true;
+  return !!marketForChannelId(id);
+}
+
+/**
+ * Persist approval + market link when channel name matches a configured market
+ * (e.g. #🛜greenville → greenville). Safe to call repeatedly.
+ */
+function ensureDealChannelRegistered(channel, actorId = 'auto') {
+  const target = resolveDealChannel(channel);
+  if (!target?.id || typeof target.name !== 'string') {
+    return { ok: false, reason: 'invalid_channel' };
+  }
+  const rules = getApprovedChannelRules();
+  if (!channelNameMatchesDealRules(target.name, rules)) {
+    return { ok: false, reason: 'name_mismatch' };
+  }
+  const inferred = inferMarketFromChannelName(target.name);
+  if (inferred) {
+    connectChannelToMarket({
+      channel: target,
+      marketId: inferred.marketId,
+      connectedBy: actorId,
+    });
+    return { ok: true, market: inferred, channelId: target.id, linked: true };
+  }
+  approveDealChannel(target, actorId);
+  return { ok: true, market: null, channelId: target.id, linked: false };
 }
 
 function channelDefaultBlitzName(channel) {
@@ -118,6 +212,132 @@ function listMarkets() {
   return readApprovedChannels().markets;
 }
 
+function readApprovedChannelsData() {
+  return readApprovedChannels();
+}
+
+function getMarketById(marketId) {
+  const id = normalizeMarketId(marketId);
+  if (!id) return null;
+  return readApprovedChannels().markets.find((m) => m.marketId === id) || null;
+}
+
+/**
+ * Resolve market by slug, display name, or single fuzzy match.
+ * @returns {{ market: object, matchedBy: string } | null}
+ */
+function resolveMarket(query) {
+  const markets = listMarkets();
+  if (!markets.length) return null;
+
+  const raw = String(query || '').trim();
+  if (!raw) return null;
+
+  const byId = getMarketById(raw);
+  if (byId) return { market: byId, matchedBy: 'id' };
+
+  const lower = raw.toLowerCase();
+  const byName = markets.find((m) => String(m.marketName || '').toLowerCase() === lower);
+  if (byName) return { market: byName, matchedBy: 'name' };
+
+  const slug = normalizeMarketId(raw);
+  const bySlugInName = markets.filter(
+    (m) =>
+      String(m.marketName || '').toLowerCase().includes(lower) ||
+      lower.includes(String(m.marketName || '').toLowerCase()) ||
+      (slug && (m.marketId.includes(slug) || slug.includes(m.marketId))),
+  );
+  if (bySlugInName.length === 1) return { market: bySlugInName[0], matchedBy: 'fuzzy' };
+
+  return null;
+}
+
+function formatMarketNotFoundMessage(query) {
+  const tried = normalizeMarketId(query);
+  const markets = listMarkets();
+  const lines = [`No market matches **${query}**${tried ? ` (slug tried: \`${tried}\`)` : ''}.`];
+  if (markets.length) {
+    lines.push('', 'Use one of these **market_id** values:');
+    for (const m of markets) {
+      lines.push(`• \`${m.marketId}\` — ${m.marketName}`);
+    }
+  } else {
+    lines.push(
+      '',
+      'No markets saved yet. Run `/admin add-market` or approve a `*-deals` channel (Virginia/Greenville auto-register).',
+    );
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Create markets for default *-deals patterns and approved channels missing from registry.
+ */
+function ensureDefaultMarkets(createdBy = null) {
+  const created = [];
+  const rules = getApprovedChannelRules();
+
+  for (const sub of rules.nameSubstrings) {
+    const id = marketIdFromDealsSubstring(sub);
+    if (!id || getMarketById(id)) continue;
+    const result = addMarket({
+      marketId: id,
+      marketName: displayNameFromMarketId(id),
+      createdBy,
+    });
+    created.push(result.market);
+  }
+
+  const channels = readApprovedChannels().channels;
+  for (const ch of channels) {
+    const name = String(ch?.name || '').toLowerCase();
+    for (const sub of rules.nameSubstrings) {
+      if (!sub || !name.includes(sub)) continue;
+      const id = marketIdFromDealsSubstring(sub);
+      if (!id || getMarketById(id)) continue;
+      const result = addMarket({
+        marketId: id,
+        marketName: displayNameFromMarketId(id),
+        createdBy,
+      });
+      created.push(result.market);
+    }
+  }
+
+  return created;
+}
+
+function deleteMarket(query) {
+  const resolved = resolveMarket(query);
+  if (!resolved) {
+    const err = new Error(formatMarketNotFoundMessage(query));
+    err.code = 'MARKET_NOT_FOUND';
+    throw err;
+  }
+
+  const data = readApprovedChannels();
+  const idx = data.markets.findIndex((m) => m.marketId === resolved.market.marketId);
+  if (idx === -1) {
+    const err = new Error(formatMarketNotFoundMessage(query));
+    err.code = 'MARKET_NOT_FOUND';
+    throw err;
+  }
+
+  const [market] = data.markets.splice(idx, 1);
+  writeApprovedChannels(data);
+  return { market, matchedBy: resolved.matchedBy };
+}
+
+function updateMarket(marketId, patch) {
+  const id = normalizeMarketId(marketId);
+  const data = readApprovedChannels();
+  const market = data.markets.find((m) => m.marketId === id);
+  if (!market) return null;
+  Object.assign(market, patch, { updatedAt: new Date().toISOString() });
+  writeApprovedChannels(data);
+  return market;
+}
+
 function marketForChannelId(channelId) {
   if (!channelId) return null;
   const id = String(channelId);
@@ -129,24 +349,69 @@ function marketForChannel(channel) {
   return marketForChannelId(channel?.id);
 }
 
-function inferMarketForLog(log) {
-  if (log?.marketId || log?.marketName) {
-    return {
-      marketId: log.marketId || null,
-      marketName: log.marketName || 'Unassigned',
-    };
+function inferMarketFromChannelName(channelName) {
+  const rules = getApprovedChannelRules();
+  const lower = String(channelName || '').toLowerCase();
+  const slug = normalizeMarketId(channelName);
+
+  for (const market of rules.markets || []) {
+    if (!market?.marketId) continue;
+    if (slug === market.marketId || lower.includes(market.marketId)) {
+      return { marketId: market.marketId, marketName: market.marketName };
+    }
   }
+
+  for (const sub of rules.nameSubstrings) {
+    if (!sub || !lower.includes(sub)) continue;
+    const id = marketIdFromDealsSubstring(sub);
+    const market = getMarketById(id);
+    if (market) {
+      return { marketId: market.marketId, marketName: market.marketName };
+    }
+  }
+  return null;
+}
+
+function inferMarketForLog(log) {
   const mapped = marketForChannelId(log?.channelId);
   if (mapped) {
+    return { marketId: mapped.marketId, marketName: mapped.marketName };
+  }
+
+  const fromChannelName = inferMarketFromChannelName(log?.channelName || log?.blitzName);
+  if (fromChannelName) return fromChannelName;
+
+  if (log?.marketId) {
+    const normalized = normalizeMarketId(log.marketId);
+    const byId = normalized ? getMarketById(normalized) : null;
+    if (byId) return { marketId: byId.marketId, marketName: byId.marketName };
     return {
-      marketId: mapped.marketId,
-      marketName: mapped.marketName,
+      marketId: normalized || log.marketId,
+      marketName: log.marketName || log.marketId || 'Unassigned',
     };
   }
-  return {
-    marketId: null,
-    marketName: 'Unassigned',
-  };
+
+  if (log?.marketName && log.marketName !== 'Unassigned') {
+    const resolved = resolveMarket(log.marketName);
+    if (resolved) {
+      return { marketId: resolved.market.marketId, marketName: resolved.market.marketName };
+    }
+  }
+
+  return { marketId: null, marketName: 'Unassigned' };
+}
+
+function renameMarket(query, { marketName, isp }) {
+  const resolved = resolveMarket(query);
+  if (!resolved) {
+    const err = new Error(formatMarketNotFoundMessage(query));
+    err.code = 'MARKET_NOT_FOUND';
+    throw err;
+  }
+  const patch = { updatedAt: new Date().toISOString() };
+  if (marketName != null && String(marketName).trim()) patch.marketName = String(marketName).trim();
+  if (isp !== undefined) patch.isp = isp ? String(isp).trim() : null;
+  return updateMarket(resolved.market.marketId, patch);
 }
 
 function addMarket({ marketId, marketName, isp = null, createdBy = null }) {
@@ -171,6 +436,8 @@ function addMarket({ marketId, marketName, isp = null, createdBy = null }) {
     isp: isp ? String(isp).trim() : null,
     active: true,
     channelIds: [],
+    roleId: null,
+    repUserIds: [],
     createdAt: new Date().toISOString(),
     createdBy: createdBy || null,
   };
@@ -181,12 +448,17 @@ function addMarket({ marketId, marketName, isp = null, createdBy = null }) {
 
 function connectChannelToMarket({ channel, marketId, connectedBy = null }) {
   if (!channel || !channel.id) throw new Error('Invalid channel');
-  const id = normalizeMarketId(marketId);
-  if (!id) throw new Error('Market id is required');
+  const resolved = resolveMarket(marketId);
+  if (!resolved) {
+    const err = new Error(formatMarketNotFoundMessage(marketId));
+    err.code = 'MARKET_NOT_FOUND';
+    throw err;
+  }
+  const id = resolved.market.marketId;
 
   const data = readApprovedChannels();
   const market = data.markets.find((m) => m.marketId === id);
-  if (!market) throw new Error(`Market not found: ${id}`);
+  if (!market) throw new Error(formatMarketNotFoundMessage(marketId));
   market.channelIds = Array.isArray(market.channelIds) ? market.channelIds : [];
 
   let removedFrom = null;
@@ -204,6 +476,13 @@ function connectChannelToMarket({ channel, marketId, connectedBy = null }) {
   market.updatedAt = new Date().toISOString();
   market.updatedBy = connectedBy || null;
   writeApprovedChannels(data);
+
+  try {
+    approveDealChannel(channel, connectedBy, market.marketName);
+  } catch {
+    /* channel may already be approved */
+  }
+
   return { market, removedFrom };
 }
 
@@ -259,20 +538,34 @@ function channelApprovalDiagnostics(channel) {
 }
 
 module.exports = {
+  resolveDealChannel,
   isApprovedDealChannel,
+  isApprovedDealChannelId,
+  ensureDealChannelRegistered,
+  channelNameMatchesDealRules,
   getApprovedChannelRules,
   approveDealChannel,
   unapproveDealChannel,
   listApprovedDealChannels,
   approvedBlitzNameForChannel,
   listMarkets,
+  readApprovedChannelsData,
+  getMarketById,
+  resolveMarket,
+  formatMarketNotFoundMessage,
+  ensureDefaultMarkets,
+  deleteMarket,
+  updateMarket,
   addMarket,
   marketForChannelId,
   marketForChannel,
   connectChannelToMarket,
   removeChannelFromMarket,
   inferMarketForLog,
+  inferMarketFromChannelName,
+  renameMarket,
   normalizeMarketId,
+  marketIdFromDealsSubstring,
   channelApprovalDiagnostics,
   DEFAULT_NAME_SUBSTRINGS,
   APPROVED_CHANNELS_PATH,

@@ -4,9 +4,10 @@ const path = require('path');
 const { DATA_PATH } = require('./storage');
 const { APPROVED_CHANNELS_PATH } = require('./deal-channels');
 const { getTimeZone, filterToday, filterByWeekId } = require('./stats');
+const { dataPath } = require('./paths');
 
-const ACTION_LOG_PATH = path.join(__dirname, 'admin-actions.log');
-const BACKUP_DIR = path.join(__dirname, 'backups');
+const ACTION_LOG_PATH = dataPath('admin-actions.log');
+const BACKUP_DIR = dataPath('backups');
 
 async function pathExists(targetPath) {
   try {
@@ -23,6 +24,39 @@ function safeStamp(date = new Date()) {
 
 async function ensureBackupDir() {
   await fs.mkdir(BACKUP_DIR, { recursive: true });
+}
+
+async function pruneBackups(maxFiles = 40) {
+  if (!(await pathExists(BACKUP_DIR))) return { pruned: 0 };
+  const entries = await fs.readdir(BACKUP_DIR);
+  const files = [];
+  for (const name of entries) {
+    const full = path.join(BACKUP_DIR, name);
+    try {
+      const stat = await fs.stat(full);
+      if (stat.isFile()) files.push({ full, mtime: stat.mtimeMs });
+    } catch {
+      /* skip */
+    }
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+  let pruned = 0;
+  for (const file of files.slice(maxFiles)) {
+    await fs.unlink(file.full).catch(() => {});
+    pruned += 1;
+  }
+  return { pruned };
+}
+
+async function runStartupMaintenance() {
+  await ensureBackupDir();
+  const backedUp = [];
+  for (const sourcePath of [DATA_PATH, APPROVED_CHANNELS_PATH]) {
+    const result = await createTimestampedBackup(sourcePath, 'startup');
+    if (result.ok) backedUp.push(path.basename(result.backupPath));
+  }
+  const { pruned } = await pruneBackups(40);
+  return { backedUp, pruned };
 }
 
 async function createTimestampedBackup(sourcePath, label = 'snapshot') {
@@ -72,6 +106,17 @@ async function collectStartupHealth({
   const users = leaderboard?.users && typeof leaderboard.users === 'object' ? leaderboard.users : {};
   const metadata = leaderboard?.metadata && typeof leaderboard.metadata === 'object' ? leaderboard.metadata : {};
 
+  let marketsCount = 0;
+  if (approvedFileExists) {
+    try {
+      const approvedRaw = await fs.readFile(approvedPath, 'utf8');
+      const approvedParsed = JSON.parse(approvedRaw);
+      marketsCount = Array.isArray(approvedParsed?.markets) ? approvedParsed.markets.length : 0;
+    } catch {
+      marketsCount = 0;
+    }
+  }
+
   const report = {
     tokenPresent,
     guildIdPresent,
@@ -80,6 +125,7 @@ async function collectStartupHealth({
     approvedPath,
     dataFileExists,
     approvedFileExists,
+    marketsCount,
     weekId: typeof metadata.weekId === 'number' ? metadata.weekId : null,
     totalLogs: logs.length,
     totalUsers: Object.keys(users).length,
@@ -149,6 +195,8 @@ module.exports = {
   pathExists,
   createTimestampedBackup,
   appendActionLog,
+  pruneBackups,
+  runStartupMaintenance,
   collectStartupHealth,
   formatHealthReport,
   buildAdminStatusSnapshot,

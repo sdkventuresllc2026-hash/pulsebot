@@ -7,26 +7,27 @@ Pulse tracks **fiber deals you close** — no points, **rank = total deals**. Ev
 
 **How to use it (3 rules)**
 • **Log in the right channel** — team / “blitz” name comes from the **channel name**, so log where your squad actually posts.
-• **One `/log` = one closed deal** — don’t spam; double‑taps within a few seconds get blocked on purpose.
-• **Wrong log?** Use `/undo-last` — only removes **your** most recent log.
+• **Quick log (no slash):** type **`1g`**, **`1gig`**, **`500`**, or **`2x 1g`** — Pulse logs it automatically.
+• **Leaderboards (no slash):** type **`lb`**, **`daily`**, **`weekly`**, **`master`**, **`mydeals`**, **`quarter`**, **`markets`** in chat.
+• **Wrong log?** **`/remove-last`** — only removes **your** most recent log.
 
 ---
 
-**Commands**
+**Type in chat (no slash)**
 
-**/log** — Log a deal (pick speed: 200MB → 2GIG). You’ll see today / week counts, rank today, and sometimes hype lines.
+**Log:** `1g` · `1gig` · `500` · `2x 1g`
 
-**/today** — Today’s leaderboard (deals + speed breakdown + streak when it applies).
+**Boards:** `lb` · `daily` · `weekly` · `blitz` · `master` · `master week` · `master month` · `mydeals` · `quarter` · `markets`
 
-**/weekly** — This week’s board (same idea).
+---
 
-**/leaderboard** — Pick **timeframe**: Today · Weekly · All‑time. Optional **blitz** filter = team name text match.
+**Slash commands (optional)**
 
-**/my-stats** — Your today / week / all‑time, speed mix, streak, best day ever, ranks.
+**/log** — Full deal + customer info
 
-**/share** — Clean **screenshot card** for weekly production (good for stories / group chat).
+**/leaderboard** · **/daily** · **/weekly** · **/master** · **/mydeals** · **/quarter** · **/share**
 
-**/undo-last** — Deletes **only your** last log. Use if you mis‑clicked.
+**/remove-last** · **/correction**
 
 ---
 

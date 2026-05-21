@@ -3,6 +3,8 @@
  */
 
 const { SPEEDS } = require('./constants');
+const { compactJoin } = require('./message-format');
+const { HYPE_LINES, isDealLogSafeLine } = require('./hype-bank');
 
 const SPEED_DISPLAY = Object.freeze({
   '200mb': '200 Mbps',
@@ -33,28 +35,33 @@ function formatMultiSpeedLine(speeds) {
   return parts.join(' | ');
 }
 
-const HYPE_LINES = Object.freeze([
-  { id: 'recognition_1', category: 'Clean Recognition', intensity: 'low', tags: ['fallback'], cooldownCount: 8, text: 'That one matters. {rep} is on the sheet.' },
-  { id: 'recognition_2', category: 'Clean Recognition', intensity: 'low', tags: ['fallback'], cooldownCount: 8, text: 'Clean work. Keep stacking.' },
-  { id: 'momentum_1', category: 'Momentum', intensity: 'medium', tags: ['second_today', 'hat_trick'], cooldownCount: 10, text: 'Momentum is starting to show.' },
-  { id: 'momentum_2', category: 'Momentum', intensity: 'medium', tags: ['five_day'], cooldownCount: 12, text: 'Five on the day. That is a real shift.' },
-  { id: 'momentum_3', category: 'Momentum', intensity: 'high', tags: ['ten_day'], cooldownCount: 14, text: 'Double digits. Different kind of day.' },
-  { id: 'pressure_1', category: 'Competitive Pressure', intensity: 'medium', tags: ['one_away_first', 'close_race'], cooldownCount: 8, text: 'Top spot is one deal away.' },
-  { id: 'pressure_2', category: 'Competitive Pressure', intensity: 'medium', tags: ['close_race'], cooldownCount: 8, text: 'Top 3 just got tighter.' },
-  { id: 'lb_1', category: 'Leaderboard Movement', intensity: 'high', tags: ['took_first'], cooldownCount: 12, text: 'Board changed. Everyone saw it.' },
-  { id: 'lb_2', category: 'Leaderboard Movement', intensity: 'medium', tags: ['entered_top3'], cooldownCount: 10, text: '{rep} just stepped into the top 3.' },
-  { id: 'lb_3', category: 'Leaderboard Movement', intensity: 'medium', tags: ['passed_rep'], cooldownCount: 10, text: '{rep} just passed {otherRep}.' },
-  { id: 'pb_1', category: 'Personal Best', intensity: 'high', tags: ['personal_best'], cooldownCount: 18, text: 'New personal best day for {rep}.' },
-  { id: 'rookie_1', category: 'Rookie / First Deal', intensity: 'medium', tags: ['first_ever', 'rookie_first'], cooldownCount: 20, text: 'First one logged. Now the game starts.' },
-  { id: 'rookie_2', category: 'Rookie / First Deal', intensity: 'medium', tags: ['first_today'], cooldownCount: 10, text: 'First one is always the hardest. Now build.' },
-  { id: 'team_1', category: 'Team Culture', intensity: 'medium', tags: ['team_milestone'], cooldownCount: 10, text: '{team} hit {count}. Team is moving.' },
-  { id: 'team_2', category: 'Team Culture', intensity: 'high', tags: ['team_milestone_high'], cooldownCount: 12, text: '{team} put {count} on the board.' },
-  { id: 'grind_1', category: 'Late Night / Grind', intensity: 'low', tags: ['late_night'], cooldownCount: 12, text: 'Late clock deal from {rep}.' },
-  { id: 'grind_2', category: 'Late Night / Grind', intensity: 'low', tags: ['early_morning'], cooldownCount: 12, text: '{rep} started early. Good sign.' },
-  { id: 'milestone_1', category: 'Milestone', intensity: 'medium', tags: ['weekly_milestone'], cooldownCount: 14, text: '{count} this week. That is not luck.' },
-  { id: 'milestone_2', category: 'Milestone', intensity: 'high', tags: ['alltime_milestone'], cooldownCount: 20, text: '{count} all-time logged by {rep}.' },
-  { id: 'comeback_1', category: 'Quiet Killer / Comeback', intensity: 'medium', tags: ['comeback'], cooldownCount: 16, text: 'That is a real answer after a quiet stretch.' },
-  { id: 'comeback_2', category: 'Quiet Killer / Comeback', intensity: 'medium', tags: ['comeback'], cooldownCount: 16, text: '{rep} is making noise again.' },
+const PERSONAL_EVENTS = new Set([
+  'first_ever',
+  'first_today',
+  'second_today',
+  'hat_trick',
+  'five_day',
+  'ten_day',
+  'personal_best',
+  'comeback',
+  'took_first',
+  'entered_top3',
+  'passed_rep',
+  'one_away_first',
+  'close_race',
+  'late_night',
+  'early_morning',
+  'weekly_milestone',
+  'alltime_milestone',
+  'fallback',
+  'momentum',
+  'q1',
+  'q2',
+  'q3',
+  'q4',
+  'pregame',
+  'overtime',
+  'culture',
 ]);
 
 function fillTemplate(template, values) {
@@ -77,6 +84,7 @@ function selectHypeLine({ event, values = {}, recentLineIds = [] }) {
     id: picked.id,
     category: picked.category,
     intensity: picked.intensity,
+    event,
     text: fillTemplate(picked.text, values),
   };
 }
@@ -94,17 +102,6 @@ function buildPhase4HypeLine(kind, values = {}, recentLineIds = []) {
   return selectHypeLine({ event, values, recentLineIds })?.text || '';
 }
 
-/**
- * @param {{
- *   speeds: string[],
- *   userId: string,
- *   dealsTodayAfter: number,
- *   dealsTodayBefore: number,
- *   rankTodayAfter: number | null,
- *   rankTodayBefore: number | null,
- *   rowsTodayAfter: { userId: string, total: number }[],
- * }} ctx
- */
 function selectClosingLine(ctx) {
   const {
     speeds,
@@ -114,6 +111,7 @@ function selectClosingLine(ctx) {
     rankTodayAfter,
     rankTodayBefore,
     rowsTodayAfter,
+    displayName,
   } = ctx;
 
   const userRow = rowsTodayAfter.find((r) => r.userId === userId);
@@ -136,57 +134,79 @@ function selectClosingLine(ctx) {
     rankTodayAfter > 1 &&
     !tiedAtTop;
 
-  if (tiedAtTop) return selectHypeLine({ event: 'close_race', values: { rep: userId } })?.text;
-  if (newSoleLeader) return selectHypeLine({ event: 'took_first', values: { rep: userId } })?.text;
-  if (oneBehind) return selectHypeLine({ event: 'one_away_first', values: { rep: userId } })?.text;
+  const rep = displayName || userId;
+  if (tiedAtTop) return selectHypeLine({ event: 'close_race', values: { rep } })?.text;
+  if (newSoleLeader) return selectHypeLine({ event: 'took_first', values: { rep } })?.text;
+  if (oneBehind) return selectHypeLine({ event: 'one_away_first', values: { rep } })?.text;
 
-  if (dealsTodayBefore === 0 && dealsTodayAfter > 0) return selectHypeLine({ event: 'first_today', values: { rep: userId } })?.text;
-  if (dealsTodayAfter === 2) return selectHypeLine({ event: 'second_today', values: { rep: userId } })?.text;
-  if (dealsTodayAfter === 3) return selectHypeLine({ event: 'hat_trick', values: { rep: userId } })?.text;
-  if (dealsTodayAfter === 5) return selectHypeLine({ event: 'five_day', values: { rep: userId } })?.text;
-  if (dealsTodayAfter === 10) return selectHypeLine({ event: 'ten_day', values: { rep: userId } })?.text;
-  if (speeds.length > 1) return selectHypeLine({ event: 'momentum', values: { rep: userId } })?.text;
-  return selectHypeLine({ event: 'fallback', values: { rep: userId } })?.text;
+  if (dealsTodayBefore === 0 && dealsTodayAfter > 0) return selectHypeLine({ event: 'first_today', values: { rep } })?.text;
+  if (dealsTodayAfter === 2) return selectHypeLine({ event: 'second_today', values: { rep } })?.text;
+  if (dealsTodayAfter === 3) return selectHypeLine({ event: 'hat_trick', values: { rep } })?.text;
+  if (dealsTodayAfter === 5) return selectHypeLine({ event: 'five_day', values: { rep } })?.text;
+  if (dealsTodayAfter === 10) return selectHypeLine({ event: 'ten_day', values: { rep } })?.text;
+  if (speeds.length > 1) return selectHypeLine({ event: 'momentum', values: { rep } })?.text;
+  return selectHypeLine({ event: 'fallback', values: { rep } })?.text;
 }
 
-/**
- * @param {{
- *   displayName: string,
- *   blitzName: string,
- *   speeds: string[],
- *   userId: string,
- *   dealsTodayAfter: number,
- *   dealsTodayBefore: number,
- *   rankTodayAfter: number | null,
- *   rankTodayBefore: number | null,
- *   rowsTodayAfter: { userId: string, total: number }[],
- *   hasCustomerOnFile?: boolean,
- * }} ctx
- */
+/** Deal confirmation: one bank line, no rep/speed repeat (header has both). */
+function buildDealHypeLine({ picked, displayName, movement }) {
+  if (!picked) return null;
+
+  if (picked.event === 'passed_rep' && movement?.passedRepName) {
+    return `**Passed ${movement.passedRepName}.**`;
+  }
+
+  const text = picked.text || '';
+  if (!isDealLogSafeLine(text)) return '**On the board.**';
+  if (displayName && text.toLowerCase().includes(String(displayName).toLowerCase())) {
+    return '**On the board.**';
+  }
+  if (/\{otherrep\}/i.test(text) && !movement?.passedRepName) return '**On the board.**';
+  return text || '**On the board.**';
+}
+
 function buildPremiumDealConfirmation(ctx) {
   const { displayName, speeds } = ctx;
 
-  let bodyLine;
+  let header;
   if (speeds.length === 1) {
-    bodyLine = `**${displayName}** — ${SPEED_DISPLAY[speeds[0]] || speeds[0]}`;
+    header = `✅ **Logged** — **${displayName}** · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}`;
   } else {
-    bodyLine = `**${displayName}** — ${speeds.length} deals\n${formatMultiSpeedLine(speeds)}`;
+    header = `✅ **Logged** — **${displayName}** · **${speeds.length}** deals\n${formatMultiSpeedLine(speeds)}`;
   }
 
-  const footer = ctx.primaryLine || selectClosingLine(ctx);
-  const parts = ['Logged ✅', bodyLine, '', footer];
-  if (ctx.hasCustomerOnFile) {
-    parts.push('', '_Customer on file._');
-  }
-  return parts.join('\n');
+  const parts = [header];
+  if (ctx.hypeLine) parts.push(ctx.hypeLine);
+  if (ctx.hasCustomerOnFile) parts.push('_Customer on file._');
+  if (ctx.pulseBuild) parts.push(`_· ${ctx.pulseBuild}_`);
+  return compactJoin(parts);
+}
+
+function normalizeHypeText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/\*\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hypeTextsSimilar(a, b) {
+  const na = normalizeHypeText(a);
+  const nb = normalizeHypeText(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
 }
 
 module.exports = {
   buildPremiumDealConfirmation,
+  buildDealHypeLine,
   buildPhase4HypeLine,
   selectHypeLine,
   HYPE_LINES,
+  PERSONAL_EVENTS,
   selectClosingLine,
   formatMultiSpeedLine,
   SPEED_DISPLAY,
+  normalizeHypeText,
+  hypeTextsSimilar,
 };

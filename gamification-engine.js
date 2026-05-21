@@ -70,26 +70,22 @@ function deriveLeaderboardMovement({ beforeRows, afterRows, userId }) {
 }
 
 function buildLeaderboardContext(rows) {
-  if (!rows || rows.length < 2) return 'The board is open.';
+  if (!rows || rows.length < 2) return '';
   const ranked = withCompetitionRanks(rows);
   const top = ranked[0];
   const second = ranked.find((r) => r.rank === 2) || ranked[1];
   const topGap = top.total - second.total;
   if (topGap <= 1) {
     return topGap === 0
-      ? `Close race: ${second.displayName} is tied for first.`
-      : `Close race: ${second.displayName} is one deal from first.`;
+      ? `**${second.displayName}** tied for **#1**`
+      : `**${second.displayName}** is **1** deal from **#1**`;
   }
   const topThree = ranked.filter((r) => r.rank <= 3);
   if (topThree.length >= 3) {
     const spread = topThree[0].total - topThree[topThree.length - 1].total;
-    if (spread <= 2) return `Top 3 is separated by ${spread} deals.`;
+    if (spread <= 2) return `Top 3 within **${spread}** deals`;
   }
-  if (ranked.length >= 4) {
-    const strikingDistance = ranked.filter((r) => top.total - r.total <= 2).length;
-    if (strikingDistance >= 3) return `${strikingDistance} reps are within striking distance.`;
-  }
-  return 'One clean run can change this board.';
+  return '';
 }
 
 module.exports = {

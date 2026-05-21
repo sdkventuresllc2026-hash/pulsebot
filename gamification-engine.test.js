@@ -62,7 +62,7 @@ test('leaderboard context generates clean race lines', () => {
     { userId: 'c', displayName: 'Charlie', total: 8 },
   ];
   const line = buildLeaderboardContext(rows);
-  assert.match(line, /Close race|Top 3|striking distance|One clean run|board/i);
+  assert.match(line, /deal from|Top 3|within|#\d/i);
 });
 
 test('rememberLineId keeps only latest window', () => {
