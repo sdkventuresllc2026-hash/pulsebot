@@ -56,7 +56,47 @@ Pulse online as Pulse#5159 · build 2026-05-21e · ONE reply per log
 
 Deal logs should end with `_· 2026-05-21e_` (or newer build tag). If you still see `Logged ✅` without that stamp, an **old** deploy or a second bot is still running.
 
-## 6. Slash commands after deploy
+## 6. Leaderboard reset — restore from your PC
+
+Railway **wiped data** if there was no volume at `/data`. Your **local** Pulse folder may still have the real file.
+
+On this machine, check:
+
+```powershell
+cd "c:\Users\danny\.cursor\projects\empty-window\pulse-bot"
+.\scripts\prepare-railway-restore.ps1
+```
+
+That creates `restore-bundle/` with `leaderboard.json`, `approved-blitz-channels.json`, and archive (if present).
+
+**Upload to Railway**
+
+1. Service → **Volume** mounted at `/data`
+2. Variable `PULSE_DATA_DIR` = `/data`
+3. Copy into the volume (Railway shell / CLI):
+   - `/data/leaderboard.json`
+   - `/data/approved-blitz-channels.json`
+4. **Restart** the Pulse service (not a full redeploy that skips the volume)
+
+**Today / this week come back automatically** — Pulse filters by `date` and `weekId` on each log. No separate “import today” command.
+
+If Railway already logged new deals after the reset, say so — we can merge by log `id` instead of overwriting.
+
+Data that only ever lived on a previous Railway deploy **without a volume** is usually **not recoverable**.
+
+## 7. V1 launch — official totals from today
+
+On Railway (with volume mounted):
+
+```bash
+node scripts/init-v1-official-start.js
+```
+
+Then restart Pulse. Post `docs/ANNOUNCEMENT-v1-launch.md` in Discord.
+
+The bot **will not start** on Railway without `PULSE_DATA_DIR` — this prevents accidental wipes.
+
+## 8. Slash commands after deploy
 
 Run once from your machine (not on Railway):
 

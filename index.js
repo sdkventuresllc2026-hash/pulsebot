@@ -2830,6 +2830,14 @@ async function startBot() {
     process.exit(1);
   }
 
+  if (process.env.RAILWAY_ENVIRONMENT && !process.env.PULSE_DATA_DIR?.trim()) {
+    console.error(
+      '[Pulse][FATAL] Railway deploy without PULSE_DATA_DIR — leaderboard will reset every deploy.',
+    );
+    console.error('[Pulse][FATAL] Add a volume at /data and set PULSE_DATA_DIR=/data, then redeploy.');
+    process.exit(1);
+  }
+
   try {
     await client.login(token);
   } catch (err) {

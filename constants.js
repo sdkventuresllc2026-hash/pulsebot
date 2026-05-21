@@ -4,7 +4,7 @@
  */
 
 /** Bump when deploying — if Discord logs don't match, an old bot is still running. */
-exports.PULSE_BUILD = '2026-05-21e';
+exports.PULSE_BUILD = '2026-05-21-v1';
 
 /** Fixed speed choices (values must match slash-command choices). */
 exports.SPEEDS = Object.freeze(['200mb', '300mb', '500mb', '1gig', '2gig']);

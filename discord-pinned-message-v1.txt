@@ -39,6 +39,7 @@ Pulse tracks **fiber deals you close** — no points, **rank = total deals**. Ev
 
 **Tips**
 • Type **`/`** in Discord anytime — every command shows a short built‑in description.
-• If the bot is **offline**, logs won’t save until it’s back on — that’s normal for a bot that runs on a PC unless it’s hosted 24/7.
+• Pulse runs **24/7 on Railway** — deal counts persist; log every close in this channel.
+• **Official totals started** on launch day — use `daily` / `weekly` for accurate boards.
 
 **Pulse v1.0** · Fiber sales team · Rank by deals · Keep stacking.
