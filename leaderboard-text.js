@@ -1,11 +1,10 @@
 /**
- * Prefix leaderboard commands only. Unsupported duplicates intentionally return null.
+ * Text leaderboard commands. Unsupported duplicates intentionally return null.
  */
 
 const UNSUPPORTED_PREFIXES = [
   'master today',
   'master week',
-  'master leaderboard',
   'master all time',
   'master lb',
   'all time',
@@ -17,8 +16,8 @@ const UNSUPPORTED_PREFIXES = [
 
 function normalizedCommand(raw) {
   const text = String(raw || '').trim();
-  if (!text.startsWith('!')) return null;
-  return text.slice(1).trim().toLowerCase().replace(/\s+/g, ' ');
+  const withoutBang = text.startsWith('!') ? text.slice(1) : text;
+  return withoutBang.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 /**
@@ -41,6 +40,7 @@ function parseLeaderboardTextIntent(raw) {
     if (second === 'daily') return { cmd: 'master', period: 'daily' };
     if (second === 'weekly') return { cmd: 'master', period: 'weekly' };
     if (second === 'alltime') return { cmd: 'master', period: 'alltime' };
+    if (second === 'leaderboard') return { cmd: 'master', period: 'alltime' };
     return null;
   }
 
