@@ -3,34 +3,15 @@ const assert = require('node:assert/strict');
 const { assertCleanOutput } = require('./message-format');
 const { formatQuarterStatus, formatQuarterHeader } = require('./day-quarters');
 const { buildPremiumDealConfirmation } = require('./premium-confirmation');
-const { formatPhase3Master, formatPhase3Leaderboard } = require('./leaderboard-format');
-const { leaderboardDateHeader } = require('./stats');
+const { formatLeaderboard, resolveDateContext } = require('./leaderboard-format');
 
 const SAMPLE_ROWS = [
-  {
-    userId: '1',
-    displayName: 'Henny Sells',
-    total: 6,
-    speeds: { '1gig': 6 },
-    blitzCounts: { Virginia: 6 },
-  },
-  {
-    userId: '2',
-    displayName: 'Caleb Head',
-    total: 5,
-    speeds: { '1gig': 5 },
-    blitzCounts: { Greenville: 5 },
-  },
-  {
-    userId: '3',
-    displayName: 'iQRexy',
-    total: 4,
-    speeds: { '1gig': 4 },
-    blitzCounts: { Virginia: 4 },
-  },
+  { userId: '1', displayName: 'Henny Sells', total: 6, market: 'Virginia' },
+  { userId: '2', displayName: 'Caleb Head', total: 5, market: 'Greenville' },
+  { userId: '3', displayName: 'iQRexy', total: 4, market: 'Virginia' },
 ];
 
-test('formatQuarterStatus is compact — no duplicate Pre-Q1 or culture stack', () => {
+test('formatQuarterStatus is compact - no duplicate Pre-Q1 or culture stack', () => {
   for (const hour of [8, 10, 14, 16, 18, 20, 22]) {
     const out = formatQuarterStatus(hour);
     assertCleanOutput(out, { maxLines: 3 });
@@ -39,7 +20,7 @@ test('formatQuarterStatus is compact — no duplicate Pre-Q1 or culture stack', 
     const lines = out.split('\n').filter(Boolean);
     assert.ok(lines.length <= 2, `quarter output max 2 lines hour=${hour}: ${lines.length}`);
     if (hour < 12) {
-      assert.match(out, /^\*\*Pre-Q1\*\* —/m);
+      assert.match(out, /^\*\*Pre-Q1\*\*/m);
       assert.ok(!out.includes('Stay at a **7**. **#nextdoor**'), 'no culture stack on /quarter');
     }
   }
@@ -51,67 +32,115 @@ test('formatQuarterHeader is one italic line', () => {
   assert.equal(h.split('\n').length, 1);
 });
 
-test('formatPhase3Master one line per rep with market in parentheses', () => {
-  const out = formatPhase3Master(SAMPLE_ROWS, 15, 'All-Time', '_Q3 — **EXTEND THE LEAD**_');
-  assertCleanOutput(out);
-  assert.match(out, /🥇 \*\*Henny Sells\*\* · \*\*6\*\* \(Virginia\)/);
-  assert.match(out, /🥈 \*\*Caleb Head\*\* · \*\*5\*\* \(Greenville\)/);
-  assert.ok(!out.includes('Virginia: 6'), 'no old Virginia: N line');
-  assert.ok(!out.includes('6 deals'), 'no old "N deals" line');
-  assert.ok(!out.includes('\n\n\n'), 'no triple newline');
-  const repBlocks = out.split('\n').filter((l) => l.startsWith('🥇') || l.startsWith('🥈') || l.startsWith('🥉'));
-  assert.equal(repBlocks.length, 3);
+test('formatLeaderboard renders exact market daily style', () => {
+  const out = formatLeaderboard({
+    scope: 'market',
+    period: 'daily',
+    rows: SAMPLE_ROWS,
+    total: 15,
+    market: 'Virginia',
+    dateContext: 'Today · Thursday, May 21',
+  });
+  assert.equal(
+    out,
+    [
+      '**Virginia Leaderboard**',
+      'Today · Thursday, May 21',
+      '',
+      '🥇 **Henny Sells** · 6',
+      '🥈 **Caleb Head** · 5',
+      '🥉 **iQRexy** · 4',
+      '',
+      '**Virginia Total** · 15 deals',
+    ].join('\n'),
+  );
 });
 
-test('formatPhase3Leaderboard compact rows', () => {
-  const out = formatPhase3Leaderboard({
-    title: 'Virginia · Today',
+test('formatLeaderboard renders exact master all-time style', () => {
+  const out = formatLeaderboard({
+    scope: 'master',
+    period: 'alltime',
     rows: SAMPLE_ROWS,
-    totalDeals: 15,
-    quarterHeader: null,
+    total: 15,
+    dateContext: 'All-Time',
   });
-  assertCleanOutput(out);
-  assert.match(out, /🥇 \*\*Henny Sells\*\* · \*\*6\*\*$/m);
-  assert.ok(!out.includes('6x 1 Gig'), 'no per-row speed stack');
-  assert.ok(!out.includes('Henny Sells - 6'));
-  const repLines = out.split('\n').filter((l) => l.startsWith('🥇') || l.startsWith('🥈'));
-  assert.equal(repLines.length, 2);
+  assert.equal(
+    out,
+    [
+      '**Master Leaderboard**',
+      'All-Time · All Markets',
+      '',
+      '🥇 **Henny Sells** · 6 · Virginia',
+      '🥈 **Caleb Head** · 5 · Greenville',
+      '🥉 **iQRexy** · 4 · Virginia',
+      '',
+      '**All Markets Total** · 15 deals',
+    ].join('\n'),
+  );
 });
 
-test('formatPhase3Leaderboard date on first line for daily and weekly only', () => {
-  const daily = formatPhase3Leaderboard({
-    title: 'Greenville · Today',
-    rows: SAMPLE_ROWS,
-    totalDeals: 15,
-    dateHeader: 'Thursday, May 21, 2026',
+test('formatLeaderboard renders empty state', () => {
+  const out = formatLeaderboard({
+    scope: 'market',
+    period: 'weekly',
+    rows: [],
+    total: 0,
+    market: 'Greenville',
+    dateContext: 'This Week · May 18–24',
   });
-  const lines = daily.split('\n');
-  assert.match(lines[0], /^\*\*Thursday, May 21, 2026\*\*$/);
-  assert.match(lines[1], /Greenville · Today/);
-
-  const weekly = formatPhase3Leaderboard({
-    title: 'Greenville · This Week',
-    rows: SAMPLE_ROWS,
-    totalDeals: 15,
-    dateHeader: 'May 19, 2026 – May 25, 2026',
-  });
-  assert.match(weekly.split('\n')[0], /May 19, 2026 – May 25, 2026/);
-
-  const alltime = formatPhase3Leaderboard({
-    title: 'Greenville · All-Time',
-    rows: SAMPLE_ROWS,
-    totalDeals: 15,
-    quarterHeader: '_Q3 — test_',
-  });
-  assert.ok(!alltime.match(/^\*\*[A-Z][a-z]+day,/m), 'all-time has no calendar date line');
-  assert.match(alltime, /^(\*\*Greenville|_Q3)/m);
+  assert.equal(
+    out,
+    [
+      '**Greenville Leaderboard**',
+      'This Week · May 18–24',
+      '',
+      'No deals logged yet.',
+      '',
+      '**Greenville Total** · 0 deals',
+    ].join('\n'),
+  );
 });
 
-test('leaderboardDateHeader returns null for all-time only', () => {
-  assert.equal(leaderboardDateHeader('alltime'), null);
-  assert.ok(leaderboardDateHeader('daily'));
-  assert.ok(leaderboardDateHeader('weekly'));
-  assert.match(leaderboardDateHeader('monthly'), /\d{4}/);
+test('formatLeaderboard trims, escapes, and caps rows', () => {
+  const rows = Array.from({ length: 12 }, (_, i) => ({
+    displayName: i === 0 ? 'Very_Long_*Rep*_Name_With_Extra' : `Rep ${i + 1}`,
+    total: 12 - i,
+  }));
+  const out = formatLeaderboard({
+    scope: 'market',
+    period: 'daily',
+    rows,
+    total: 78,
+    market: 'Evansville',
+    dateContext: 'Today · Thursday, May 21',
+  });
+  assert.match(out, /🥇 \*\*Very\\_Long\\_\\\*Rep\\\*\\_Name\\_Wit…\*\* · 12/);
+  assert.match(out, /^#10 \*\*Rep 10\*\* · 3$/m);
+  assert.doesNotMatch(out, /Rep 11/);
+});
+
+test('resolveDateContext formats daily and weekly labels', () => {
+  assert.equal(
+    resolveDateContext('daily', new Date('2026-05-21T16:00:00Z'), 'America/New_York'),
+    'Today · Thursday, May 21',
+  );
+  assert.equal(
+    resolveDateContext('weekly', new Date('2026-05-21T16:00:00Z'), 'America/New_York'),
+    'This Week · May 18–24',
+  );
+  assert.equal(
+    resolveDateContext('weekly', new Date('2026-06-01T16:00:00Z'), 'America/New_York'),
+    'This Week · June 1–7',
+  );
+  assert.equal(
+    resolveDateContext('weekly', new Date('2026-09-02T16:00:00Z'), 'America/New_York'),
+    'This Week · August 31–September 6',
+  );
+  assert.equal(
+    resolveDateContext('weekly', new Date('2026-12-31T16:00:00Z'), 'America/New_York'),
+    'This Week · December 28–January 3, 2027',
+  );
+  assert.equal(resolveDateContext('alltime', new Date('2026-05-21T16:00:00Z'), 'America/New_York'), 'All-Time');
 });
 
 test('buildPremiumDealConfirmation no extra blank lines', () => {

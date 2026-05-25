@@ -81,6 +81,8 @@ const {
   formatPhase3SpeedBreakdown,
   formatPhase3Leaderboard,
   formatPhase3Master,
+  formatLeaderboard,
+  resolveDateContext,
 } = require('./leaderboard-format');
 const { compactJoin } = require('./message-format');
 const {
@@ -102,6 +104,7 @@ const {
   getTimeZone,
   filterToday,
   filterByWeekId,
+  filterWeeklyByCalendarWeek,
   filterByCalendarMonth,
   blitzFromChannelName,
   aggregateUsers,
@@ -113,7 +116,6 @@ const {
   aggregateTeamWeekly,
   fmtDateInTz,
   getWeekWindow,
-  leaderboardDateHeader,
 } = require('./stats');
 
 const token = process.env.DISCORD_TOKEN;
@@ -416,7 +418,7 @@ function logMatchesCurrentBlitz(log, interaction) {
 
 function filterPhase3Timeframe(logs, timeframe, data) {
   if (timeframe === 'daily') return filterToday(logs, getTimeZone());
-  if (timeframe === 'weekly') return filterByWeekId(logs, data.metadata.weekId);
+  if (timeframe === 'weekly') return filterWeeklyByCalendarWeek(logs, getTimeZone());
   if (timeframe === 'monthly') return filterByCalendarMonth(logs, getTimeZone());
   return logs;
 }
@@ -447,24 +449,37 @@ function phase3Rows(logs) {
     if (!byUser.has(log.userId)) {
       byUser.set(log.userId, {
         userId: log.userId,
-        displayName: log.displayName || log.username || 'Unknown',
+        displayName: log.displayName || log.username || 'Unknown Rep',
+        username: log.username || '',
         total: 0,
+        firstLoggedAt: log.timestamp || '',
         speeds: {},
         blitzCounts: {},
+        marketCounts: {},
       });
     }
 
     const row = byUser.get(log.userId);
     row.total += 1;
     row.speeds[log.speed] = (row.speeds[log.speed] || 0) + 1;
+    if (!row.firstLoggedAt || String(log.timestamp || '').localeCompare(String(row.firstLoggedAt)) < 0) {
+      row.firstLoggedAt = log.timestamp || row.firstLoggedAt;
+    }
 
     const blitzName = titleCaseBlitzName(log.blitzName || log.channelName);
     row.blitzCounts[blitzName] = (row.blitzCounts[blitzName] || 0) + 1;
+    const marketName = inferMarketIdentityForLog(log).marketName || 'Unassigned';
+    row.marketCounts[marketName] = (row.marketCounts[marketName] || 0) + 1;
+    row.market = Object.entries(row.marketCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || marketName;
     row.displayName = log.displayName || row.displayName;
+    row.username = log.username || row.username;
   }
 
   return [...byUser.values()].sort(
-    (a, b) => b.total - a.total || a.displayName.localeCompare(b.displayName),
+    (a, b) =>
+      b.total - a.total ||
+      String(a.firstLoggedAt || '').localeCompare(String(b.firstLoggedAt || '')) ||
+      String(a.displayName || '').localeCompare(String(b.displayName || ''), undefined, { sensitivity: 'base' }),
   );
 }
 
@@ -505,7 +520,7 @@ async function handlePhase3Leaderboard(interaction, { timeframe, label }) {
       title: `${heading} · ${label}`,
       rows: phase3Rows(logs),
       totalDeals: logs.length,
-      dateHeader: leaderboardDateHeader(timeframe),
+      dateHeader: resolveDateContext(timeframe, new Date(), getTimeZone()),
       quarterHeader: showQuarter ? formatQuarterHeader(hour) : null,
     }),
     embeds: [],
@@ -519,7 +534,7 @@ async function handlePhase3Master(interaction, period = 'alltime') {
     return;
   }
 
-  const timeframe = period === 'week' ? 'weekly' : period === 'month' ? 'monthly' : 'alltime';
+  const timeframe = period === 'week' ? 'weekly' : period === 'month' ? 'monthly' : period || 'alltime';
 
   await interaction.deferReply();
   const data = await readLeaderboard();
@@ -534,7 +549,7 @@ async function handlePhase3Master(interaction, period = 'alltime') {
       logs.length,
       phase3PeriodLabel(timeframe),
       showQuarter ? formatQuarterHeader(hour) : null,
-      leaderboardDateHeader(timeframe),
+      resolveDateContext(timeframe, new Date(), getTimeZone()),
     ),
     embeds: [],
   });
@@ -603,28 +618,22 @@ function buildMyDealsContent(channel, userId, data) {
 }
 
 async function buildTextLeaderboardContent(channel, intent, data) {
-  const hour = localHour(new Date(), getTimeZone());
-
-  if (intent.cmd === 'quarter') return formatQuarterStatus(hour);
-  if (intent.cmd === 'markets') return buildMarketsBoardContent(data);
-  if (intent.cmd === 'mydeals') return null;
-
   if (intent.cmd === 'master') {
     const period = intent.period || 'alltime';
-    const timeframe = period === 'week' ? 'weekly' : period === 'month' ? 'monthly' : 'alltime';
+    const timeframe = period === 'week' ? 'weekly' : period;
     const allLogs = approvedDealLogs(activeDealLogs(data));
     const logs = filterPhase3Timeframe(allLogs, timeframe, data);
-    return formatPhase3Master(
-      phase3Rows(logs),
-      logs.length,
-      phase3PeriodLabel(timeframe),
-      period === 'alltime' ? formatQuarterHeader(hour) : null,
-      leaderboardDateHeader(timeframe),
-    );
+    return formatLeaderboard({
+      scope: 'master',
+      period: timeframe,
+      rows: phase3Rows(logs),
+      total: logs.length,
+      dateContext: resolveDateContext(timeframe, new Date(), getTimeZone()),
+    });
   }
 
   if (intent.cmd === 'blitz') {
-    const timeframe = intent.timeframe || 'alltime';
+    const timeframe = intent.timeframe || 'daily';
     const allLogs = approvedDealLogs(activeDealLogs(data));
     const dealCh = resolveDealChannel(channel) || channel;
     const scopedLogs = logsForCurrentMarketChannel(allLogs, dealCh);
@@ -633,12 +642,13 @@ async function buildTextLeaderboardContent(channel, intent, data) {
     const heading =
       market?.marketName ||
       titleCaseBlitzName(approvedBlitzNameForChannel(dealCh) || blitzFromChannelName(dealCh?.name));
-    return formatPhase3Leaderboard({
-      title: `${heading} · ${phase3PeriodLabel(timeframe)}`,
+    return formatLeaderboard({
+      scope: 'market',
+      period: timeframe,
       rows: phase3Rows(logs),
-      totalDeals: logs.length,
-      dateHeader: leaderboardDateHeader(timeframe),
-      quarterHeader: timeframe === 'alltime' ? formatQuarterHeader(hour) : null,
+      total: logs.length,
+      market: heading,
+      dateContext: resolveDateContext(timeframe, new Date(), getTimeZone()),
     });
   }
 
@@ -674,8 +684,11 @@ function messageChannelIsDealApproved(message, dealChannel) {
 }
 
 async function handleTextLeaderboard(message, intent) {
+  const started = Date.now();
+  const resolvedCmd =
+    intent.cmd === 'master' ? `master_${intent.period || 'alltime'}` : intent.timeframe || 'daily';
   const dealChannel = await resolveDealChannelForMessage(message);
-  if (!messageChannelIsDealApproved(message, dealChannel)) {
+  if (intent.cmd !== 'master' && !messageChannelIsDealApproved(message, dealChannel)) {
     const chName = message.channel?.name || 'this channel';
     const mapped = marketForChannel(dealChannel || message.channel);
     console.warn(
@@ -689,13 +702,13 @@ async function handleTextLeaderboard(message, intent) {
       }),
     );
     await message
-      .reply({
+      .channel.send({
         content: compactJoin([
           `**#${chName}** is not a deal-log channel.`,
           mapped
-            ? `Market **${mapped.marketName}** is configured — try \`lb\` again (channel link was refreshed).`
+            ? `Market **${mapped.marketName}** is configured — try \`!lb\` again (channel link was refreshed).`
             : `Use a channel named for a market (e.g. ${dealChannelHint(message.guild)}) or \`/admin add-channel\` here.`,
-          'Keywords: `lb` `daily` `weekly` `master` (no slash).',
+          'Keywords: `!lb` `!daily` `!weekly` `!master weekly`.',
         ]),
         allowedMentions: { parse: [] },
       })
@@ -703,17 +716,32 @@ async function handleTextLeaderboard(message, intent) {
     return;
   }
 
-  const data = await readLeaderboard();
-
-  if (intent.cmd === 'mydeals') {
-    const content = buildMyDealsContent(dealChannel || message.channel, message.author.id, data);
-    await message.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
-    return;
+  try {
+    const data = await readLeaderboard();
+    const content = await buildTextLeaderboardContent(dealChannel || message.channel, intent, data);
+    if (!content) return;
+    const sent = await message.channel.send({ content, allowedMentions: { parse: [] } }).catch((err) => {
+      console.error('[Pulse] Text leaderboard send failed:', err.stack || err.message || err);
+      return null;
+    });
+    if (!sent) return;
+    await message.delete().catch(() => {});
+    const rows = content
+      .split('\n')
+      .filter((line) => line.startsWith('🥇') || line.startsWith('🥈') || line.startsWith('🥉') || /^#\d+ /.test(line))
+      .length;
+    const totalMatch = content.match(/· (\d+) deals$/m);
+    const market = intent.cmd === 'master' ? '__master__' : marketForChannel(dealChannel || message.channel)?.marketName || '__unmapped__';
+    console.info(
+      `[leaderboard] cmd=${resolvedCmd} market=${market} user=${message.author.username} channel=${message.channel?.id} ms=${Date.now() - started} rows=${rows} total=${totalMatch ? totalMatch[1] : 0}`,
+    );
+  } catch (err) {
+    console.error(
+      `[leaderboard] cmd=${resolvedCmd} market=${intent.cmd === 'master' ? '__master__' : '__unknown__'} user=${message.author.username} channel=${message.channel?.id} ms=${Date.now() - started} rows=0 total=0`,
+      err.stack || err.message || err,
+    );
+    await message.channel.send({ content: "Couldn't load that leaderboard. Try again in a moment." }).catch(() => {});
   }
-
-  const content = await buildTextLeaderboardContent(dealChannel || message.channel, intent, data);
-  if (!content) return;
-  await message.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
 }
 
 async function handlePhase3MyDeals(interaction) {
@@ -2560,11 +2588,9 @@ client.on('interactionCreate', async (interaction) => {
         daily: { timeframe: 'daily', label: phase3PeriodLabel('daily') },
         week: { timeframe: 'weekly', label: phase3PeriodLabel('weekly') },
         weekly: { timeframe: 'weekly', label: phase3PeriodLabel('weekly') },
-        month: { timeframe: 'monthly', label: phase3PeriodLabel('monthly') },
-        monthly: { timeframe: 'monthly', label: phase3PeriodLabel('monthly') },
         alltime: { timeframe: 'alltime', label: phase3PeriodLabel('alltime') },
       };
-      return map[raw] || map.alltime;
+      return map[raw] || map.daily;
     };
 
     switch (interaction.commandName) {
@@ -2585,7 +2611,7 @@ client.on('interactionCreate', async (interaction) => {
         break;
       case 'lb':
       case 'leaderboard': {
-        const cfg = leaderboardPeriod(interaction.options.getString('period') || 'alltime');
+        const cfg = leaderboardPeriod(interaction.options.getString('period') || 'daily');
         await handlePhase3Leaderboard(interaction, cfg);
         break;
       }
