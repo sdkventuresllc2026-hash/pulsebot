@@ -106,6 +106,9 @@ const {
   filterByWeekId,
   filterWeeklyByCalendarWeek,
   filterByCalendarMonth,
+  filterYesterday,
+  filterPreviousWeek,
+  filterPreviousMonth,
   blitzFromChannelName,
   aggregateUsers,
   primaryBlitz,
@@ -418,15 +421,21 @@ function logMatchesCurrentBlitz(log, interaction) {
 
 function filterPhase3Timeframe(logs, timeframe, data) {
   if (timeframe === 'daily') return filterToday(logs, getTimeZone());
+  if (timeframe === 'yesterday') return filterYesterday(logs, getTimeZone());
   if (timeframe === 'weekly') return filterWeeklyByCalendarWeek(logs, getTimeZone());
+  if (timeframe === 'lastweek') return filterPreviousWeek(logs, getTimeZone());
   if (timeframe === 'monthly') return filterByCalendarMonth(logs, getTimeZone());
+  if (timeframe === 'lastmonth') return filterPreviousMonth(logs, getTimeZone());
   return logs;
 }
 
 const LEADERBOARD_PERIOD_LABELS = {
   daily: 'Today',
+  yesterday: 'Yesterday',
   weekly: 'This Week',
+  lastweek: 'Last Week',
   monthly: 'This Month',
+  lastmonth: 'Last Month',
   alltime: 'All-Time',
 };
 
@@ -534,7 +543,16 @@ async function handlePhase3Master(interaction, period = 'alltime') {
     return;
   }
 
-  const timeframe = period === 'week' ? 'weekly' : period === 'month' ? 'monthly' : period || 'alltime';
+  const periodMap = {
+    week: 'weekly', weekly: 'weekly',
+    month: 'monthly', monthly: 'monthly',
+    'last-week': 'lastweek', lastweek: 'lastweek',
+    'last-month': 'lastmonth', lastmonth: 'lastmonth',
+    daily: 'daily', today: 'daily',
+    yesterday: 'yesterday',
+    alltime: 'alltime',
+  };
+  const timeframe = periodMap[period] || period || 'alltime';
 
   await interaction.deferReply();
   const data = await readLeaderboard();
@@ -2584,11 +2602,19 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const leaderboardPeriod = (raw) => {
+      const mk = (tf) => ({ timeframe: tf, label: phase3PeriodLabel(tf) });
       const map = {
-        daily: { timeframe: 'daily', label: phase3PeriodLabel('daily') },
-        week: { timeframe: 'weekly', label: phase3PeriodLabel('weekly') },
-        weekly: { timeframe: 'weekly', label: phase3PeriodLabel('weekly') },
-        alltime: { timeframe: 'alltime', label: phase3PeriodLabel('alltime') },
+        daily: mk('daily'),
+        yesterday: mk('yesterday'),
+        week: mk('weekly'),
+        weekly: mk('weekly'),
+        'last-week': mk('lastweek'),
+        lastweek: mk('lastweek'),
+        month: mk('monthly'),
+        monthly: mk('monthly'),
+        'last-month': mk('lastmonth'),
+        lastmonth: mk('lastmonth'),
+        alltime: mk('alltime'),
       };
       return map[raw] || map.daily;
     };
@@ -2609,7 +2635,6 @@ client.on('interactionCreate', async (interaction) => {
       case 'sync-permissions':
         await handleAdminSyncPermissions(interaction);
         break;
-      case 'lb':
       case 'leaderboard': {
         const cfg = leaderboardPeriod(interaction.options.getString('period') || 'daily');
         await handlePhase3Leaderboard(interaction, cfg);
@@ -2621,11 +2646,23 @@ client.on('interactionCreate', async (interaction) => {
       case 'daily':
         await handlePhase3Leaderboard(interaction, { timeframe: 'daily', label: phase3PeriodLabel('daily') });
         break;
+      case 'yesterday':
+        await handlePhase3Leaderboard(interaction, { timeframe: 'yesterday', label: phase3PeriodLabel('yesterday') });
+        break;
       case 'weekly':
         await handlePhase3Leaderboard(interaction, { timeframe: 'weekly', label: phase3PeriodLabel('weekly') });
         break;
+      case 'lastweek':
+        await handlePhase3Leaderboard(interaction, { timeframe: 'lastweek', label: phase3PeriodLabel('lastweek') });
+        break;
+      case 'monthly':
+        await handlePhase3Leaderboard(interaction, { timeframe: 'monthly', label: phase3PeriodLabel('monthly') });
+        break;
+      case 'lastmonth':
+        await handlePhase3Leaderboard(interaction, { timeframe: 'lastmonth', label: phase3PeriodLabel('lastmonth') });
+        break;
       case 'master': {
-        const period = interaction.options.getString('period') || 'alltime';
+        const period = interaction.options.getString('period') || 'daily';
         await handlePhase3Master(interaction, period);
         break;
       }

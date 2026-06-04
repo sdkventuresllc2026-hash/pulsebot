@@ -93,6 +93,38 @@ function filterByCalendarMonth(logs, timeZone = getTimeZone()) {
   return logs.filter((l) => logInYmdRange(l, startYmd, endYmdExclusive));
 }
 
+function filterYesterday(logs, timeZone = getTimeZone()) {
+  const today = fmtDateInTz(new Date(), timeZone);
+  const yesterday = addDaysYmd(today, -1, timeZone);
+  return logs.filter((l) => (l.date || l.timestamp?.slice(0, 10)) === yesterday);
+}
+
+function getPreviousWeekWindow(date = new Date(), timeZone = getTimeZone()) {
+  const { startYmd } = getWeekWindow(date, timeZone);
+  const prevStart = addDaysYmd(startYmd, -7, timeZone);
+  const prevEndExclusive = startYmd;
+  return { startYmd: prevStart, endYmdExclusive: prevEndExclusive, timeZone };
+}
+
+function filterPreviousWeek(logs, timeZone = getTimeZone()) {
+  const { startYmd, endYmdExclusive } = getPreviousWeekWindow(new Date(), timeZone);
+  return logs.filter((l) => logInYmdRange(l, startYmd, endYmdExclusive));
+}
+
+function getPreviousMonthWindow(date = new Date(), timeZone = getTimeZone()) {
+  const { startYmd } = getMonthWindow(date, timeZone);
+  const [Y, M] = startYmd.split('-').map(Number);
+  const prevY = M === 1 ? Y - 1 : Y;
+  const prevM = M === 1 ? 12 : M - 1;
+  const prevStart = `${prevY}-${String(prevM).padStart(2, '0')}-01`;
+  return { startYmd: prevStart, endYmdExclusive: startYmd, timeZone };
+}
+
+function filterPreviousMonth(logs, timeZone = getTimeZone()) {
+  const { startYmd, endYmdExclusive } = getPreviousMonthWindow(new Date(), timeZone);
+  return logs.filter((l) => logInYmdRange(l, startYmd, endYmdExclusive));
+}
+
 function blitzFromChannelName(channelName) {
   if (!channelName) return 'Unknown Team';
   return channelName.replace(/^#/, '').trim() || 'Unknown Team';
@@ -249,6 +281,11 @@ exports.filterToday = filterToday;
 exports.filterWeeklyByCalendarWeek = filterWeeklyByCalendarWeek;
 exports.getMonthWindow = getMonthWindow;
 exports.filterByCalendarMonth = filterByCalendarMonth;
+exports.filterYesterday = filterYesterday;
+exports.filterPreviousWeek = filterPreviousWeek;
+exports.filterPreviousMonth = filterPreviousMonth;
+exports.getPreviousWeekWindow = getPreviousWeekWindow;
+exports.getPreviousMonthWindow = getPreviousMonthWindow;
 exports.blitzFromChannelName = blitzFromChannelName;
 exports.aggregateUsers = aggregateUsers;
 exports.primaryBlitz = primaryBlitz;

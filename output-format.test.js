@@ -101,7 +101,7 @@ test('formatLeaderboard renders empty state', () => {
   );
 });
 
-test('formatLeaderboard trims, escapes, and caps rows', () => {
+test('formatLeaderboard shows all rows up to soft cap and notes overflow', () => {
   const rows = Array.from({ length: 12 }, (_, i) => ({
     displayName: i === 0 ? 'Very_Long_*Rep*_Name_With_Extra' : `Rep ${i + 1}`,
     total: 12 - i,
@@ -116,7 +116,17 @@ test('formatLeaderboard trims, escapes, and caps rows', () => {
   });
   assert.match(out, /🥇 \*\*Very\\_Long\\_\\\*Rep\\\*\\_Name\\_Wit…\*\* · 12/);
   assert.match(out, /^#10 \*\*Rep 10\*\* · 3$/m);
-  assert.doesNotMatch(out, /Rep 11/);
+  assert.match(out, /^#11 \*\*Rep 11\*\* · 2$/m);
+  assert.match(out, /^#12 \*\*Rep 12\*\* · 1$/m);
+  assert.doesNotMatch(out, /and \d+ more/);
+});
+
+test('formatLeaderboard applies soft cap with overflow note past 50 rows', () => {
+  const rows = Array.from({ length: 55 }, (_, i) => ({ displayName: `Rep ${i + 1}`, total: 55 - i }));
+  const out = formatLeaderboard({ scope: 'master', period: 'alltime', rows, total: 100 });
+  assert.match(out, /^#50 /m);
+  assert.doesNotMatch(out, /Rep 51/);
+  assert.match(out, /…and 5 more/);
 });
 
 test('resolveDateContext formats daily and weekly labels', () => {

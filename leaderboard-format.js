@@ -109,13 +109,52 @@ function weekRangeLabel(now, timeZone) {
   return `${start.month} ${start.day}–${end.day}`;
 }
 
+function previousWeekRangeLabel(now, timeZone) {
+  const todayYmd = ymdInTz(now, timeZone);
+  const daysFromMonday = (weekdayIndex(dateFromYmdNoonUtc(todayYmd), timeZone) + 6) % 7;
+  const thisMondayYmd = addDaysYmd(todayYmd, -daysFromMonday);
+  const startYmd = addDaysYmd(thisMondayYmd, -7);
+  const endYmd = addDaysYmd(startYmd, 6);
+  const start = getDateParts(dateFromYmdNoonUtc(startYmd), timeZone);
+  const end = getDateParts(dateFromYmdNoonUtc(endYmd), timeZone);
+  if (start.year !== end.year) return `${start.month} ${start.day}–${end.month} ${end.day}, ${end.year}`;
+  if (start.month !== end.month) return `${start.month} ${start.day}–${end.month} ${end.day}`;
+  return `${start.month} ${start.day}–${end.day}`;
+}
+
+function monthLabel(now, timeZone, offsetMonths = 0) {
+  const todayYmd = ymdInTz(now, timeZone);
+  const [Y, M] = todayYmd.split('-').map(Number);
+  const targetMonth0 = M - 1 + offsetMonths;
+  const yearAdj = Math.floor(targetMonth0 / 12);
+  const monthIdx = ((targetMonth0 % 12) + 12) % 12;
+  const targetYmd = `${Y + yearAdj}-${String(monthIdx + 1).padStart(2, '0')}-15`;
+  const parts = getDateParts(dateFromYmdNoonUtc(targetYmd), timeZone);
+  return `${parts.month} ${parts.year}`;
+}
+
 function resolveDateContext(period, now = new Date(), tz = process.env.TZ || DEFAULT_TZ) {
   if (period === 'daily') {
     const parts = getDateParts(now, tz);
     return `Today · ${parts.weekday}, ${parts.month} ${parts.day}`;
   }
+  if (period === 'yesterday') {
+    const ymd = ymdInTz(now, tz);
+    const y = addDaysYmd(ymd, -1);
+    const parts = getDateParts(dateFromYmdNoonUtc(y), tz);
+    return `Yesterday · ${parts.weekday}, ${parts.month} ${parts.day}`;
+  }
   if (period === 'weekly') {
     return `This Week · ${weekRangeLabel(now, tz)}`;
+  }
+  if (period === 'lastweek') {
+    return `Last Week · ${previousWeekRangeLabel(now, tz)}`;
+  }
+  if (period === 'monthly') {
+    return `This Month · ${monthLabel(now, tz, 0)}`;
+  }
+  if (period === 'lastmonth') {
+    return `Last Month · ${monthLabel(now, tz, -1)}`;
   }
   return 'All-Time';
 }
@@ -125,7 +164,10 @@ function formatLeaderboard({ scope, period, rows, total, market, dateContext }) 
   const title = isMaster ? '**Master Leaderboard**' : `**${market || 'Unknown Market'} Leaderboard**`;
   const baseContext = dateContext || resolveDateContext(period);
   const context = isMaster ? `${baseContext} · All Markets` : baseContext;
-  const safeRows = Array.isArray(rows) ? rows.slice(0, 10) : [];
+  const SOFT_CAP = 50;
+  const allRows = Array.isArray(rows) ? rows : [];
+  const safeRows = allRows.slice(0, SOFT_CAP);
+  const overflow = allRows.length - safeRows.length;
   const lines = [title, context, ''];
 
   if (safeRows.length) {
@@ -134,6 +176,7 @@ function formatLeaderboard({ scope, period, rows, total, market, dateContext }) 
       if (isMaster) fields.push(row.market || 'Unassigned');
       lines.push(fields.join(' · '));
     });
+    if (overflow > 0) lines.push(`…and ${overflow} more`);
   } else {
     lines.push('No deals logged yet.');
   }
@@ -145,7 +188,14 @@ function formatLeaderboard({ scope, period, rows, total, market, dateContext }) 
 
 function formatPhase3Leaderboard({ title, rows, totalDeals, dateHeader }) {
   const [market = title] = String(title || '').split(' · ');
-  const period = title?.includes('This Week') ? 'weekly' : title?.includes('All-Time') ? 'alltime' : 'daily';
+  const t = String(title || '');
+  const period = t.includes('Last Week') ? 'lastweek'
+    : t.includes('This Week') ? 'weekly'
+    : t.includes('Last Month') ? 'lastmonth'
+    : t.includes('This Month') ? 'monthly'
+    : t.includes('Yesterday') ? 'yesterday'
+    : t.includes('All-Time') ? 'alltime'
+    : 'daily';
   return formatLeaderboard({
     scope: 'market',
     period,
@@ -157,7 +207,16 @@ function formatPhase3Leaderboard({ title, rows, totalDeals, dateHeader }) {
 }
 
 function formatPhase3Master(rows, totalDeals, periodLabel, _quarterHeader, dateHeader) {
-  const period = periodLabel === 'This Week' ? 'weekly' : periodLabel === 'Today' ? 'daily' : 'alltime';
+  const labelToPeriod = {
+    'Today': 'daily',
+    'Yesterday': 'yesterday',
+    'This Week': 'weekly',
+    'Last Week': 'lastweek',
+    'This Month': 'monthly',
+    'Last Month': 'lastmonth',
+    'All-Time': 'alltime',
+  };
+  const period = labelToPeriod[periodLabel] || 'alltime';
   return formatLeaderboard({
     scope: 'master',
     period,

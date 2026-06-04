@@ -60,48 +60,45 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('leaderboard')
-    .setDescription('Blitz leaderboard for this channel')
+    .setDescription('Market leaderboard for this channel')
     .addStringOption((o) =>
       o
         .setName('period')
-        .setDescription('Time period (default: all-time)')
+        .setDescription('Time period (default: today)')
         .setRequired(false)
         .addChoices(
           { name: 'Today', value: 'daily' },
-          { name: 'This Week', value: 'week' },
+          { name: 'Yesterday', value: 'yesterday' },
+          { name: 'This Week', value: 'weekly' },
+          { name: 'Last Week', value: 'lastweek' },
+          { name: 'This Month', value: 'monthly' },
+          { name: 'Last Month', value: 'lastmonth' },
           { name: 'All-Time', value: 'alltime' },
         ),
     ),
 
-  new SlashCommandBuilder()
-    .setName('lb')
-    .setDescription('Blitz leaderboard (alias)')
-    .addStringOption((o) =>
-      o
-        .setName('period')
-        .setDescription('Time period (default: all-time)')
-        .setRequired(false)
-        .addChoices(
-          { name: 'Today', value: 'daily' },
-          { name: 'This Week', value: 'week' },
-          { name: 'All-Time', value: 'alltime' },
-        ),
-    ),
-
-  new SlashCommandBuilder().setName('daily').setDescription("Today's blitz leaderboard"),
-  new SlashCommandBuilder().setName('weekly').setDescription("This week's blitz leaderboard"),
-  new SlashCommandBuilder().setName('blitz').setDescription('All-time blitz leaderboard'),
+  new SlashCommandBuilder().setName('daily').setDescription("Today's market leaderboard"),
+  new SlashCommandBuilder().setName('yesterday').setDescription("Yesterday's market leaderboard"),
+  new SlashCommandBuilder().setName('weekly').setDescription("This week's market leaderboard"),
+  new SlashCommandBuilder().setName('lastweek').setDescription("Last week's market leaderboard"),
+  new SlashCommandBuilder().setName('monthly').setDescription("This month's market leaderboard"),
+  new SlashCommandBuilder().setName('lastmonth').setDescription("Last month's market leaderboard"),
+  new SlashCommandBuilder().setName('blitz').setDescription('All-time market leaderboard'),
   new SlashCommandBuilder()
     .setName('master')
-    .setDescription('Master leaderboard across all approved blitzes')
+    .setDescription('Master leaderboard across all approved markets')
     .addStringOption((o) =>
       o
         .setName('period')
-        .setDescription('Time period (default: all-time)')
+        .setDescription('Time period (default: today)')
         .setRequired(false)
         .addChoices(
-          { name: 'This Week', value: 'week' },
-          { name: 'This Month', value: 'month' },
+          { name: 'Today', value: 'daily' },
+          { name: 'Yesterday', value: 'yesterday' },
+          { name: 'This Week', value: 'weekly' },
+          { name: 'Last Week', value: 'lastweek' },
+          { name: 'This Month', value: 'monthly' },
+          { name: 'Last Month', value: 'lastmonth' },
           { name: 'All-Time', value: 'alltime' },
         ),
     ),

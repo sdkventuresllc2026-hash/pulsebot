@@ -178,7 +178,6 @@ function buildPremiumDealConfirmation(ctx) {
   const parts = [header];
   if (ctx.hypeLine) parts.push(ctx.hypeLine);
   if (ctx.hasCustomerOnFile) parts.push('_Customer on file._');
-  if (ctx.pulseBuild) parts.push(`_· ${ctx.pulseBuild}_`);
   return compactJoin(parts);
 }
 
