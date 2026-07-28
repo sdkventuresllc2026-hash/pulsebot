@@ -46,10 +46,9 @@ const OWNER_OVERRIDES = {
   // Alex Minter backfills Jacksonville management. He does NOT hold the Discord Manager role, so
   // this assignment is inert until an Owner grants it — surfaced as a blocker, never auto-granted.
   '1464879769756893270': { markets: ['jacksonville'], replaces: true, reason: 'Owner 2026-07-28: Jacksonville manager after Caleb/Ben/Jonah move to Wilmington', requiresManagerRole: true }, // Alex Minter
-  // Henry Sells is NARROWED to Jacksonville. His earlier three-market proposal is superseded and
-  // must not be treated as still approved — Inman and Kannapolis need separate explicit approval.
-  // He holds all three Discord roles today, so reconciliation will REMOVE two of them.
-  '1504984792758751423': { markets: ['jacksonville'], replaces: true, reason: 'Owner 2026-07-28: Jacksonville only. Inman and Kannapolis are NOT approved and require a separate decision.' }, // Henry Sells
+  // Henry Sells: NO override. Owner confirmed 2026-07-28 (final) that he keeps all three approved
+  // markets — Inman, Kannapolis and Jacksonville. Role-derived evidence already proposes exactly
+  // those three, so an override would only risk narrowing him by mistake.
 };
 
 const APPLY = process.argv.includes('--apply');

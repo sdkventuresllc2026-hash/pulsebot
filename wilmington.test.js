@@ -210,21 +210,20 @@ test('the three Jacksonville managers manage Jacksonville and nothing else', () 
   }
 });
 
-test('Henry is narrowed to Jacksonville — Inman and Kannapolis are NOT retained', () => {
-  // His earlier three-market proposal is superseded; only an explicit approval restores them.
-  A.addManagerMarketAssignment(HENRY, 'jacksonville');
-  assert.deepEqual(A.getManagerMarkets(HENRY), ['jacksonville']);
-  assert.equal(can(HENRY, 'add', 'kannapolis'), false, 'Kannapolis requires separate approval');
-  assert.equal(can(HENRY, 'status', 'inman'), false, 'Inman requires separate approval');
+test('Henry keeps all THREE approved markets', () => {
+  for (const m of ['jacksonville', 'inman', 'kannapolis']) A.addManagerMarketAssignment(HENRY, m);
+  assert.deepEqual(A.getManagerMarkets(HENRY).sort(), ['inman', 'jacksonville', 'kannapolis']);
+  for (const m of ['jacksonville', 'inman', 'kannapolis']) assert.equal(can(HENRY, 'add', m), true, m);
+  assert.equal(can(HENRY, 'add', 'wilmington-nc'), false, 'Wilmington is not his');
 });
 
-test('reconciliation strips Henry’s unapproved Inman and Kannapolis roles', async () => {
-  A.addManagerMarketAssignment(HENRY, 'jacksonville');
-  const held = new Set([R.jax, R.inm, R.kan]);   // he holds all three in Discord today
+test('reconciliation KEEPS all three approved Henry roles', async () => {
+  for (const m of ['jacksonville', 'inman', 'kannapolis']) A.addManagerMarketAssignment(HENRY, m);
+  const held = new Set([R.jax, R.inm, R.kan]);
   const member = { roles: { cache: { keys: () => held.values(), has: (r) => held.has(r) }, add: async (r) => held.add(r), remove: async (r) => held.delete(r) } };
   const plan = await A.reconcileMemberMarketRoles({ members: { fetch: async () => member } }, HENRY);
-  assert.deepEqual(Array.from(held), [R.jax], 'only the approved market role survives');
-  assert.deepEqual(plan.remove.map((r) => r.roleId).sort(), [R.inm, R.kan].sort());
+  assert.deepEqual(Array.from(held).sort(), [R.jax, R.inm, R.kan].sort(), 'all three approved roles survive');
+  assert.equal(plan.remove.length, 0, 'nothing is stripped from an approved multi-market manager');
 });
 
 test('the two manager groups are mutually exclusive', () => {
@@ -234,16 +233,18 @@ test('the two manager groups are mutually exclusive', () => {
   for (const uid of [JACOB, ALEX, HENRY]) assert.equal(can(uid, 'add', 'wilmington-nc'), false);
 });
 
-test('a temporary close-out role grants VIEW without manager authority', () => {
-  // The recommended close-out: keep the Discord market role for read access, add NO assignment
-  // record. Access without authority is exactly what a pending-order wind-down needs.
+test('the movers keep NO Jacksonville access — clean cut, no unbacked roles', async () => {
+  // Owner FINAL: no temporary access. A role with no assignment record is drift, and
+  // reconciliation removes it — which is exactly the intended outcome here.
   for (const uid of [CALEB, BEN, JONAH]) A.addManagerMarketAssignment(uid, 'wilmington-nc');
-  for (const uid of [CALEB, BEN, JONAH]) {
-    assert.equal(can(uid, 'add', 'jacksonville'), false, 'no manager authority in Jacksonville');
-    assert.equal(can(uid, 'remove', 'jacksonville'), false);
-    assert.equal(can(uid, 'status', 'jacksonville'), false);
-  }
-  // Their Jacksonville assignment record must not exist.
+  A.assignRepMarket(TRIPP, 'wilmington-nc');
+  A.assignRepMarket(MALAKAI, 'wilmington-nc');
   const jax = DC.readApprovedChannelsData().markets.find((m) => m.marketId === 'jacksonville');
   for (const uid of [CALEB, BEN, JONAH]) assert.ok(!(jax.managerUserIds || []).includes(uid));
+  for (const uid of [TRIPP, MALAKAI]) assert.ok(!(jax.repUserIds || []).includes(uid));
+  // And a leftover Discord role reconciles away rather than lingering.
+  const held = new Set([R.jax]);
+  const member = { roles: { cache: { keys: () => held.values(), has: (r) => held.has(r) }, add: async (r) => held.add(r), remove: async (r) => held.delete(r) } };
+  await A.reconcileMemberMarketRoles({ members: { fetch: async () => member } }, CALEB);
+  assert.deepEqual(Array.from(held), [R.wilm], 'stale Jacksonville role removed, Wilmington granted');
 });
