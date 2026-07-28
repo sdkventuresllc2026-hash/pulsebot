@@ -3005,7 +3005,32 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+/**
+ * Graceful shutdown. Railway sends SIGTERM on every redeploy and on any manual stop; without this
+ * the process is force-killed, which Railway records as a failure and then restarts under
+ * ON_FAILURE. Exiting 0 tells the platform this was an orderly stop, not a crash.
+ *
+ * Kept deliberately small: close the Discord connection, release the lock (process-lock's own
+ * 'exit' handler does that), exit 0. A hard timeout guarantees we exit even if destroy() hangs,
+ * because Railway will SIGKILL us shortly anyway and a clean 0 is better than being killed.
+ */
+function installGracefulShutdown() {
+  let stopping = false;
+  const stop = (signal) => async () => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[Pulse] ${signal} received — shutting down cleanly.`);
+    const hardExit = setTimeout(() => process.exit(0), 4000);
+    hardExit.unref?.();
+    try { await client.destroy(); } catch { /* already gone */ }
+    process.exit(0);
+  };
+  process.on('SIGTERM', stop('SIGTERM'));
+  process.on('SIGINT', stop('SIGINT'));
+}
+
 async function startBot() {
+  installGracefulShutdown();
   const lock = acquireProcessLock();
   if (!lock.ok) {
     console.error(

@@ -3,8 +3,14 @@
 builder = "nixpacks"
 
 [deploy]
-# Ensures data dir even if the dashboard variable was missed (volume must still mount at /data)
-startCommand = "PULSE_DATA_DIR=/data npm start"
+# Run node DIRECTLY, not through `npm start`. npm does not forward signals cleanly: when Railway
+# stops a container it sends SIGTERM, npm reports the signal-terminated child as a non-zero exit
+# ("npm error signal SIGTERM"), Railway reads that as a crash, and restartPolicy = ON_FAILURE
+# restarts it — a perfectly normal shutdown looks like a crash loop. Calling node directly means
+# the signal reaches our own handler, which exits 0.
+# PULSE_DATA_DIR is also set as a service variable; keeping it here means a missed dashboard var
+# cannot silently send the leaderboard to the ephemeral container disk instead of the volume.
+startCommand = "PULSE_DATA_DIR=/data node index.js"
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
