@@ -2595,7 +2595,20 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
-client.once('ready', async () => {
+// discord.js renamed 'ready' -> 'clientReady' partway through v14 and warns if you listen to the
+// old name. Listen for BOTH so the boot sequence can't depend on which version Railway installs,
+// with a latch because both fire in the versions that emit both — running startup twice would
+// double-sync market permissions and double-register handlers.
+let bootstrapped = false;
+const onClientReady = async () => {
+  if (bootstrapped) return;
+  bootstrapped = true;
+  await bootstrap();
+};
+client.once('clientReady', onClientReady);
+client.once('ready', onClientReady);
+
+async function bootstrap() {
   const appId = process.env.CLIENT_ID || client.application?.id || 'unknown';
   console.log(
     `Pulse online as ${client.user.tag} (pid ${process.pid}) · build ${PULSE_BUILD} · app ${appId} · ONE reply per log`,
@@ -2638,7 +2651,7 @@ client.once('ready', async () => {
       })
       .catch((err) => console.error(`[Pulse] Market permission sync failed (${guild.name}):`, err.message || err));
   }
-});
+}
 
 async function replySlashHint(message, hintKey) {
   const text = SLASH_HINTS[hintKey];
