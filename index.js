@@ -2619,10 +2619,15 @@ client.once('ready', async () => {
     await readLeaderboard();
   } catch (err) {
     if (err?.code === CORRUPT_CODE) {
+      // The one case worth dying for: the file exists but is unparseable. Continuing would let the
+      // next write replace real history with an empty file.
       console.error(`\n[Pulse] REFUSING TO START — leaderboard data is unreadable.\n${err.message}\n`);
       process.exit(1);
     }
-    throw err;
+    // Anything else (volume not mounted yet, transient EACCES, ENOSPC) must NOT take the bot down.
+    // Rethrowing here surfaced as an unhandled rejection inside the ready handler and killed the
+    // process — a far worse outcome than a noisy log, since deal logging stops for everyone.
+    console.error(`[Pulse] Startup leaderboard read failed (continuing): ${err?.message || err}`);
   }
 
   for (const guild of client.guilds.cache.values()) {
