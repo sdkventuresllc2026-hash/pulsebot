@@ -1,17 +1,19 @@
 /**
- * Wilmington market creation — DRY RUN BY DEFAULT, Owner-only operation.
+ * Wilmington — Pulse OPERATIONAL market creation. DRY RUN BY DEFAULT, Owner-only.
  *
- * Creates nothing without --apply, and REFUSES to activate until state and provider are confirmed.
- * This is the direct lesson from Ashtabula: `new-york` became the permanent internal id of an Ohio
- * market because a value was written before it was known. An id is immutable once deal logs carry
- * it, so it must never be derived from a guess.
+ * SCOPE BOUNDARY (owner decision 2026-07-28):
+ *   · "wilmington-nc" is a PULSE OPERATIONAL IDENTIFIER. It is NOT a FiberSales.co Prisma
+ *     Market id — those are cuid()s, and Pulse does not own that identity.
+ *   · Jacksonville and Wilmington are T-Fiber markets whose ORDER DATA comes from Palmetto.
+ *     FiberSales.co receives that data through a separate Palmetto integration built elsewhere.
+ *   · This script does not touch FiberSales.co, Prisma, or the Palmetto importer. It manages
+ *     Discord access and Pulse deal-channel activity only.
  *
- *   node scripts/create-market-wilmington.js                          # preview, PENDING config
- *   node scripts/create-market-wilmington.js --state=NC --provider="T-Fiber"     # preview, complete
- *   node scripts/create-market-wilmington.js --state=NC --provider="T-Fiber" --apply
+ * Future-mapping fields are recorded now and left null — so the Palmetto integration has somewhere
+ * to write when the real identifiers are known, without blocking Wilmington today.
  *
- * Without --state and --provider the market can still be created as PENDING (channel + role, not
- * active, no deal logging) so setup can proceed — but it is never marked active.
+ *   node scripts/create-market-wilmington.js                      # preview
+ *   node scripts/create-market-wilmington.js --apply              # create
  */
 require('dotenv').config();
 const fs = require('node:fs');
@@ -26,16 +28,29 @@ const arg = (k) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').spl
 
 const DISPLAY_NAME = 'Wilmington';
 const CITY = 'Wilmington';
-const STATE = arg('state');           // e.g. NC — REQUIRED to activate
-const PROVIDER = arg('provider');     // e.g. T-Fiber — REQUIRED to activate
+const STATE = arg('state') || 'NC';                    // owner-confirmed 2026-07-28
+const PROVIDER = arg('provider') || 'T-Fiber';         // owner-confirmed 2026-07-28
 
-// Immutable id. Only derived once the state is known, so it can never become another `new-york`:
-// a market id is stamped on every deal log and can never be corrected afterwards.
-const MARKET_ID = STATE ? normalizeMarketId(`wilmington-${STATE}`) : null;
+// Pulse OPERATIONAL id — stable and readable, and stamped on Pulse deal logs. It is deliberately
+// NOT a FiberSales.co Market cuid: Pulse does not own that identity. Still immutable once written,
+// which is why it encodes the confirmed state rather than a guess (the Ashtabula/new-york lesson).
+const MARKET_ID = 'wilmington-nc';
 
 const CHANNEL_NAME = '🛜wilmington';   // matches the existing convention (🛜inman, 🛜kannapolis)
 const ROLE_NAME = `Pulse · ${DISPLAY_NAME}`;
-const TOPIC = `${DISPLAY_NAME} blitz. Log every deal here — just post your speed: 1g, 2g, 2x 1g. Attach your order confirmation screenshot.`;
+const TOPIC = 'Wilmington, North Carolina · T-Fiber (orders via Palmetto). Log every deal here — just post your speed: 1g, 2g, 2x 1g. Attach your order confirmation screenshot.';
+
+/**
+ * Future-mapping fields for the separate Palmetto integration. Written now, left null, so that
+ * work has somewhere to record identifiers without a migration — and without blocking Wilmington
+ * today on an identifier nobody has yet.
+ */
+const FUTURE_MAPPING = {
+  sourceSystem: 'palmetto',
+  externalMarketId: null,     // Palmetto market/office id — unknown until the importer runs
+  externalMarketName: null,   // Palmetto's own label for this market
+  lastImportedAt: null,       // set by the Palmetto integration, never by Pulse
+};
 
 (async () => {
   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
@@ -61,7 +76,9 @@ const TOPIC = `${DISPLAY_NAME} blitz. Log every deal here — just post your spe
   console.log(`    city           ${CITY}`);
   console.log(`    state          ${STATE ?? '⚠ PENDING — you must confirm'}`);
   console.log(`    provider       ${PROVIDER ?? '⚠ PENDING — you must confirm'}`);
-  console.log(`    immutable id   ${MARKET_ID ?? '⚠ PENDING — derived from state, never guessed'}`);
+  console.log(`    operational id ${MARKET_ID}   (Pulse id — NOT a FiberSales.co Market cuid)`);
+  console.log(`    order source   Palmetto  (FiberSales.co receives T-Fiber data via the separate Palmetto integration)`);
+  console.log(`    future mapping externalMarketId=null externalMarketName=null lastImportedAt=null`);
   console.log(`    active         ${missing.length ? 'false (PENDING config)' : 'true'}`);
   console.log(`    channel        #${CHANNEL_NAME}${existingChannel ? `  (EXISTS ${existingChannel.id})` : ''}`);
   console.log(`    role           ${ROLE_NAME}${existingRole ? `  (EXISTS ${existingRole.id})` : ''}`);
@@ -119,6 +136,7 @@ const TOPIC = `${DISPLAY_NAME} blitz. Log every deal here — just post your spe
 
   const { addMarket, connectChannelToMarket, updateMarket } = require('../deal-channels');
   addMarket({ marketName: DISPLAY_NAME, marketId: MARKET_ID, isp: PROVIDER, createdBy: 'owner-script' });
+  updateMarket(MARKET_ID, { ...FUTURE_MAPPING });
   updateMarket(MARKET_ID, { roleId: role.id, city: CITY, state: STATE, active: true, managerUserIds: [], repUserIds: [] });
   connectChannelToMarket({ channel, marketId: MARKET_ID, connectedBy: 'owner-script' });
 

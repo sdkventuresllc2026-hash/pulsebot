@@ -17,6 +17,7 @@ const { PermissionFlagsBits: P } = require('discord.js');
 const CALEB = '373653162042720266', BEN = '949541784126648330', JONAH = '699672451344236645';
 const TRIPP = '1296303439084650552', MALAKAI = '459667932914515969';
 const OUTSIDER = '111111111111111111';
+const ALEX = '1464879769756893270', JACOB = '1234228856555045015';
 const R = { wilm: 'r-wilm', jax: 'r-jax', kan: 'r-kan' };
 
 function seed() {
@@ -24,7 +25,7 @@ function seed() {
     schemaVersion: 1, channels: [], disabledChannelIds: [],
     markets: [
       { marketId: 'wilmington-nc', marketName: 'Wilmington', city: 'Wilmington', state: 'NC', isp: 'T-Fiber', active: true, channelIds: ['c-wilm'], roleId: R.wilm, repUserIds: [], managerUserIds: [] },
-      { marketId: 'jacksonville', marketName: 'Jacksonville', active: true, channelIds: ['c-jax'], roleId: R.jax, repUserIds: [TRIPP, MALAKAI], managerUserIds: [] },
+      { marketId: 'jacksonville', marketName: 'Jacksonville', active: true, channelIds: ['c-jax'], roleId: R.jax, repUserIds: [TRIPP, MALAKAI], managerUserIds: [JACOB] },
       { marketId: 'kannapolis', marketName: 'Kannapolis', active: true, channelIds: ['c-kan'], roleId: R.kan, repUserIds: [], managerUserIds: [OUTSIDER] },
     ],
   }, null, 2));
@@ -133,4 +134,61 @@ test('the desired overwrite set for Wilmington is deterministic across restarts'
   const b = buildChannelOverwrites(guild(), mkt('wilmington-nc', 'Wilmington', R.wilm, [CALEB]), 'bot');
   const norm = (ow) => ow.map((o) => [o.id, (o.allow || []).map(String).sort().join(), (o.deny || []).map(String).sort().join()]);
   assert.deepEqual(norm(a), norm(b));
+});
+
+// --- Scope boundary: Pulse operational market, not a FiberSales.co record --------------------
+
+test('Wilmington is a PULSE operational market tagged T-Fiber via Palmetto', () => {
+  const m = DC.readApprovedChannelsData().markets.find((x) => x.marketId === 'wilmington-nc');
+  assert.equal(m.isp, 'T-Fiber');
+  assert.equal(m.state, 'NC');
+  // A readable operational slug, deliberately NOT a FiberSales.co Prisma cuid (25 chars, c-prefixed).
+  assert.ok(!/^c[a-z0-9]{24}$/.test(m.marketId), 'must not masquerade as a FiberSales.co Market cuid');
+  assert.equal(m.marketId, 'wilmington-nc');
+});
+
+// --- Jacksonville after the move -------------------------------------------------------------
+
+test('Jacob keeps Jacksonville while the three movers lose it', () => {
+  for (const uid of [CALEB, BEN, JONAH]) A.addManagerMarketAssignment(uid, 'wilmington-nc');
+  assert.deepEqual(A.getManagerMarkets(JACOB), ['jacksonville'], 'unrelated Jacksonville assignment untouched');
+  assert.equal(can(JACOB, 'add', 'jacksonville'), true);
+  for (const uid of [CALEB, BEN, JONAH]) {
+    assert.equal(can(uid, 'add', 'jacksonville'), false, 'no default retention of the old market');
+  }
+});
+
+test('Alex manages Jacksonville once assigned, and nothing else', () => {
+  A.addManagerMarketAssignment(ALEX, 'jacksonville');
+  assert.deepEqual(A.getManagerMarkets(ALEX), ['jacksonville']);
+  assert.equal(can(ALEX, 'add', 'jacksonville'), true);
+  assert.equal(can(ALEX, 'add', 'wilmington-nc'), false, 'Jacksonville only unless separately approved');
+  assert.equal(can(ALEX, 'status', 'kannapolis'), false);
+});
+
+test('an assignment record alone does not bypass the Manager tier', () => {
+  A.addManagerMarketAssignment(ALEX, 'jacksonville');
+  // Alex does not hold the Discord Manager role today. isManagerTier=false models that.
+  const denied = authorizeMarketCommand({
+    userId: ALEX, isOwner: false, isManagerTier: false, subcommand: 'add', marketId: 'jacksonville', scopingEnabled: true,
+  });
+  assert.equal(denied.ok, false, 'the record is inert until the Owner grants the Manager role');
+  assert.match(denied.reason, /Manager role/);
+});
+
+test('assignment records survive drift: reconciliation restores the approved state', async () => {
+  A.addManagerMarketAssignment(CALEB, 'wilmington-nc');
+  const held = new Set([R.jax]);                       // hand-added drift, no record backing it
+  const member = { roles: { cache: { keys: () => held.values(), has: (r) => held.has(r) }, add: async (r) => held.add(r), remove: async (r) => held.delete(r) } };
+  const plan = await A.reconcileMemberMarketRoles({ members: { fetch: async () => member } }, CALEB);
+  assert.deepEqual(Array.from(held), [R.wilm], 'Discord drift reconciles back to the record');
+  assert.equal(plan.remove.length, 1);
+  assert.equal(plan.add.length, 1);
+});
+
+test('historical Pulse logs are untouched by an assignment change', () => {
+  const before = JSON.parse(JSON.stringify(DC.readApprovedChannelsData().channels));
+  A.assignRepMarket(TRIPP, 'wilmington-nc');
+  for (const uid of [CALEB, BEN, JONAH]) A.addManagerMarketAssignment(uid, 'wilmington-nc');
+  assert.deepEqual(DC.readApprovedChannelsData().channels, before, 'channel/log records must not be rewritten');
 });

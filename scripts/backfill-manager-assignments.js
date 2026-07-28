@@ -43,6 +43,9 @@ const OWNER_OVERRIDES = {
   '373653162042720266': { markets: ['wilmington-nc'], replaces: true, reason: 'Owner 2026-07-28: moved to the new Wilmington market' }, // Caleb Head
   '949541784126648330': { markets: ['wilmington-nc'], replaces: true, reason: 'Owner 2026-07-28: moved to the new Wilmington market' }, // Ben Edwards
   '699672451344236645': { markets: ['wilmington-nc'], replaces: true, reason: 'Owner 2026-07-28: moved to the new Wilmington market' }, // Jonah McKinnon
+  // Alex Minter backfills Jacksonville management. He does NOT hold the Discord Manager role, so
+  // this assignment is inert until an Owner grants it — surfaced as a blocker, never auto-granted.
+  '1464879769756893270': { markets: ['jacksonville'], replaces: true, reason: 'Owner 2026-07-28: Jacksonville manager after Caleb/Ben/Jonah move to Wilmington', requiresManagerRole: true }, // Alex Minter
 };
 
 const APPLY = process.argv.includes('--apply');
@@ -86,8 +89,15 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
   const byRoleId = new Map(markets.filter((m) => m.roleId).map((m) => [m.roleId, m]));
 
   const rows = [];
-  for (const member of managerRole.members.values()) {
+  const candidates = new Map(managerRole.members.map((m) => [m.id, m]));
+  for (const uid of Object.keys(OWNER_OVERRIDES)) {
+    if (candidates.has(uid)) continue;
+    const m = guild.members.cache.get(uid);
+    if (m) candidates.set(uid, m);   // owner-directed target who does not yet hold Manager
+  }
+  for (const member of candidates.values()) {
     if (member.user.bot) continue;
+    const holdsManagerRole = member.roles.cache.has(managerRole.id);
 
     const heldMarketRoles = Array.from(member.roles.cache.keys()).filter((r) => byRoleId.has(r)).map((r) => byRoleId.get(r));
     const visible = markets.filter((m) => (m.channelIds || []).some((cid) => {
@@ -110,6 +120,7 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
     const conflicts = [];
     if (isAdmin && onlyMedium) conflicts.push('Administrator — channel visibility proves nothing about which markets they run');
     if (proposed.length === 0) conflicts.push('no market role and no channel access — cannot infer any market');
+    if (!holdsManagerRole) conflicts.push('DOES NOT HOLD THE MANAGER ROLE — this assignment is inert until an Owner grants it. Owner action required; never granted automatically.');
     if (onlyMedium && proposed.length > 1) conflicts.push(`visible in ${proposed.length} markets with no role in any — cannot tell which they run`);
 
     let autoApplicable = proposed.filter((p) => p.confidence === 'ROLE_SUPPORTED');
@@ -130,7 +141,7 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
       userId: member.id,
       username: member.user.username,
       displayName: member.displayName,
-      hasManagerRole: true,
+      hasManagerRole: holdsManagerRole,
       managerRoleId: managerRole.id,
       marketRoleDetail: heldMarketRoles.map((m) => ({ marketId: m.marketId, marketName: m.marketName, roleId: m.roleId, active: m.active !== false })),
       roleAssignedAt: 'not exposed by the Discord API',
