@@ -1,115 +1,111 @@
-# Deployment & rollback order — Phase 1
+# Deployment order — two-stage, Phase 2
 
-2026-07-28. Each stage has its own verification. **Do not skip a verify step** — several stages
-depend on the one before actually having worked.
-
----
-
-## Stage 0 — code (NON-DESTRUCTIVE, ready now)
-
-```
-cd C:\dev\FiberSales\pulse-bot
-npm test          # must be 80/80
-npm run deploy    # registers command visibility restrictions
-git push          # triggers Railway build
-```
-
-**Verify:** Railway logs show `--- Pulse configuration ---`. Expect it to report
-`✗ CONFIGURATION INVALID` until Stage 1 — that is correct, and it is why permission
-reconciliation is skipped rather than run from bad config.
-
-**Rollback:** `git revert d24d596 && git push`.
+The backfill script only exists on Railway once the commit containing it is deployed. Scoped
+enforcement therefore CANNOT ship enabled — it would deny all nine managers before any assignment
+exists. Stage A installs capability with enforcement held; Stage B turns it on.
 
 ---
 
-## Stage 1 — Railway configuration (NON-DESTRUCTIVE, unblocks everything)
+## Stage A — install capability, enforcement HELD
 
-Railway → pulsebot → Variables → add:
+Manager-scoped commands return a maintenance message. Owner commands work. Managers are **never**
+granted global access as a fallback.
 
+**A1.** Approve rows in `docs/manager-backfill-review.json` (set `"approved": true`).
+Editing `proposedAssignments` invalidates the checksum and forces a fresh preview — that is intended.
+
+**A2.** Railway → Variables:
 ```
-MANAGER_ROLE_ID = 1504351060674740255
+MANAGER_ROLE_ID          = 1504351060674740255
+MANAGER_SCOPING_ENABLED  = false
 ```
 
-Redeploy.
+**A3.** Push:
+```
+git push
+```
 
-**Verify:** logs show `✓ configuration valid` and `MANAGER_ROLE_ID  1504351060674740255  "Manager"`.
-Then have a manager run `/market list` — it must work.
+**A4.** Confirm startup. Railway logs must show:
+```
+--- Pulse configuration ---
+  GUILD             1504331970916909106  "FiberSales HQ"
+  MANAGER_ROLE_ID   1504351060674740255  "Manager"
+  ⚠ Role "Manager" (MANAGER_ROLE_ID) sits at or above Pulse's highest role — …
+  ✓ configuration valid
+```
+`✗ CONFIGURATION INVALID` means stop — permission reconciliation is skipped by design.
 
-**Rollback:** delete the variable. Pulse returns to unhealthy and stops reconciling permissions;
-it does not break logging.
+**A5.** Run the backfill **on Railway** (it needs the real /data volume):
+```
+node scripts/backfill-manager-assignments.js                     # preview, changes nothing
+node scripts/backfill-manager-assignments.js --apply --confirm   # applies ONLY approved rows
+```
+Apply refuses if: a user left, the Manager role changed, a market was archived, a reviewed market
+role vanished, the file was edited after approval, or the live store changed since the preview.
+
+**A6.** Verify:
+```
+/market manager-list market:Jacksonville      → expect 4 managers
+/market manager-markets user:@hennysells      → expect inman, kannapolis, jacksonville
+```
+
+**A7.** Export off-volume — the /data backups die with the volume:
+```
+node scripts/export-assignments.js --out "<somewhere private, NOT the repo>"
+```
+
+**A8.** Dry-run reconciliation before any enforcement:
+```
+node scripts/phase2-live-fixes.js --all        # 22 changes, applies nothing
+```
+
+### Stage A rollback
+Set `MANAGER_SCOPING_ENABLED=false` (already false) → nothing to undo.
+Code: `git revert f5d8d19 d24d596 && git push`.
+Assignments: restore `managerUserIds` from `manager-assignments-backup-*.json`.
 
 ---
 
-## Stage 2 — Discord permission fixes (DESTRUCTIVE — removes access)
+## Stage B — enable enforcement
 
-1. Remove `Pro`, `Vet`, `Rookie` overwrites from the **LEADERSHIP category** and from
-   **#management** (both — a channel allow survives a category fix).
-2. Remove `CreateInstantInvite` from all 13 market roles.
-
-**Impact:** 1 person (the single `Pro` holder) loses `#management`. Reps lose invite creation.
-**Verify:** `#management` viewable only by Manager + Owner; a rep cannot create an invite.
-**Rollback:** re-add the overwrites; re-enable `CreateInstantInvite` per role.
-**Backup:** current state is in `docs/discord-current-state.json`.
-
----
-
-## Stage 3 — market cleanup (DESTRUCTIVE)
-
-Full impact preview: `docs/discord-market-cleanup-impact.md`. Zero reps affected.
-
+**B1.** Readiness must pass before flipping the flag. Expected once A5 succeeds:
 ```
-/market cleanup                  # preview — must list exactly 2
-/market cleanup confirm:true     # delete
-```
-Then delete roles `Pulse · Virginia` and `Pulse · Greenville` by hand (0 members each).
-
-**Verify:** restart Pulse **twice**; neither role returns; `/market list` shows 4.
-**Rollback:** `/market create name:Virginia`, `/market create name:Greenville` (new ids; no history
-exists, so nothing is lost).
-
----
-
-## Stage 4 — channel structure (LOW RISK, one destructive step)
-
-1. Rename `#🛜ashtabuhla` → `#🛜ashtabula` (misspelt city).
-2. Split START HERE → START HERE (welcome, announcements) + TEAM (wins, leaderboard, ask-anything).
-3. Rename REFERENCE → TRAINING & TOOLS; rename `#pulse-help` → `#pulse-commands`.
-4. **Destructive:** purge the 79 bot join-messages from `#pulse-commands` after exporting them.
-
-**Verify:** all 14 channels present; deal logging unaffected (channel IDs never change on rename).
-**Rollback:** rename back; the message purge is NOT reversible — export first.
-
----
-
-## Stage 5 — Pulse least privilege (MANUAL, after tests pass)
-
-Only once tests 1–11, 20 and 21 pass. Exact permission list in
-`docs/discord-roles-and-commands.md` §4.
-
-**Verify immediately:** post `1g` (must log **and delete** your message); `/market add` on a test
-member (must set nickname **and** grant the role).
-**Rollback:** re-enable Administrator on the Pulse role.
-
----
-
-## Stage 6 — Sapphire removal (DESTRUCTIVE, last)
-
-Only after acceptance test 1 passes with a real new account.
-**Verify:** a new join produces exactly one welcome, from Pulse, in `#welcome`.
-**Rollback:** re-invite Sapphire.
-
----
-
-## Rollback order (reverse)
-
-```
-6 Sapphire   → re-invite
-5 Pulse perms→ re-enable Administrator
-4 channels   → rename back (purge NOT reversible)
-3 markets    → /market create (new ids)
-2 permissions→ re-add overwrites from discord-current-state.json
-1 Railway    → delete MANAGER_ROLE_ID
-0 code       → git revert d24d596 && git push
+ready: true · activeMarkets: 4 · assignedMarkets: 4 · stale: []
 ```
 
-Stages 0 and 1 are safe to leave in place while rolling back anything above them.
+**B2.** Railway → `MANAGER_SCOPING_ENABLED = true` → redeploy.
+
+**B3.** Test all nine (table in `discord-manager-approval.md`): each manager runs `/market list`
+and sees exactly their markets; `/market status` on an unassigned market is refused.
+
+**B4.** Only after B3 passes, apply the permission fixes:
+```
+node scripts/phase2-live-fixes.js --leadership --invites --apply   # DESTRUCTIVE
+```
+
+### Stage B rollback
+`MANAGER_SCOPING_ENABLED=false` → redeploy. Scoped commands return to safe-hold within one restart;
+assignments are untouched.
+
+---
+
+## Ongoing: a manager leaving does NOT break the others
+
+Before activation a departed assignee blocks readiness — the reviewed backfill no longer matches
+reality. After activation it is flagged, not fatal:
+
+- the stale user gets no authority (authorisation reads the record; they never invoke anything)
+- the other eight keep working
+- `assessScopeReadiness().remediation` prints the exact fix
+- Owner removes it by id: `/market manager-remove user:<id> market:<market>`
+- no reassignment is ever inferred
+
+Corrupt storage still blocks all scoped authorisation — one stale row does not.
+
+---
+
+## Still blocked after Stage B
+
+Market cleanup (`docs/discord-market-cleanup-impact.md`) · Ashtabula rename · `#pulse-commands`
+rename · Pulse least-privilege (`discord-roles-and-commands.md` §4) · Sapphire removal.
+Each has its own preview and rollback. None run in Phase 2.

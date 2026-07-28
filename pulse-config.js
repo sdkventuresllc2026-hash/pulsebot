@@ -141,6 +141,22 @@ function managerRoleId() {
   return v || null;
 }
 
+/**
+ * Stage A / Stage B switch.
+ *
+ * The backfill script only exists on Railway once the commit containing it is deployed, so the
+ * code must ship BEFORE assignments exist. Shipping scoped enforcement at the same moment would
+ * deny all nine managers. Stage A installs the capability with enforcement held; Stage B turns it
+ * on after the backfill and readiness check pass.
+ *
+ * Defaults to FALSE — safe-hold. Managers are told the system is being configured; they are never
+ * silently granted global access as a fallback, and no partial assignment state can become
+ * authoritative by accident.
+ */
+function managerScopingEnabled() {
+  return /^(1|true|yes|on)$/i.test(raw('MANAGER_SCOPING_ENABLED'));
+}
+
 module.exports = {
   REQUIRED,
   OPTIONAL_BUT_LOAD_BEARING,
@@ -151,4 +167,5 @@ module.exports = {
   isHealthy,
   getReport,
   managerRoleId,
+  managerScopingEnabled,
 };

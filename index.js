@@ -2201,11 +2201,20 @@ async function handleManagerAuthority(interaction, sub) {
   try {
     if (sub === 'manager-markets') {
       const markets = marketAssignments.getManagerMarkets(user.id);
-      audit('OK', `${markets.length} market(s)`);
+      // Flag stale authority for the Owner: an assignment held by someone who has left, or who no
+      // longer holds Manager, is inert but still on record and needs removing by hand.
+      const m = await interaction.guild.members.fetch(user.id).catch(() => null);
+      const mgrRole = pulseConfig.managerRoleId();
+      const stale = !m
+        ? '⚠ This user has **left the server** — their assignments are stale. Remove with `/market manager-remove`.'
+        : (mgrRole && !m.roles.cache.has(mgrRole))
+          ? '⚠ This user no longer holds the **Manager** role, so these assignments grant nothing.'
+          : null;
+      audit('OK', `${markets.length} market(s)${stale ? ' STALE' : ''}`);
       return interaction.editReply({
         content: markets.length
-          ? `<@${user.id}> manages **${markets.length}** market(s):\n• ${markets.join('\n• ')}`
-          : `<@${user.id}> has **no** market assignments on record.`,
+          ? [`<@${user.id}> \`${user.id}\` manages **${markets.length}** market(s):`, `• ${markets.join('\n• ')}`, stale].filter(Boolean).join('\n')
+          : [`<@${user.id}> has **no** market assignments on record.`, stale].filter(Boolean).join('\n'),
       });
     }
 
@@ -2213,25 +2222,39 @@ async function handleManagerAuthority(interaction, sub) {
       const market = listMarkets().find((m) => m.marketId === normalizeMarketId(marketId) || m.marketName === marketId);
       if (!market) { audit('DENIED', 'unknown market'); return interaction.editReply({ content: `No market matches \`${marketId}\`.` }); }
       const ids = Array.isArray(market.managerUserIds) ? market.managerUserIds : [];
+      const mgrRole = pulseConfig.managerRoleId();
+      // Stale rows must be VISIBLE to the Owner — an assignment held by someone who left, or who
+      // lost the Manager role, is exactly what needs cleaning up and is invisible otherwise.
+      const rendered = [];
+      for (const id of ids) {
+        const m = await interaction.guild.members.fetch(id).catch(() => null);
+        if (!m) rendered.push(`<@${id}> \`${id}\` — ⚠ **left the server** (stale)`);
+        else if (mgrRole && !m.roles.cache.has(mgrRole)) rendered.push(`<@${id}> \`${id}\` — ⚠ no longer holds Manager (stale)`);
+        else rendered.push(`<@${id}> \`${id}\``);
+      }
       audit('OK', `${ids.length} manager(s)`);
       return interaction.editReply({
         content: ids.length
-          ? `**${market.marketName}** is managed by:\n• ${ids.map((id) => `<@${id}>`).join('\n• ')}`
+          ? `**${market.marketName}** is managed by:\n• ${rendered.join('\n• ')}`
           : `**${market.marketName}** has **no** managers assigned. Nobody can run scoped commands for it.`,
       });
     }
 
-    // add / remove both need a real, non-bot member.
+    // manager-remove must work when the target has LEFT or lost the Manager role — those are
+    // precisely the assignments that need clearing. Requiring a resolvable member here would make
+    // stale rows permanently unremovable.
     const member = await interaction.guild.members.fetch(user.id).catch(() => null);
-    if (!member) { audit('DENIED', 'not in guild'); return interaction.editReply({ content: `<@${user.id}> is not in this server.` }); }
-    if (member.user.bot) { audit('DENIED', 'bot'); return interaction.editReply({ content: 'Bots cannot hold market authority.' }); }
+    if (sub === 'manager-add') {
+      if (!member) { audit('DENIED', 'not in guild'); return interaction.editReply({ content: `<@${user.id}> is not in this server.` }); }
+      if (member.user.bot) { audit('DENIED', 'bot'); return interaction.editReply({ content: 'Bots cannot hold market authority.' }); }
+    }
 
     const before = marketAssignments.getManagerMarkets(user.id);
 
     if (sub === 'manager-add') {
       // Authority without the Manager role is inert — they still could not reach a manager command.
       const mgrRole = pulseConfig.managerRoleId();
-      if (mgrRole && !member.roles.cache.has(mgrRole)) {
+      if (mgrRole && member && !member.roles.cache.has(mgrRole)) {
         audit('DENIED', 'target lacks Manager role');
         return interaction.editReply({ content: `<@${user.id}> does not hold the **Manager** role, so this authority would do nothing. Give them Manager first.` });
       }
@@ -2272,6 +2295,7 @@ async function handleMarketRouter(interaction) {
 
   const decision = authorizeMarketCommand({
     userId: interaction.user.id, isOwner, isManagerTier, subcommand: sub, marketId,
+    scopingEnabled: pulseConfig.managerScopingEnabled(),
   });
 
   console.log(auditLine({

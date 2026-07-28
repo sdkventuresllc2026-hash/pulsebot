@@ -73,6 +73,14 @@ function authorizeMarketCommand(req) {
     return deny('You need the Manager role to use this.');
   }
 
+  // STAGE A SAFE-HOLD. The code ships before assignments exist (the backfill script only reaches
+  // Railway inside this very commit), so scoped enforcement is held until the Owner turns it on.
+  // Held means HELD — never "fall back to global", which would hand every manager every market.
+  const scopeDependent = policy.tier === 'MANAGER_SCOPED' || policy.tier === 'MANAGER_FILTERED';
+  if (scopeDependent && req.scopingEnabled === false) {
+    return deny('Market scoping is being configured and this command is temporarily on hold. Owner/Admin commands still work. Nothing is broken — an admin is finishing setup.');
+  }
+
   // `list` never denies — it filters. The handler must call scopedMarketsFor() and show only those.
   if (policy.tier === 'MANAGER_FILTERED') {
     const managed = getManagerMarkets(req.userId);
@@ -136,15 +144,39 @@ function assessScopeReadiness(ctx) {
     errors.push('No active market has a manager assignment. Enabling scoped commands now would deny every manager. Run the backfill, or pass an explicit Owner override.');
   }
 
+  // Stale assignees are BLOCKING before activation and merely FLAGGED after.
+  //
+  // Before you switch scoping on, a departed assignee means the reviewed backfill no longer
+  // matches reality and should be re-reviewed. After the system is live, a manager leaving is
+  // routine — failing readiness then would take scoped commands away from the other eight for one
+  // person's departure. The stale user gets no authority either way: authorizeMarketCommand reads
+  // the record, and a departed user never invokes anything.
+  const postActivation = ctx.activated === true;
+  const stale = [];
   for (const m of active) {
     for (const uid of m.managerUserIds || []) {
       const member = ctx.guildMembers?.get?.(uid);
-      if (!member) { errors.push(`${m.marketId}: assigned user ${uid} is no longer in the guild.`); continue; }
+      if (!member) {
+        stale.push({ marketId: m.marketId, userId: uid, why: 'no longer in the guild' });
+        (postActivation ? warnings : errors).push(`${m.marketId}: assigned user ${uid} is no longer in the guild.`);
+        continue;
+      }
+      // A bot with authority is always an error — it is a data-integrity fault, not attrition.
       if (member.bot) errors.push(`${m.marketId}: assigned user ${uid} is a bot.`);
-      if (!member.hasManagerRole) warnings.push(`${m.marketId}: assigned user ${uid} no longer holds the Manager role.`);
+      if (!member.hasManagerRole) {
+        stale.push({ marketId: m.marketId, userId: uid, why: 'no longer holds the Manager role' });
+        warnings.push(`${m.marketId}: assigned user ${uid} no longer holds the Manager role.`);
+      }
     }
   }
-  return { ready: errors.length === 0, errors, warnings, assignedMarkets: assigned.length, activeMarkets: active.length };
+  return {
+    ready: errors.length === 0,
+    errors, warnings, stale,
+    assignedMarkets: assigned.length,
+    activeMarkets: active.length,
+    // Owner action, never automatic: no reassignment is ever inferred.
+    remediation: stale.map((s) => `/market manager-remove user:${s.userId} market:${s.marketId}   (${s.why})`),
+  };
 }
 
 module.exports = { POLICY, policyFor, authorizeMarketCommand, auditLine, assessScopeReadiness };

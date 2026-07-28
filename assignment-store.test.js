@@ -174,3 +174,59 @@ test('duplicate manager assignment is idempotent', () => {
 test('an unknown market fails safely', () => {
   assert.throws(() => A.addManagerMarketAssignment('x', 'atlantis'), /MARKET_NOT_FOUND|not found|No market/i);
 });
+
+// --- Stage A safe-hold + post-activation attrition ------------------------------------------
+
+test('Stage A: scoped commands are HELD, never silently global', () => {
+  seed({ ...good(), markets: [{ marketId: 'inman', marketName: 'Inman', active: true, channelIds: ['c1'], roleId: 'r1', managerUserIds: ['mgr'] }] });
+  const held = authorizeMarketCommand({ userId: 'mgr', isOwner: false, isManagerTier: true, subcommand: 'add', marketId: 'inman', scopingEnabled: false });
+  assert.equal(held.ok, false);
+  assert.match(held.reason, /temporarily on hold/);
+  // Owner is unaffected during Stage A.
+  assert.equal(authorizeMarketCommand({ userId: 'o', isOwner: true, isManagerTier: true, subcommand: 'add', marketId: 'inman', scopingEnabled: false }).ok, true);
+  // And enabling it restores normal scoped behaviour.
+  assert.equal(authorizeMarketCommand({ userId: 'mgr', isOwner: false, isManagerTier: true, subcommand: 'add', marketId: 'inman', scopingEnabled: true }).ok, true);
+});
+
+test('Stage A hold applies to list and status too', () => {
+  seed({ ...good(), markets: [{ marketId: 'inman', marketName: 'Inman', active: true, channelIds: ['c1'], roleId: 'r1', managerUserIds: ['mgr'] }] });
+  for (const sub of ['list', 'status']) {
+    assert.equal(authorizeMarketCommand({ userId: 'mgr', isOwner: false, isManagerTier: true, subcommand: sub, marketId: 'inman', scopingEnabled: false }).ok, false, sub);
+  }
+});
+
+test('a Manager leaving AFTER activation does not break the others', () => {
+  const markets = [{ marketId: 'inman', marketName: 'Inman', active: true, channelIds: ['c1'], roleId: 'r1', managerUserIds: ['stays', 'left'] }];
+  const members = new Map([['stays', { bot: false, hasManagerRole: true }]]); // 'left' is gone
+
+  // Before activation this is blocking — the reviewed backfill no longer matches reality.
+  const pre = assessScopeReadiness({ guildMembers: members, markets, managerRoleIdValid: true });
+  assert.equal(pre.ready, false);
+
+  // After activation it is a flag, not an outage for the other eight.
+  const post = assessScopeReadiness({ guildMembers: members, markets, managerRoleIdValid: true, activated: true });
+  assert.equal(post.ready, true, 'one departure must not disable scoped commands for everyone');
+  assert.equal(post.stale.length, 1);
+  assert.equal(post.stale[0].userId, 'left');
+  assert.match(post.remediation.join(' '), /manager-remove user:left/);
+
+  // The remaining manager keeps working; the departed one is inert on the record.
+  seed({ ...good(), markets });
+  assert.equal(authorizeMarketCommand({ userId: 'stays', isOwner: false, isManagerTier: true, subcommand: 'add', marketId: 'inman', scopingEnabled: true }).ok, true);
+});
+
+test('a bot assignee is an error even after activation', () => {
+  const markets = [{ marketId: 'inman', marketName: 'Inman', active: true, channelIds: ['c1'], roleId: 'r1', managerUserIds: ['b'] }];
+  const r = assessScopeReadiness({ guildMembers: new Map([['b', { bot: true, hasManagerRole: true }]]), markets, managerRoleIdValid: true, activated: true });
+  assert.equal(r.ready, false, 'a bot holding authority is a data fault, not attrition');
+});
+
+test('removing a departed manager preserves every other assignment', () => {
+  seed({ ...good(), markets: [
+    { marketId: 'inman', marketName: 'Inman', active: true, channelIds: ['c1'], roleId: 'r1', managerUserIds: ['gone', 'keep'] },
+    { marketId: 'kannapolis', marketName: 'Kannapolis', active: true, channelIds: ['c2'], roleId: 'r2', managerUserIds: ['gone'] },
+  ] });
+  A.removeManagerMarketAssignment('gone', 'inman');
+  assert.deepEqual(A.getManagerMarkets('gone'), ['kannapolis'], 'only the named market is removed');
+  assert.deepEqual(A.getManagerMarkets('keep'), ['inman'], 'other managers untouched');
+});

@@ -24,6 +24,7 @@
 require('dotenv').config();
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
 const { listMarkets } = require('../deal-channels');
 const A = require('../market-assignments');
@@ -82,8 +83,8 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
     /** @type {{marketId:string, evidence:string, confidence:string}[]} */
     const proposed = [];
     for (const m of markets) {
-      if (already.includes(m.marketId)) { proposed.push({ marketId: m.marketId, evidence: 'E1 already recorded', confidence: 'CONFIRMED' }); continue; }
-      if (heldMarketRoles.some((h) => h.marketId === m.marketId)) { proposed.push({ marketId: m.marketId, evidence: 'E2 holds the market role', confidence: 'HIGH' }); continue; }
+      if (already.includes(m.marketId)) { proposed.push({ marketId: m.marketId, evidence: 'E1 already recorded', confidence: 'ALREADY_RECORDED' }); continue; }
+      if (heldMarketRoles.some((h) => h.marketId === m.marketId)) { proposed.push({ marketId: m.marketId, evidence: 'E2 holds the market role', confidence: 'ROLE_SUPPORTED' }); continue; }
       if (visible.some((v) => v.marketId === m.marketId)) proposed.push({ marketId: m.marketId, evidence: 'E3 effective channel access only', confidence: 'MEDIUM' });
     }
 
@@ -95,18 +96,22 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
     if (proposed.length === 0) conflicts.push('no market role and no channel access — cannot infer any market');
     if (onlyMedium && proposed.length > 1) conflicts.push(`visible in ${proposed.length} markets with no role in any — cannot tell which they run`);
 
-    const autoApplicable = proposed.filter((p) => p.confidence === 'HIGH');
+    const autoApplicable = proposed.filter((p) => p.confidence === 'ROLE_SUPPORTED');
     rows.push({
       userId: member.id,
-      displayNameForReviewOnly: member.displayName,
+      username: member.user.username,
+      displayName: member.displayName,
       hasManagerRole: true,
+      managerRoleId: managerRole.id,
+      marketRoleDetail: heldMarketRoles.map((m) => ({ marketId: m.marketId, marketName: m.marketName, roleId: m.roleId, active: m.active !== false })),
+      roleAssignedAt: 'not exposed by the Discord API',
       isAdministrator: isAdmin,
       currentMarketRoles: heldMarketRoles.map((m) => m.marketId),
       effectiveMarketVisibility: visible.map((m) => m.marketId),
       alreadyRecorded: already,
       proposed,
       proposedAssignments: autoApplicable.map((p) => p.marketId),
-      confidence: autoApplicable.length ? 'HIGH' : (proposed.length ? 'AMBIGUOUS' : 'NONE'),
+      confidence: autoApplicable.length ? 'ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL' : (proposed.length ? 'AMBIGUOUS' : 'NONE'),
       conflicts,
       approved: false, // Owner sets this to true after review.
       note: autoApplicable.length ? '' : 'LEFT UNASSIGNED — requires an explicit Owner decision.',
@@ -116,23 +121,30 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
   if (!APPLY) {
     fs.mkdirSync(path.dirname(REVIEW), { recursive: true });
     fs.writeFileSync(REVIEW, JSON.stringify({
+      reviewFileVersion: 1,
       generatedAt: new Date().toISOString(),
+      guildId: guild.id,
+      managerRoleId: managerRole.id,
       instructions: 'Review each row. Set "approved": true and adjust "proposedAssignments" as needed. Then run with --apply --confirm. Rows left approved:false are skipped.',
       guild: guild.name, managerRole: managerRole.name, activeMarkets: markets.map((m) => m.marketId),
       managers: rows,
+      // Covers userId + proposedAssignments only, so flipping approved to true stays valid while
+      // editing the actual assignments invalidates the file and forces a fresh review.
+      checksum: crypto.createHash('sha256').update(JSON.stringify(rows.map((r) => ({ userId: r.userId, proposedAssignments: r.proposedAssignments })))).digest('hex'),
+      storeSnapshotChecksum: crypto.createHash('sha256').update(JSON.stringify(listMarkets().map((m) => ({ id: m.marketId, mgrs: (m.managerUserIds || []).slice().sort() })))).digest('hex'),
     }, null, 2));
 
     console.log(`\n=== MANAGER BACKFILL — DRY RUN (nothing changed) ===\n`);
     for (const r of rows) {
-      console.log(`${r.confidence === 'HIGH' ? '✅' : '⚠ '} ${r.displayNameForReviewOnly}  (${r.userId})`);
+      console.log(`${r.confidence === 'ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL' ? '✅' : '⚠ '} ${r.displayName}  (${r.userId})`);
       console.log(`     roles: ${r.currentMarketRoles.join(', ') || '(none)'}   visible: ${r.effectiveMarketVisibility.join(', ') || '(none)'}${r.isAdministrator ? '   [ADMIN]' : ''}`);
       console.log(`     propose: ${r.proposedAssignments.join(', ') || '(nothing — needs your decision)'}`);
       r.proposed.forEach((p) => console.log(`       · ${p.marketId}: ${p.evidence} [${p.confidence}]`));
       r.conflicts.forEach((c) => console.log(`     ⚠ ${c}`));
       console.log('');
     }
-    const auto = rows.filter((r) => r.confidence === 'HIGH').length;
-    console.log(`${rows.length} manager(s): ${auto} with HIGH-confidence evidence, ${rows.length - auto} need your decision.`);
+    const auto = rows.filter((r) => r.confidence === 'ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL').length;
+    console.log(`${rows.length} manager(s): ${auto} with role-supported evidence (still needs your approval), ${rows.length - auto} need your decision.`);
     console.log(`\nReview file -> docs/${path.basename(REVIEW)}`);
     console.log(`Approve rows there, then: node scripts/backfill-manager-assignments.js --apply --confirm\n`);
     await client.destroy();
@@ -143,8 +155,50 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
   if (!CONFIRM) { console.error('Refusing to apply without --confirm.'); process.exit(1); }
   if (!fs.existsSync(REVIEW)) { console.error(`No review file at ${REVIEW}. Run the dry run first.`); process.exit(1); }
   const review = JSON.parse(fs.readFileSync(REVIEW, 'utf8'));
+
+  // APPLY USES ONLY THE APPROVED ROWS. The inference above already ran to build `rows`, but it is
+  // deliberately discarded here: re-inferring at apply time would silently produce a different
+  // result if a Discord role changed between review and execution, and the Owner would have
+  // approved something other than what was written.
   const approved = (review.managers || []).filter((r) => r.approved === true && Array.isArray(r.proposedAssignments) && r.proposedAssignments.length);
   if (!approved.length) { console.error('No rows approved. Set "approved": true on the ones you accept.'); process.exit(1); }
+
+  // --- staleness gate: refuse to apply a preview that no longer matches reality ---------------
+  const stale = [];
+  if (review.guildId && review.guildId !== guild.id) stale.push(`review was generated for guild ${review.guildId}, connected to ${guild.id}`);
+  if (review.managerRoleId && review.managerRoleId !== managerRole.id) stale.push(`Manager role changed since review (${review.managerRoleId} -> ${managerRole.id})`);
+
+  // Checksum covers only the reviewable payload, so setting approved:true does not invalidate it.
+  if (review.checksum) {
+    const canonical = JSON.stringify((review.managers || []).map((r) => ({ userId: r.userId, proposedAssignments: r.proposedAssignments })));
+    const actual = crypto.createHash('sha256').update(canonical).digest('hex');
+    if (actual !== review.checksum) stale.push('review file was modified after generation (checksum mismatch on userId/proposedAssignments)');
+  }
+  const liveMarketIds = new Set(markets.map((m) => m.marketId));
+  for (const r of approved) {
+    const member = guild.members.cache.get(r.userId);
+    if (!member) { stale.push(`${r.userId} (${r.displayName || '?'}) has left the guild since review`); continue; }
+    if (!member.roles.cache.has(managerRole.id)) stale.push(`${r.userId} no longer holds the Manager role`);
+    for (const mid of r.proposedAssignments) {
+      if (!liveMarketIds.has(mid)) stale.push(`${r.userId}: market "${mid}" is no longer active`);
+    }
+    for (const detail of r.marketRoleDetail || []) {
+      if (!guild.roles.cache.has(detail.roleId)) stale.push(`${r.userId}: reviewed market role ${detail.roleId} (${detail.marketName}) no longer exists`);
+    }
+  }
+  // The live store must also be unchanged since the preview.
+  if (review.storeSnapshotChecksum) {
+    const now = crypto.createHash('sha256')
+      .update(JSON.stringify(listMarkets().map((m) => ({ id: m.marketId, mgrs: (m.managerUserIds || []).slice().sort() }))))
+      .digest('hex');
+    if (now !== review.storeSnapshotChecksum) stale.push('the live assignment store changed after the preview was generated');
+  }
+  if (stale.length) {
+    console.error('\n✗ REFUSING TO APPLY — reviewed input is stale:');
+    stale.forEach((s) => console.error(`   • ${s}`));
+    console.error('\nRe-run the dry run, re-review, then apply.\n');
+    process.exit(1);
+  }
 
   const before = JSON.parse(JSON.stringify(listMarkets().map((m) => ({ marketId: m.marketId, managerUserIds: m.managerUserIds || [] }))));
   const backup = path.resolve(__dirname, '..', `manager-assignments-backup-${Date.now()}.json`);

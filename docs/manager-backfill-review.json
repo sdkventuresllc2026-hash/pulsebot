@@ -1,5 +1,8 @@
 {
-  "generatedAt": "2026-07-28T19:39:32.409Z",
+  "reviewFileVersion": 1,
+  "generatedAt": "2026-07-28T20:04:23.577Z",
+  "guildId": "1504331970916909106",
+  "managerRoleId": "1504351060674740255",
   "instructions": "Review each row. Set \"approved\": true and adjust \"proposedAssignments\" as needed. Then run with --apply --confirm. Rows left approved:false are skipped.",
   "guild": "FiberSales HQ",
   "managerRole": "Manager",
@@ -12,8 +15,19 @@
   "managers": [
     {
       "userId": "521846693130534915",
-      "displayNameForReviewOnly": "Blake Lipson",
+      "username": "blakelipson001",
+      "displayName": "Blake Lipson",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "ashtabula",
+          "marketName": "Ashtabula",
+          "roleId": "1511437541469847614",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "ashtabula"
@@ -26,21 +40,32 @@
         {
           "marketId": "ashtabula",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
         "ashtabula"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     },
     {
       "userId": "997526910827495486",
-      "displayNameForReviewOnly": "Deven Topa",
+      "username": "deventopa696969",
+      "displayName": "Deven Topa",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "ashtabula",
+          "marketName": "Ashtabula",
+          "roleId": "1511437541469847614",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "ashtabula"
@@ -53,21 +78,32 @@
         {
           "marketId": "ashtabula",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
         "ashtabula"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     },
     {
       "userId": "927499597453078589",
-      "displayNameForReviewOnly": "Steezydlo",
+      "username": "litty29012",
+      "displayName": "Steezydlo",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "kannapolis",
+          "marketName": "Kannapolis",
+          "roleId": "1516862063119433760",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "kannapolis"
@@ -80,21 +116,32 @@
         {
           "marketId": "kannapolis",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
         "kannapolis"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     },
     {
       "userId": "949541784126648330",
-      "displayNameForReviewOnly": "Ben Edwards",
+      "username": "bedwar26",
+      "displayName": "Ben Edwards",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "jacksonville",
+          "marketName": "Jacksonville",
+          "roleId": "1525004927779344526",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "jacksonville"
@@ -107,21 +154,32 @@
         {
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
         "jacksonville"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     },
     {
       "userId": "699672451344236645",
-      "displayNameForReviewOnly": "Jonah McKinnon",
+      "username": "elitekill6996",
+      "displayName": "Jonah McKinnon",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "jacksonville",
+          "marketName": "Jacksonville",
+          "roleId": "1525004927779344526",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "jacksonville"
@@ -134,21 +192,32 @@
         {
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
         "jacksonville"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     },
     {
       "userId": "1234228856555045015",
-      "displayNameForReviewOnly": "Jacob Arnold",
+      "username": "jmaneski.",
+      "displayName": "Jacob Arnold",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "jacksonville",
+          "marketName": "Jacksonville",
+          "roleId": "1525004927779344526",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "jacksonville"
@@ -161,21 +230,44 @@
         {
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
         "jacksonville"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     },
     {
       "userId": "1504984792758751423",
-      "displayNameForReviewOnly": "Henny Sells",
+      "username": "hennysells",
+      "displayName": "Henny Sells",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "kannapolis",
+          "marketName": "Kannapolis",
+          "roleId": "1516862063119433760",
+          "active": true
+        },
+        {
+          "marketId": "jacksonville",
+          "marketName": "Jacksonville",
+          "roleId": "1525004927779344526",
+          "active": true
+        },
+        {
+          "marketId": "inman",
+          "marketName": "Inman",
+          "roleId": "1516474303426596945",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "kannapolis",
@@ -192,17 +284,17 @@
         {
           "marketId": "inman",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         },
         {
           "marketId": "kannapolis",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         },
         {
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
@@ -210,15 +302,26 @@
         "kannapolis",
         "jacksonville"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     },
     {
       "userId": "1475356377760272505",
-      "displayNameForReviewOnly": "iQRexy",
+      "username": "iqrexy_37266",
+      "displayName": "iQRexy",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "kannapolis",
+          "marketName": "Kannapolis",
+          "roleId": "1516862063119433760",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "kannapolis"
@@ -231,21 +334,32 @@
         {
           "marketId": "kannapolis",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
         "kannapolis"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     },
     {
       "userId": "373653162042720266",
-      "displayNameForReviewOnly": "Caleb Head",
+      "username": "headcalebebay305",
+      "displayName": "Caleb Head",
       "hasManagerRole": true,
+      "managerRoleId": "1504351060674740255",
+      "marketRoleDetail": [
+        {
+          "marketId": "jacksonville",
+          "marketName": "Jacksonville",
+          "roleId": "1525004927779344526",
+          "active": true
+        }
+      ],
+      "roleAssignedAt": "not exposed by the Discord API",
       "isAdministrator": false,
       "currentMarketRoles": [
         "jacksonville"
@@ -258,16 +372,18 @@
         {
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
-          "confidence": "HIGH"
+          "confidence": "ROLE_SUPPORTED"
         }
       ],
       "proposedAssignments": [
         "jacksonville"
       ],
-      "confidence": "HIGH",
+      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
       "note": ""
     }
-  ]
+  ],
+  "checksum": "140f1e5a1a27a6abe2f18f42bef74804766b0939bfacf3910864c4cc7df8413b",
+  "storeSnapshotChecksum": "02d02248a8becff9321532b1cf5d7afa33d76bf1283bb5369eb9436ee0ae5697"
 }
