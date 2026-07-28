@@ -2263,21 +2263,32 @@ async function handleManagerAuthority(interaction, sub) {
         return interaction.editReply({ content: `Already assigned — <@${user.id}> manages **${marketId}**. No change.` });
       }
       const r = marketAssignments.addManagerMarketAssignment(user.id, marketId);
+      // The record is the authority, but it is inert until Discord matches it. Reconcile here so
+      // the manager can actually SEE the channel — otherwise the assignment silently grants
+      // command scope with no visibility, which looks like a broken permission.
+      const recon = await marketAssignments.reconcileMemberMarketRoles(interaction.guild, user.id).catch((e) => ({ error: e.message }));
       audit('OK', `before=${before.length} after=${r.markets.length}`);
       return interaction.editReply({
         content: [`✅ <@${user.id}> now manages **${r.marketName}**.`,
           `Before: ${before.length ? before.join(', ') : '(none)'}`,
-          `After:  ${r.markets.join(', ')}`].join('\n'),
+          `After:  ${r.markets.join(', ')}`,
+          recon?.error ? `⚠ Role sync failed (${recon.error}) — run \`/market sync\`.`
+            : `Roles: +${recon.add?.length ?? 0} / -${recon.remove?.length ?? 0}`].join('\n'),
       });
     }
 
     if (sub === 'manager-remove') {
       const r = marketAssignments.removeManagerMarketAssignment(user.id, marketId);
+      // Reconcile so the Discord role goes with the record. Without this the person keeps channel
+      // visibility they are no longer authorised for, which is the worse half of the failure.
+      const recon = await marketAssignments.reconcileMemberMarketRoles(interaction.guild, user.id).catch((e) => ({ error: e.message }));
       audit('OK', `before=${before.length} after=${r.remaining.length}`);
       return interaction.editReply({
         content: [`✅ Removed <@${user.id}> from **${r.marketName}**.`,
           `Before: ${before.length ? before.join(', ') : '(none)'}`,
-          `After:  ${r.remaining.length ? r.remaining.join(', ') : '(none)'} — other markets untouched.`].join('\n'),
+          `After:  ${r.remaining.length ? r.remaining.join(', ') : '(none)'} — other markets untouched.`,
+          recon?.error ? `⚠ Role sync failed (${recon.error}) — run \`/market sync\`.`
+            : `Roles: +${recon.add?.length ?? 0} / -${recon.remove?.length ?? 0}`].join('\n'),
       });
     }
     return interaction.editReply({ content: 'Unknown manager subcommand.' });
