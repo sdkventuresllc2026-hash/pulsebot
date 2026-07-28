@@ -1,6 +1,6 @@
 {
   "reviewFileVersion": 1,
-  "generatedAt": "2026-07-28T21:04:51.748Z",
+  "generatedAt": "2026-07-28T21:14:31.181Z",
   "guildId": "1504331970916909106",
   "managerRoleId": "1504351060674740255",
   "instructions": "Review each row. Set \"approved\": true and adjust \"proposedAssignments\" as needed. Then run with --apply --confirm. Rows left approved:false are skipped.",
@@ -327,17 +327,28 @@
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
           "confidence": "ROLE_SUPPORTED"
+        },
+        {
+          "marketId": "jacksonville",
+          "evidence": "OWNER OVERRIDE — Owner 2026-07-28: Jacksonville only. Inman and Kannapolis are NOT approved and require a separate decision.",
+          "confidence": "OWNER_DIRECTED"
         }
       ],
       "proposedAssignments": [
-        "inman",
-        "kannapolis",
         "jacksonville"
       ],
-      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
-      "conflicts": [],
+      "confidence": "OWNER_DIRECTED_REQUIRES_APPROVAL",
+      "conflicts": [
+        "Owner move REPLACES their role-derived market(s): inman, kannapolis. If they should ALSO keep inman, kannapolis, approve that separately — it is not a default."
+      ],
       "approved": false,
-      "ownerOverride": null,
+      "ownerOverride": {
+        "markets": [
+          "jacksonville"
+        ],
+        "replaces": true,
+        "reason": "Owner 2026-07-28: Jacksonville only. Inman and Kannapolis are NOT approved and require a separate decision."
+      },
       "note": ""
     },
     {
@@ -485,6 +496,6 @@
       "note": ""
     }
   ],
-  "checksum": "e1e2bf483ecf9ce6b257c8fbe5df15eb127e7e323dd0c6e152939d9f9e4c2143",
+  "checksum": "dfb6b873384eb432e1bb50d0e6805db9d656430f568580c0000c8a177f48ef4c",
   "storeSnapshotChecksum": "02d02248a8becff9321532b1cf5d7afa33d76bf1283bb5369eb9436ee0ae5697"
 }

@@ -18,7 +18,7 @@ const CALEB = '373653162042720266', BEN = '949541784126648330', JONAH = '6996724
 const TRIPP = '1296303439084650552', MALAKAI = '459667932914515969';
 const OUTSIDER = '111111111111111111';
 const ALEX = '1464879769756893270', JACOB = '1234228856555045015';
-const R = { wilm: 'r-wilm', jax: 'r-jax', kan: 'r-kan' };
+const R = { wilm: 'r-wilm', jax: 'r-jax', kan: 'r-kan', inm: 'r-inm' };
 
 function seed() {
   fs.writeFileSync(STORE, JSON.stringify({
@@ -27,13 +27,14 @@ function seed() {
       { marketId: 'wilmington-nc', marketName: 'Wilmington', city: 'Wilmington', state: 'NC', isp: 'T-Fiber', active: true, channelIds: ['c-wilm'], roleId: R.wilm, repUserIds: [], managerUserIds: [] },
       { marketId: 'jacksonville', marketName: 'Jacksonville', active: true, channelIds: ['c-jax'], roleId: R.jax, repUserIds: [TRIPP, MALAKAI], managerUserIds: [JACOB] },
       { marketId: 'kannapolis', marketName: 'Kannapolis', active: true, channelIds: ['c-kan'], roleId: R.kan, repUserIds: [], managerUserIds: [OUTSIDER] },
+      { marketId: 'inman', marketName: 'Inman', active: true, channelIds: ['c-inm'], roleId: R.inm, repUserIds: [], managerUserIds: [] },
     ],
   }, null, 2));
   DC.readApprovedChannelsData();
 }
 test.beforeEach(() => seed());
 
-const guild = () => ({ roles: { everyone: { id: 'everyone' }, cache: new Map([['everyone', {}], [R.wilm, {}], [R.jax, {}], [R.kan, {}]]) } });
+const guild = () => ({ roles: { everyone: { id: 'everyone' }, cache: new Map([['everyone', {}], [R.wilm, {}], [R.jax, {}], [R.kan, {}], [R.inm, {}]]) } });
 const mkt = (id, name, roleId, mgrs) => ({ marketId: id, marketName: name, roleId, managerUserIds: mgrs });
 const viewers = (ow) => ow.filter((o) => (o.allow || []).includes(P.ViewChannel)).map((o) => o.id);
 const can = (uid, sub, marketId, owner) => authorizeMarketCommand({
@@ -191,4 +192,58 @@ test('historical Pulse logs are untouched by an assignment change', () => {
   A.assignRepMarket(TRIPP, 'wilmington-nc');
   for (const uid of [CALEB, BEN, JONAH]) A.addManagerMarketAssignment(uid, 'wilmington-nc');
   assert.deepEqual(DC.readApprovedChannelsData().channels, before, 'channel/log records must not be rewritten');
+});
+
+// --- Final owner decisions, 2026-07-28 -------------------------------------------------------
+// Jacksonville managers: Jacob Arnold, Alex Minter, Henry Sells.
+// Wilmington managers:   Caleb Head, Ben Edwards, Jonah McKinnon.
+
+const HENRY = '1504984792758751423';
+
+test('the three Jacksonville managers manage Jacksonville and nothing else', () => {
+  for (const uid of [JACOB, ALEX, HENRY]) A.addManagerMarketAssignment(uid, 'jacksonville');
+  for (const uid of [JACOB, ALEX, HENRY]) {
+    assert.deepEqual(A.getManagerMarkets(uid), ['jacksonville']);
+    assert.equal(can(uid, 'add', 'jacksonville'), true);
+    assert.equal(can(uid, 'add', 'wilmington-nc'), false, 'Jacksonville managers must not reach Wilmington');
+    assert.equal(can(uid, 'status', 'kannapolis'), false);
+  }
+});
+
+test('Henry is narrowed to Jacksonville — Inman and Kannapolis are NOT retained', () => {
+  // His earlier three-market proposal is superseded; only an explicit approval restores them.
+  A.addManagerMarketAssignment(HENRY, 'jacksonville');
+  assert.deepEqual(A.getManagerMarkets(HENRY), ['jacksonville']);
+  assert.equal(can(HENRY, 'add', 'kannapolis'), false, 'Kannapolis requires separate approval');
+  assert.equal(can(HENRY, 'status', 'inman'), false, 'Inman requires separate approval');
+});
+
+test('reconciliation strips Henry’s unapproved Inman and Kannapolis roles', async () => {
+  A.addManagerMarketAssignment(HENRY, 'jacksonville');
+  const held = new Set([R.jax, R.inm, R.kan]);   // he holds all three in Discord today
+  const member = { roles: { cache: { keys: () => held.values(), has: (r) => held.has(r) }, add: async (r) => held.add(r), remove: async (r) => held.delete(r) } };
+  const plan = await A.reconcileMemberMarketRoles({ members: { fetch: async () => member } }, HENRY);
+  assert.deepEqual(Array.from(held), [R.jax], 'only the approved market role survives');
+  assert.deepEqual(plan.remove.map((r) => r.roleId).sort(), [R.inm, R.kan].sort());
+});
+
+test('the two manager groups are mutually exclusive', () => {
+  for (const uid of [CALEB, BEN, JONAH]) A.addManagerMarketAssignment(uid, 'wilmington-nc');
+  for (const uid of [JACOB, ALEX, HENRY]) A.addManagerMarketAssignment(uid, 'jacksonville');
+  for (const uid of [CALEB, BEN, JONAH]) assert.equal(can(uid, 'add', 'jacksonville'), false);
+  for (const uid of [JACOB, ALEX, HENRY]) assert.equal(can(uid, 'add', 'wilmington-nc'), false);
+});
+
+test('a temporary close-out role grants VIEW without manager authority', () => {
+  // The recommended close-out: keep the Discord market role for read access, add NO assignment
+  // record. Access without authority is exactly what a pending-order wind-down needs.
+  for (const uid of [CALEB, BEN, JONAH]) A.addManagerMarketAssignment(uid, 'wilmington-nc');
+  for (const uid of [CALEB, BEN, JONAH]) {
+    assert.equal(can(uid, 'add', 'jacksonville'), false, 'no manager authority in Jacksonville');
+    assert.equal(can(uid, 'remove', 'jacksonville'), false);
+    assert.equal(can(uid, 'status', 'jacksonville'), false);
+  }
+  // Their Jacksonville assignment record must not exist.
+  const jax = DC.readApprovedChannelsData().markets.find((m) => m.marketId === 'jacksonville');
+  for (const uid of [CALEB, BEN, JONAH]) assert.ok(!(jax.managerUserIds || []).includes(uid));
 });
