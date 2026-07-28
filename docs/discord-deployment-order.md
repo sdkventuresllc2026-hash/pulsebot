@@ -35,7 +35,14 @@ git push
 ```
 `✗ CONFIGURATION INVALID` means stop — permission reconciliation is skipped by design.
 
-**A5.** Run the backfill **on Railway** (it needs the real /data volume):
+**A5.** Create Wilmington (Owner-only) BEFORE any assignment references it:
+```
+node scripts/create-market-wilmington.js --state=NC --provider="T-Fiber"          # preview
+node scripts/create-market-wilmington.js --state=NC --provider="T-Fiber" --apply  # create
+```
+Verify: `/market list` shows Wilmington (`wilmington-nc`), restart Pulse, confirm it survives.
+
+**A6.** Run the backfill **on Railway** (it needs the real /data volume):
 ```
 node scripts/backfill-manager-assignments.js                     # preview, changes nothing
 node scripts/backfill-manager-assignments.js --apply --confirm   # applies ONLY approved rows
@@ -43,18 +50,28 @@ node scripts/backfill-manager-assignments.js --apply --confirm   # applies ONLY 
 Apply refuses if: a user left, the Manager role changed, a market was archived, a reviewed market
 role vanished, the file was edited after approval, or the live store changed since the preview.
 
-**A6.** Verify:
+**A7.** Verify:
 ```
 /market manager-list market:Jacksonville      → expect 4 managers
 /market manager-markets user:@hennysells      → expect inman, kannapolis, jacksonville
 ```
 
-**A7.** Export off-volume — the /data backups die with the volume:
+**A8.** Apply Wilmington assignments (managers first, then reps):
+```
+/market manager-add user:@headcalebebay305 market:wilmington-nc
+/market manager-add user:@bedwar26         market:wilmington-nc
+/market manager-add user:@elitekill6996    market:wilmington-nc
+/market add rep:@trippb23.    name:"Tripp Barnes"     market:wilmington-nc
+/market add rep:@malakai_0914 name:"Malakai Shepherd" market:wilmington-nc
+```
+Each rep move REMOVES their Jacksonville role — that is the intended exclusive behaviour.
+
+**A9.** Export off-volume — the /data backups die with the volume:
 ```
 node scripts/export-assignments.js --out "<somewhere private, NOT the repo>"
 ```
 
-**A8.** Dry-run reconciliation before any enforcement:
+**A10.** Dry-run reconciliation before any enforcement:
 ```
 node scripts/phase2-live-fixes.js --all        # 22 changes, applies nothing
 ```
@@ -75,10 +92,12 @@ ready: true · activeMarkets: 4 · assignedMarkets: 4 · stale: []
 
 **B2.** Railway → `MANAGER_SCOPING_ENABLED = true` → redeploy.
 
-**B3.** Test all nine (table in `discord-manager-approval.md`): each manager runs `/market list`
+**B3.** Test Wilmington specifically: Caleb, Ben and Jonah can each run `/market status market:wilmington-nc` and are REFUSED on `jacksonville`; Tripp and Malakai see #🛜wilmington and no longer see #🛜jacksonville.
+
+**B4.** Test all nine (table in `discord-manager-approval.md`): each manager runs `/market list`
 and sees exactly their markets; `/market status` on an unassigned market is refused.
 
-**B4.** Only after B3 passes, apply the permission fixes:
+**B5.** Only after B3 and B4 pass, apply the permission fixes:
 ```
 node scripts/phase2-live-fixes.js --leadership --invites --apply   # DESTRUCTIVE
 ```

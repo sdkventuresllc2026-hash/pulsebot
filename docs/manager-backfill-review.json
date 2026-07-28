@@ -1,6 +1,6 @@
 {
   "reviewFileVersion": 1,
-  "generatedAt": "2026-07-28T20:04:23.577Z",
+  "generatedAt": "2026-07-28T20:19:15.855Z",
   "guildId": "1504331970916909106",
   "managerRoleId": "1504351060674740255",
   "instructions": "Review each row. Set \"approved\": true and adjust \"proposedAssignments\" as needed. Then run with --apply --confirm. Rows left approved:false are skipped.",
@@ -49,6 +49,7 @@
       "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
+      "ownerOverride": null,
       "note": ""
     },
     {
@@ -87,6 +88,7 @@
       "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
+      "ownerOverride": null,
       "note": ""
     },
     {
@@ -125,6 +127,7 @@
       "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
+      "ownerOverride": null,
       "note": ""
     },
     {
@@ -155,14 +158,28 @@
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
           "confidence": "ROLE_SUPPORTED"
+        },
+        {
+          "marketId": "wilmington-nc",
+          "evidence": "OWNER OVERRIDE — Owner 2026-07-28: moved to the new Wilmington market",
+          "confidence": "OWNER_DIRECTED"
         }
       ],
       "proposedAssignments": [
-        "jacksonville"
+        "wilmington-nc"
       ],
-      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
-      "conflicts": [],
+      "confidence": "OWNER_DIRECTED_REQUIRES_APPROVAL",
+      "conflicts": [
+        "Owner move REPLACES their role-derived market(s): jacksonville. If they should ALSO keep jacksonville, approve that separately — it is not a default."
+      ],
       "approved": false,
+      "ownerOverride": {
+        "markets": [
+          "wilmington-nc"
+        ],
+        "replaces": true,
+        "reason": "Owner 2026-07-28: moved to the new Wilmington market"
+      },
       "note": ""
     },
     {
@@ -193,14 +210,28 @@
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
           "confidence": "ROLE_SUPPORTED"
+        },
+        {
+          "marketId": "wilmington-nc",
+          "evidence": "OWNER OVERRIDE — Owner 2026-07-28: moved to the new Wilmington market",
+          "confidence": "OWNER_DIRECTED"
         }
       ],
       "proposedAssignments": [
-        "jacksonville"
+        "wilmington-nc"
       ],
-      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
-      "conflicts": [],
+      "confidence": "OWNER_DIRECTED_REQUIRES_APPROVAL",
+      "conflicts": [
+        "Owner move REPLACES their role-derived market(s): jacksonville. If they should ALSO keep jacksonville, approve that separately — it is not a default."
+      ],
       "approved": false,
+      "ownerOverride": {
+        "markets": [
+          "wilmington-nc"
+        ],
+        "replaces": true,
+        "reason": "Owner 2026-07-28: moved to the new Wilmington market"
+      },
       "note": ""
     },
     {
@@ -239,6 +270,7 @@
       "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
+      "ownerOverride": null,
       "note": ""
     },
     {
@@ -305,6 +337,7 @@
       "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
+      "ownerOverride": null,
       "note": ""
     },
     {
@@ -343,6 +376,7 @@
       "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
       "conflicts": [],
       "approved": false,
+      "ownerOverride": null,
       "note": ""
     },
     {
@@ -373,17 +407,31 @@
           "marketId": "jacksonville",
           "evidence": "E2 holds the market role",
           "confidence": "ROLE_SUPPORTED"
+        },
+        {
+          "marketId": "wilmington-nc",
+          "evidence": "OWNER OVERRIDE — Owner 2026-07-28: moved to the new Wilmington market",
+          "confidence": "OWNER_DIRECTED"
         }
       ],
       "proposedAssignments": [
-        "jacksonville"
+        "wilmington-nc"
       ],
-      "confidence": "ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL",
-      "conflicts": [],
+      "confidence": "OWNER_DIRECTED_REQUIRES_APPROVAL",
+      "conflicts": [
+        "Owner move REPLACES their role-derived market(s): jacksonville. If they should ALSO keep jacksonville, approve that separately — it is not a default."
+      ],
       "approved": false,
+      "ownerOverride": {
+        "markets": [
+          "wilmington-nc"
+        ],
+        "replaces": true,
+        "reason": "Owner 2026-07-28: moved to the new Wilmington market"
+      },
       "note": ""
     }
   ],
-  "checksum": "140f1e5a1a27a6abe2f18f42bef74804766b0939bfacf3910864c4cc7df8413b",
+  "checksum": "e963bc4cba38737696dbe743302f6d3798498acbaa277e3530821351154f4196",
   "storeSnapshotChecksum": "02d02248a8becff9321532b1cf5d7afa33d76bf1283bb5369eb9436ee0ae5697"
 }

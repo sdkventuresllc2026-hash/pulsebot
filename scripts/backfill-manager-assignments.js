@@ -29,6 +29,22 @@ const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js')
 const { listMarkets } = require('../deal-channels');
 const A = require('../market-assignments');
 
+/**
+ * Owner-declared organisational changes. These SUPERSEDE role-derived evidence, because a Discord
+ * role reflects where someone was, not where the org has decided they are going. Caleb, Ben and
+ * Jonah still hold `Pulse · Jacksonville`, so inference alone would propose Jacksonville and
+ * silently miss the Wilmington move.
+ *
+ * `replaces: true` means the proposal REPLACES their inferred markets rather than adding to them —
+ * managing both Wilmington and Jacksonville is a separate Owner decision, never a default.
+ */
+const OWNER_OVERRIDES = {
+  // userId -> { markets, replaces, reason }
+  '373653162042720266': { markets: ['wilmington-nc'], replaces: true, reason: 'Owner 2026-07-28: moved to the new Wilmington market' }, // Caleb Head
+  '949541784126648330': { markets: ['wilmington-nc'], replaces: true, reason: 'Owner 2026-07-28: moved to the new Wilmington market' }, // Ben Edwards
+  '699672451344236645': { markets: ['wilmington-nc'], replaces: true, reason: 'Owner 2026-07-28: moved to the new Wilmington market' }, // Jonah McKinnon
+};
+
 const APPLY = process.argv.includes('--apply');
 const CONFIRM = process.argv.includes('--confirm');
 const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.json');
@@ -96,7 +112,20 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
     if (proposed.length === 0) conflicts.push('no market role and no channel access — cannot infer any market');
     if (onlyMedium && proposed.length > 1) conflicts.push(`visible in ${proposed.length} markets with no role in any — cannot tell which they run`);
 
-    const autoApplicable = proposed.filter((p) => p.confidence === 'ROLE_SUPPORTED');
+    let autoApplicable = proposed.filter((p) => p.confidence === 'ROLE_SUPPORTED');
+
+    // An Owner-declared move outranks role-derived evidence, and REPLACES it — so the previous
+    // market is not silently retained alongside the new one.
+    const override = OWNER_OVERRIDES[member.id];
+    if (override) {
+      const displaced = autoApplicable.map((p) => p.marketId).filter((m) => !override.markets.includes(m));
+      autoApplicable = override.markets.map((m) => ({ marketId: m, evidence: `OWNER OVERRIDE — ${override.reason}`, confidence: 'OWNER_DIRECTED' }));
+      proposed.push(...autoApplicable);
+      if (override.replaces && displaced.length) {
+        conflicts.push(`Owner move REPLACES their role-derived market(s): ${displaced.join(', ')}. If they should ALSO keep ${displaced.join(', ')}, approve that separately — it is not a default.`);
+      }
+    }
+
     rows.push({
       userId: member.id,
       username: member.user.username,
@@ -111,9 +140,10 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
       alreadyRecorded: already,
       proposed,
       proposedAssignments: autoApplicable.map((p) => p.marketId),
-      confidence: autoApplicable.length ? 'ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL' : (proposed.length ? 'AMBIGUOUS' : 'NONE'),
+      confidence: override ? 'OWNER_DIRECTED_REQUIRES_APPROVAL' : (autoApplicable.length ? 'ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL' : (proposed.length ? 'AMBIGUOUS' : 'NONE')),
       conflicts,
       approved: false, // Owner sets this to true after review.
+      ownerOverride: override ?? null,
       note: autoApplicable.length ? '' : 'LEFT UNASSIGNED — requires an explicit Owner decision.',
     });
   }
@@ -136,7 +166,7 @@ const REVIEW = path.resolve(__dirname, '..', 'docs', 'manager-backfill-review.js
 
     console.log(`\n=== MANAGER BACKFILL — DRY RUN (nothing changed) ===\n`);
     for (const r of rows) {
-      console.log(`${r.confidence === 'ROLE_SUPPORTED_REQUIRES_OWNER_APPROVAL' ? '✅' : '⚠ '} ${r.displayName}  (${r.userId})`);
+      console.log(`${r.confidence.includes('REQUIRES') ? '✅' : '⚠ '} ${r.displayName}  (${r.userId})`);
       console.log(`     roles: ${r.currentMarketRoles.join(', ') || '(none)'}   visible: ${r.effectiveMarketVisibility.join(', ') || '(none)'}${r.isAdministrator ? '   [ADMIN]' : ''}`);
       console.log(`     propose: ${r.proposedAssignments.join(', ') || '(nothing — needs your decision)'}`);
       r.proposed.forEach((p) => console.log(`       · ${p.marketId}: ${p.evidence} [${p.confidence}]`));
