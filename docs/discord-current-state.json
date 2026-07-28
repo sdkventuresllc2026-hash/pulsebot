@@ -1,0 +1,4093 @@
+{
+  "capturedAt": "2026-07-28T18:34:57.785Z",
+  "guild": {
+    "name": "FiberSales HQ",
+    "id": "1504331970916909106",
+    "ownerId": "1504316861838393415",
+    "ownerUsername": "fibersales",
+    "createdAt": "2026-05-14T03:58:11.003Z",
+    "memberCount": 73,
+    "humans": 71,
+    "bots": 2,
+    "verificationLevel": 1,
+    "explicitContentFilter": 2,
+    "mfaLevel": 0,
+    "premiumTier": 0,
+    "features": [],
+    "rulesChannelId": null,
+    "rulesChannel": null,
+    "systemChannelId": "1504331974163169474",
+    "systemChannel": "pulse-help",
+    "systemChannelFlags": [
+      "SuppressJoinNotifications",
+      "SuppressGuildReminderNotifications",
+      "SuppressJoinNotificationReplies"
+    ],
+    "publicUpdatesChannel": null,
+    "communityEnabled": false,
+    "membershipScreeningEnabled": false,
+    "welcomeScreenEnabled": false,
+    "botHighestRole": {
+      "name": "Pulse",
+      "id": "1504383512256581674",
+      "position": 22
+    }
+  },
+  "roles": [
+    {
+      "name": "Owner",
+      "id": "1504350965254590604",
+      "position": 24,
+      "color": "#1abc9c",
+      "hoist": false,
+      "managed": false,
+      "mentionable": false,
+      "memberCount": 1,
+      "members": [
+        "fibersales"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "ManageMessages",
+        "ManageChannels",
+        "ManageRoles",
+        "MentionEveryone",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite",
+        "Administrator",
+        "ManageGuild",
+        "KickMembers",
+        "BanMembers"
+      ],
+      "aboveBot": true
+    },
+    {
+      "name": "Manager",
+      "id": "1504351060674740255",
+      "position": 23,
+      "color": "#607d8b",
+      "hoist": false,
+      "managed": false,
+      "mentionable": false,
+      "memberCount": 9,
+      "members": [
+        "blakelipson001",
+        "deventopa696969",
+        "litty29012",
+        "bedwar26",
+        "elitekill6996",
+        "jmaneski.",
+        "hennysells",
+        "iqrexy_37266",
+        "headcalebebay305"
+      ],
+      "permissions": [
+        "ManageMessages",
+        "KickMembers",
+        "BanMembers"
+      ],
+      "aboveBot": true
+    },
+    {
+      "name": "Pulse",
+      "id": "1504383512256581674",
+      "position": 22,
+      "color": "#000000",
+      "hoist": false,
+      "managed": true,
+      "mentionable": false,
+      "memberCount": 1,
+      "members": [
+        "Pulse"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "ManageMessages",
+        "ManageChannels",
+        "ManageRoles",
+        "MentionEveryone",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite",
+        "Administrator",
+        "ManageGuild",
+        "KickMembers",
+        "BanMembers"
+      ],
+      "aboveBot": true
+    },
+    {
+      "name": "Pro",
+      "id": "1504350693589516288",
+      "position": 21,
+      "color": "#2ecc71",
+      "hoist": true,
+      "managed": false,
+      "mentionable": false,
+      "memberCount": 1,
+      "members": [
+        "hennysells"
+      ],
+      "permissions": [],
+      "aboveBot": false
+    },
+    {
+      "name": "Vet",
+      "id": "1504350591034589224",
+      "position": 20,
+      "color": "#9b59b6",
+      "hoist": true,
+      "managed": false,
+      "mentionable": false,
+      "memberCount": 0,
+      "members": [],
+      "permissions": [],
+      "aboveBot": false
+    },
+    {
+      "name": "Rookie",
+      "id": "1504350483454754987",
+      "position": 19,
+      "color": "#000000",
+      "hoist": true,
+      "managed": false,
+      "mentionable": false,
+      "memberCount": 0,
+      "members": [],
+      "permissions": [],
+      "aboveBot": false
+    },
+    {
+      "name": "Bot",
+      "id": "1504349620296224821",
+      "position": 18,
+      "color": "#f1c40f",
+      "hoist": true,
+      "managed": false,
+      "mentionable": false,
+      "memberCount": 2,
+      "members": [
+        "Pulse",
+        "Sapphire"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "ManageMessages",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "Member",
+      "id": "1504350276184834079",
+      "position": 17,
+      "color": "#e74c3c",
+      "hoist": true,
+      "managed": false,
+      "mentionable": false,
+      "memberCount": 70,
+      "members": [
+        "Pulse",
+        "donniemills",
+        "blakelipson001",
+        "noahagm07_61514",
+        "thadonmo",
+        "mucciolo15",
+        "brocknellie_87087",
+        "ishawngraves",
+        "epalm747",
+        "bradyskeen4",
+        "deventopa696969",
+        "cxden3",
+        "litty29012",
+        "sizhoodieyt",
+        "camshady_03",
+        "itsfearlolz",
+        "jrhea75",
+        "tanner067120",
+        "zaybag423",
+        "otmskeet",
+        "hadenmassey",
+        "charlie3167",
+        "sirnaan.",
+        "cc.7k",
+        "kkmx5",
+        "dboy1011",
+        "koolkailyn",
+        "jaysantdiscor",
+        "lizzie.calm",
+        "colinjskeen",
+        "sp3akzy",
+        "dieops",
+        "csessions117",
+        "eli2smovee",
+        "bedwar26",
+        "rileeeey0859",
+        "owen.tullock",
+        "kaisyiturner",
+        "elitekill6996",
+        "jmaneski.",
+        "elishadoe",
+        "danmurph6",
+        "hennysells",
+        "dennissonroller",
+        "gavgav4034",
+        "agm757",
+        "durst_nolan",
+        "ryderb50",
+        "spiffyfn123",
+        "caydensharp",
+        "rilla69",
+        "jaako_thetruth10",
+        "_.fenfen._4396",
+        "tgso5ivee",
+        "goated102",
+        "rymanc48",
+        "tren.setra",
+        "skii02593",
+        "goob.mc",
+        "toqcin",
+        "iqrexy_37266",
+        "heath_whitehead",
+        "danny_hill",
+        "jamezgod",
+        "jallen710",
+        "dihcheeseitis",
+        "ja.frushon",
+        "jadin9400",
+        "headcalebebay305",
+        "trippb23."
+      ],
+      "permissions": [],
+      "aboveBot": false
+    },
+    {
+      "name": "Sapphire",
+      "id": "1504357086665113633",
+      "position": 16,
+      "color": "#000000",
+      "hoist": false,
+      "managed": true,
+      "mentionable": false,
+      "memberCount": 1,
+      "members": [
+        "Sapphire"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "AddReactions"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · Virginia",
+      "id": "1506936322030567575",
+      "position": 15,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 2,
+      "members": [
+        "ishawngraves",
+        "camshady_03"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · Greenville",
+      "id": "1506936323687317606",
+      "position": 14,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 1,
+      "members": [
+        "brocknellie_87087"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · Portland",
+      "id": "1508614134311288872",
+      "position": 13,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 10,
+      "members": [
+        "blakelipson001",
+        "bradyskeen4",
+        "deventopa696969",
+        "colinjskeen",
+        "csessions117",
+        "danmurph6",
+        "dennissonroller",
+        "ryderb50",
+        "rilla69",
+        "ja.frushon"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · Kentucky",
+      "id": "1510847576407150742",
+      "position": 12,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 4,
+      "members": [
+        "sizhoodieyt",
+        "camshady_03",
+        "bedwar26",
+        "owen.tullock"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · Georgia",
+      "id": "1510848030276976691",
+      "position": 11,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 4,
+      "members": [
+        "otmskeet",
+        "hennysells",
+        "jaako_thetruth10",
+        "tgso5ivee"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "Pulse · Ashtabula",
+      "id": "1511437541469847614",
+      "position": 10,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 11,
+      "members": [
+        "blakelipson001",
+        "mucciolo15",
+        "bradyskeen4",
+        "deventopa696969",
+        "charlie3167",
+        "colinjskeen",
+        "csessions117",
+        "danmurph6",
+        "rilla69",
+        "danny_hill",
+        "ja.frushon"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · Oklahoma",
+      "id": "1513556774840565900",
+      "position": 9,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 0,
+      "members": [],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "Pulse · Inman",
+      "id": "1516474303426596945",
+      "position": 8,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 9,
+      "members": [
+        "noahagm07_61514",
+        "epalm747",
+        "cxden3",
+        "itsfearlolz",
+        "jaysantdiscor",
+        "dieops",
+        "hennysells",
+        "durst_nolan",
+        "skii02593"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · London",
+      "id": "1516860410500878457",
+      "position": 7,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 1,
+      "members": [
+        "goated102"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "Pulse · Kannapolis",
+      "id": "1516862063119433760",
+      "position": 6,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 16,
+      "members": [
+        "donniemills",
+        "thadonmo",
+        "litty29012",
+        "sizhoodieyt",
+        "tanner067120",
+        "zaybag423",
+        "dboy1011",
+        "koolkailyn",
+        "owen.tullock",
+        "elishadoe",
+        "hennysells",
+        "gavgav4034",
+        "rymanc48",
+        "tren.setra",
+        "iqrexy_37266",
+        "jamezgod"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "Pulse · Jacksonville",
+      "id": "1525004927779344526",
+      "position": 5,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 17,
+      "members": [
+        "malakai_0914",
+        "jrhea75",
+        "sirnaan.",
+        "kkmx5",
+        "eli2smovee",
+        "bedwar26",
+        "rileeeey0859",
+        "elitekill6996",
+        "jmaneski.",
+        "hennysells",
+        "agm757",
+        "caydensharp",
+        "_.fenfen._4396",
+        "heath_whitehead",
+        "jadin9400",
+        "headcalebebay305",
+        "trippb23."
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · Canton",
+      "id": "1528609221464035488",
+      "position": 4,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 1,
+      "members": [
+        "kkmx5"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "zz · Texarkana",
+      "id": "1528750963618218046",
+      "position": 3,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 3,
+      "members": [
+        "hadenmassey",
+        "lizzie.calm",
+        "sp3akzy"
+      ],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "Pulse · Virginia",
+      "id": "1531703614614278346",
+      "position": 2,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 0,
+      "members": [],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "Pulse · Greenville",
+      "id": "1531703615612260486",
+      "position": 1,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": true,
+      "memberCount": 0,
+      "members": [],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions"
+      ],
+      "aboveBot": false
+    },
+    {
+      "name": "@everyone",
+      "id": "1504331970916909106",
+      "position": 0,
+      "color": "#000000",
+      "hoist": false,
+      "managed": false,
+      "mentionable": false,
+      "memberCount": 73,
+      "members": [],
+      "permissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions"
+      ],
+      "aboveBot": false
+    }
+  ],
+  "bots": [
+    {
+      "username": "Sapphire",
+      "id": "678344927997853742",
+      "tag": "Sapphire#8184",
+      "roles": [
+        {
+          "name": "Sapphire",
+          "id": "1504357086665113633",
+          "managed": true
+        },
+        {
+          "name": "Bot",
+          "id": "1504349620296224821",
+          "managed": false
+        }
+      ],
+      "effectiveGuildPermissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "ManageMessages",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions"
+      ],
+      "highestRolePosition": 18,
+      "joinedAt": "2026-05-14T05:37:59.150Z"
+    },
+    {
+      "username": "Pulse",
+      "id": "1504345789952954418",
+      "tag": "Pulse#5159",
+      "roles": [
+        {
+          "name": "Pulse",
+          "id": "1504383512256581674",
+          "managed": true
+        },
+        {
+          "name": "Bot",
+          "id": "1504349620296224821",
+          "managed": false
+        },
+        {
+          "name": "Member",
+          "id": "1504350276184834079",
+          "managed": false
+        }
+      ],
+      "effectiveGuildPermissions": [
+        "ViewChannel",
+        "SendMessages",
+        "ReadMessageHistory",
+        "ManageMessages",
+        "ManageChannels",
+        "ManageRoles",
+        "MentionEveryone",
+        "AttachFiles",
+        "EmbedLinks",
+        "UseApplicationCommands",
+        "AddReactions",
+        "CreateInstantInvite",
+        "Administrator",
+        "ManageGuild",
+        "KickMembers",
+        "BanMembers"
+      ],
+      "highestRolePosition": 22,
+      "joinedAt": "2026-05-14T07:22:59.505Z"
+    }
+  ],
+  "categories": [
+    {
+      "name": "START HERE",
+      "id": "1504331974163169473",
+      "position": 0,
+      "overwrites": [
+        {
+          "targetType": "role",
+          "target": "@everyone",
+          "targetId": "1504331970916909106",
+          "allow": [],
+          "deny": [
+            "SendMessages"
+          ]
+        }
+      ],
+      "channels": [
+        {
+          "name": "welcome",
+          "id": "1531541508996599910",
+          "type": "text",
+          "position": 0,
+          "parentId": "1504331974163169473",
+          "topic": "Start here. What FiberSales is, how you get paid, and how to get into your market channel.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": true,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "SendMessages"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 2,
+            "lastMessageAt": "2026-07-28T16:25:10.463Z",
+            "daysSinceLastMessage": 0,
+            "last7d": 2,
+            "last14d": 2,
+            "last30d": 2,
+            "botMessages": 2,
+            "humanMessages": 0,
+            "uniqueHumanAuthors": 0,
+            "attachments": 0,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 1
+        },
+        {
+          "name": "announcements",
+          "id": "1504331974163169475",
+          "type": "text",
+          "position": 1,
+          "parentId": "1504331974163169473",
+          "topic": "Company-wide news from leadership. Read-only.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": true,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "SendMessages"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 82,
+            "lastMessageAt": "2026-07-24T19:58:54.775Z",
+            "daysSinceLastMessage": 4,
+            "last7d": 1,
+            "last14d": 11,
+            "last30d": 21,
+            "botMessages": 1,
+            "humanMessages": 81,
+            "uniqueHumanAuthors": 1,
+            "attachments": 17,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 2
+        },
+        {
+          "name": "wins",
+          "id": "1531541509923410091",
+          "type": "text",
+          "position": 2,
+          "parentId": "1504331974163169473",
+          "topic": "Post your own wins. Closed a tough one? Say it here. Everyone can post.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory"
+              ],
+              "deny": []
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 0,
+            "lastMessageAt": null,
+            "daysSinceLastMessage": null,
+            "last7d": 0,
+            "last14d": 0,
+            "last30d": 0,
+            "botMessages": 0,
+            "humanMessages": 0,
+            "uniqueHumanAuthors": 0,
+            "attachments": 0,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 0
+        },
+        {
+          "name": "ask-anything",
+          "id": "1531541511035027526",
+          "type": "text",
+          "position": 3,
+          "parentId": "1504331974163169473",
+          "topic": "No dumb questions. Pricing, objections, order entry, pay — ask here.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory"
+              ],
+              "deny": []
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 0,
+            "lastMessageAt": null,
+            "daysSinceLastMessage": null,
+            "last7d": 0,
+            "last14d": 0,
+            "last30d": 0,
+            "botMessages": 0,
+            "humanMessages": 0,
+            "uniqueHumanAuthors": 0,
+            "attachments": 0,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 0
+        },
+        {
+          "name": "leaderboard",
+          "id": "1531541512146522232",
+          "type": "text",
+          "position": 4,
+          "parentId": "1504331974163169473",
+          "topic": "Daily and all-time standings, posted by Pulse.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "member",
+              "target": "Pulse",
+              "targetId": "1504345789952954418",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "EmbedLinks",
+                "AttachFiles",
+                "ReadMessageHistory"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "SendMessages"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 0,
+            "lastMessageAt": null,
+            "daysSinceLastMessage": null,
+            "last7d": 0,
+            "last14d": 0,
+            "last30d": 0,
+            "botMessages": 0,
+            "humanMessages": 0,
+            "uniqueHumanAuthors": 0,
+            "attachments": 0,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 0
+        }
+      ]
+    },
+    {
+      "name": "BLITZES",
+      "id": "1504331974163169476",
+      "position": 1,
+      "overwrites": [
+        {
+          "targetType": "role",
+          "target": "Pro",
+          "targetId": "1504350693589516288",
+          "allow": [
+            "ViewChannel",
+            "Connect"
+          ],
+          "deny": []
+        },
+        {
+          "targetType": "role",
+          "target": "Vet",
+          "targetId": "1504350591034589224",
+          "allow": [
+            "ViewChannel",
+            "Connect"
+          ],
+          "deny": []
+        },
+        {
+          "targetType": "role",
+          "target": "Manager",
+          "targetId": "1504351060674740255",
+          "allow": [
+            "ViewChannel",
+            "Connect"
+          ],
+          "deny": []
+        },
+        {
+          "targetType": "role",
+          "target": "Rookie",
+          "targetId": "1504350483454754987",
+          "allow": [
+            "ViewChannel",
+            "Connect"
+          ],
+          "deny": []
+        },
+        {
+          "targetType": "role",
+          "target": "@everyone",
+          "targetId": "1504331970916909106",
+          "allow": [],
+          "deny": [
+            "ViewChannel"
+          ]
+        }
+      ],
+      "channels": [
+        {
+          "name": "🛜ashtabuhla",
+          "id": "1508611702910881913",
+          "type": "text",
+          "position": 0,
+          "parentId": "1504331974163169476",
+          "topic": "Ashtabula blitz. Log every deal here — just post your speed: 1g, 2g, 2x 1g. Attach your order confirmation screenshot.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "member",
+              "target": "Pulse",
+              "targetId": "1504345789952954418",
+              "allow": [
+                "ManageChannels",
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory",
+                "ManageRoles"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "Pulse · Ashtabula",
+              "targetId": "1511437541469847614",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory",
+                "UseApplicationCommands"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "ViewChannel"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 100,
+            "lastMessageAt": "2026-07-28T00:17:50.523Z",
+            "daysSinceLastMessage": 1,
+            "last7d": 100,
+            "last14d": 100,
+            "last30d": 100,
+            "botMessages": 35,
+            "humanMessages": 65,
+            "uniqueHumanAuthors": 6,
+            "attachments": 1,
+            "sampleSaturated": true
+          },
+          "pinnedCount": 0
+        },
+        {
+          "name": "🛜inman",
+          "id": "1516474256790130778",
+          "type": "text",
+          "position": 1,
+          "parentId": "1504331974163169476",
+          "topic": "Inman blitz. Log every deal here — just post your speed: 1g, 2g, 2x 1g. Attach your order confirmation screenshot.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "Pulse · Inman",
+              "targetId": "1516474303426596945",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory",
+                "UseApplicationCommands"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "member",
+              "target": "Pulse",
+              "targetId": "1504345789952954418",
+              "allow": [
+                "ManageChannels",
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory",
+                "ManageRoles"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "ViewChannel"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 100,
+            "lastMessageAt": "2026-07-27T01:35:36.499Z",
+            "daysSinceLastMessage": 2,
+            "last7d": 100,
+            "last14d": 100,
+            "last30d": 100,
+            "botMessages": 44,
+            "humanMessages": 56,
+            "uniqueHumanAuthors": 7,
+            "attachments": 17,
+            "sampleSaturated": true
+          },
+          "pinnedCount": 0
+        },
+        {
+          "name": "🛜kannapolis",
+          "id": "1516504087825354842",
+          "type": "text",
+          "position": 2,
+          "parentId": "1504331974163169476",
+          "topic": "Kannapolis blitz. Log every deal here — just post your speed: 1g, 2g, 2x 1g. Attach your order confirmation screenshot.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "Pulse · Kannapolis",
+              "targetId": "1516862063119433760",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory",
+                "UseApplicationCommands"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "member",
+              "target": "Pulse",
+              "targetId": "1504345789952954418",
+              "allow": [
+                "ManageChannels",
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory",
+                "ManageRoles"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "ViewChannel"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 100,
+            "lastMessageAt": "2026-07-28T01:07:19.635Z",
+            "daysSinceLastMessage": 1,
+            "last7d": 100,
+            "last14d": 100,
+            "last30d": 100,
+            "botMessages": 34,
+            "humanMessages": 66,
+            "uniqueHumanAuthors": 12,
+            "attachments": 14,
+            "sampleSaturated": true
+          },
+          "pinnedCount": 1
+        },
+        {
+          "name": "🛜jacksonville",
+          "id": "1525004755494244544",
+          "type": "text",
+          "position": 3,
+          "parentId": "1504331974163169476",
+          "topic": "Jacksonville blitz. Log every deal here — just post your speed: 1g, 2g, 2x 1g. Attach your order confirmation screenshot.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "member",
+              "target": "Pulse",
+              "targetId": "1504345789952954418",
+              "allow": [
+                "ManageChannels",
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory",
+                "ManageRoles"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "Pulse · Jacksonville",
+              "targetId": "1525004927779344526",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory",
+                "UseApplicationCommands"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "ViewChannel"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 100,
+            "lastMessageAt": "2026-07-28T16:26:19.533Z",
+            "daysSinceLastMessage": 0,
+            "last7d": 100,
+            "last14d": 100,
+            "last30d": 100,
+            "botMessages": 56,
+            "humanMessages": 44,
+            "uniqueHumanAuthors": 7,
+            "attachments": 27,
+            "sampleSaturated": true
+          },
+          "pinnedCount": 0
+        }
+      ]
+    },
+    {
+      "name": "REFERENCE",
+      "id": "1531729469344321713",
+      "position": 2,
+      "overwrites": [],
+      "channels": [
+        {
+          "name": "training",
+          "id": "1511486552021143642",
+          "type": "text",
+          "position": 0,
+          "parentId": "1531729469344321713",
+          "topic": "Scripts, objection handling, and door-to-door fundamentals. Read-only — ask in #ask-anything.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "SendMessages"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 22,
+            "lastMessageAt": "2026-07-23T15:58:05.903Z",
+            "daysSinceLastMessage": 5,
+            "last7d": 2,
+            "last14d": 3,
+            "last30d": 10,
+            "botMessages": 0,
+            "humanMessages": 22,
+            "uniqueHumanAuthors": 1,
+            "attachments": 2,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 0
+        },
+        {
+          "name": "resources",
+          "id": "1511074336784650240",
+          "type": "text",
+          "position": 1,
+          "parentId": "1531729469344321713",
+          "topic": "Order-entry references, promos, and tools for every carrier we sell.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "SendMessages"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 14,
+            "lastMessageAt": "2026-07-14T16:39:31.819Z",
+            "daysSinceLastMessage": 14,
+            "last7d": 0,
+            "last14d": 0,
+            "last30d": 2,
+            "botMessages": 0,
+            "humanMessages": 14,
+            "uniqueHumanAuthors": 1,
+            "attachments": 7,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 0
+        },
+        {
+          "name": "pulse-help",
+          "id": "1504331974163169474",
+          "type": "text",
+          "position": 2,
+          "parentId": "1531729469344321713",
+          "topic": "How to use Pulse. Log a deal by posting your speed in your blitz channel: 1g, 2g, 2x 1g.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "member",
+              "target": "Pulse",
+              "targetId": "1504345789952954418",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "EmbedLinks",
+                "AttachFiles",
+                "ReadMessageHistory"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "member",
+              "target": "Sapphire",
+              "targetId": "678344927997853742",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "EmbedLinks",
+                "AttachFiles",
+                "ReadMessageHistory"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "SendMessages"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": true,
+              "send": false,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 85,
+            "lastMessageAt": "2026-07-28T14:46:24.841Z",
+            "daysSinceLastMessage": 0,
+            "last7d": 6,
+            "last14d": 23,
+            "last30d": 38,
+            "botMessages": 79,
+            "humanMessages": 6,
+            "uniqueHumanAuthors": 1,
+            "attachments": 79,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 0
+        }
+      ]
+    },
+    {
+      "name": "LEADERSHIP",
+      "id": "1504349180427243682",
+      "position": 3,
+      "overwrites": [
+        {
+          "targetType": "role",
+          "target": "@everyone",
+          "targetId": "1504331970916909106",
+          "allow": [],
+          "deny": [
+            "ViewChannel"
+          ]
+        },
+        {
+          "targetType": "role",
+          "target": "Vet",
+          "targetId": "1504350591034589224",
+          "allow": [
+            "ViewChannel",
+            "Connect"
+          ],
+          "deny": []
+        },
+        {
+          "targetType": "role",
+          "target": "Manager",
+          "targetId": "1504351060674740255",
+          "allow": [
+            "ViewChannel",
+            "Connect"
+          ],
+          "deny": []
+        },
+        {
+          "targetType": "role",
+          "target": "Rookie",
+          "targetId": "1504350483454754987",
+          "allow": [
+            "ViewChannel",
+            "Connect"
+          ],
+          "deny": []
+        },
+        {
+          "targetType": "role",
+          "target": "Pro",
+          "targetId": "1504350693589516288",
+          "allow": [
+            "ViewChannel",
+            "Connect"
+          ],
+          "deny": []
+        }
+      ],
+      "channels": [
+        {
+          "name": "management",
+          "id": "1504349236265877514",
+          "type": "text",
+          "position": 0,
+          "parentId": "1504349180427243682",
+          "topic": "Managers and Owner only. Team performance, staffing, escalations.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": true,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "Pro",
+              "targetId": "1504350693589516288",
+              "allow": [
+                "ViewChannel",
+                "Connect"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "Vet",
+              "targetId": "1504350591034589224",
+              "allow": [
+                "ViewChannel",
+                "Connect"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "Manager",
+              "targetId": "1504351060674740255",
+              "allow": [
+                "ViewChannel",
+                "Connect"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "Rookie",
+              "targetId": "1504350483454754987",
+              "allow": [
+                "ViewChannel",
+                "Connect"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "ViewChannel"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 1,
+            "lastMessageAt": "2026-07-01T21:09:55.796Z",
+            "daysSinceLastMessage": 27,
+            "last7d": 0,
+            "last14d": 0,
+            "last30d": 1,
+            "botMessages": 0,
+            "humanMessages": 1,
+            "uniqueHumanAuthors": 1,
+            "attachments": 0,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 0
+        },
+        {
+          "name": "pay-and-ops",
+          "id": "1531541512809218209",
+          "type": "text",
+          "position": 1,
+          "parentId": "1504349180427243682",
+          "topic": "Payday schedule, pay runs, and operational issues. Managers only.",
+          "nsfw": false,
+          "slowmodeSeconds": 0,
+          "permissionSynced": false,
+          "overwrites": [
+            {
+              "targetType": "role",
+              "target": "Manager",
+              "targetId": "1504351060674740255",
+              "allow": [
+                "ViewChannel",
+                "SendMessages",
+                "ReadMessageHistory"
+              ],
+              "deny": []
+            },
+            {
+              "targetType": "role",
+              "target": "@everyone",
+              "targetId": "1504331970916909106",
+              "allow": [],
+              "deny": [
+                "ViewChannel"
+              ]
+            }
+          ],
+          "effectivePermissionsByRole": {
+            "@everyone": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Bot": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Member": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Rookie": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Vet": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pro": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Owner": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Manager": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "Sapphire": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse": {
+              "view": true,
+              "send": true,
+              "history": true,
+              "manageMessages": true
+            },
+            "zz · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Portland": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Kentucky": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Georgia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Ashtabula": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Oklahoma": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Inman": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · London": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Kannapolis": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Jacksonville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Canton": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "zz · Texarkana": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Virginia": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            },
+            "Pulse · Greenville": {
+              "view": false,
+              "send": true,
+              "history": true,
+              "manageMessages": false
+            }
+          },
+          "usage": {
+            "messagesSampled": 0,
+            "lastMessageAt": null,
+            "daysSinceLastMessage": null,
+            "last7d": 0,
+            "last14d": 0,
+            "last30d": 0,
+            "botMessages": 0,
+            "humanMessages": 0,
+            "uniqueHumanAuthors": 0,
+            "attachments": 0,
+            "sampleSaturated": false
+          },
+          "pinnedCount": 0
+        }
+      ]
+    }
+  ],
+  "uncategorized": [],
+  "applicationCommands": [
+    {
+      "name": "log",
+      "id": "1504385370089984091",
+      "description": "Log a closed fiber deal",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "leaderboard",
+      "id": "1504385370089984092",
+      "description": "Market leaderboard for this channel",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "weekly",
+      "id": "1504385370089984094",
+      "description": "This week's market leaderboard",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "share",
+      "id": "1504385370089984096",
+      "description": "Screenshot-friendly weekly production card",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "reset-weekly",
+      "id": "1504385370089984099",
+      "description": "Archive weekly totals and advance the weekly board (admin only)",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "daily",
+      "id": "1504524772636233801",
+      "description": "Today's market leaderboard",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "blitz",
+      "id": "1504524772636233802",
+      "description": "All-time market leaderboard",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "master",
+      "id": "1504524772636233803",
+      "description": "Master leaderboard across all approved markets",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "mydeals",
+      "id": "1504524772636233804",
+      "description": "Your deal stats and ranks",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "admin",
+      "id": "1504531943105237053",
+      "description": "Pulse admin controls",
+      "defaultMemberPermissions": null,
+      "subcommands": [
+        "status",
+        "stats",
+        "export-csv"
+      ],
+      "overrides": null
+    },
+    {
+      "name": "remove-last",
+      "id": "1504534651044364318",
+      "description": "Remove your most recent deal log",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "correction",
+      "id": "1504534651044364319",
+      "description": "Correct your most recent deal speed",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "markets",
+      "id": "1506452772755865762",
+      "description": "Market board (today + this week)",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "quarter",
+      "id": "1506919894623457280",
+      "description": "Current sales quarter (Q1–Q4) + culture check-in",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "market",
+      "id": "1531683977750908949",
+      "description": "Markets: create one, add reps, see who is where",
+      "defaultMemberPermissions": null,
+      "subcommands": [
+        "create",
+        "add",
+        "remove",
+        "rename",
+        "cleanup",
+        "list",
+        "status",
+        "sync"
+      ],
+      "overrides": null
+    },
+    {
+      "name": "yesterday",
+      "id": "1531683977750908950",
+      "description": "Yesterday's market leaderboard",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "lastweek",
+      "id": "1531683977750908951",
+      "description": "Last week's market leaderboard",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "monthly",
+      "id": "1531683977750908953",
+      "description": "This month's market leaderboard",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    },
+    {
+      "name": "lastmonth",
+      "id": "1531683977750908954",
+      "description": "Last month's market leaderboard",
+      "defaultMemberPermissions": null,
+      "subcommands": [],
+      "overrides": null
+    }
+  ],
+  "integrations": [
+    {
+      "name": "Pulse",
+      "type": "discord",
+      "enabled": true,
+      "application": "Pulse",
+      "scopes": [
+        "bot",
+        "applications.commands"
+      ],
+      "roleId": null,
+      "roleName": null
+    },
+    {
+      "name": "Sapphire",
+      "type": "discord",
+      "enabled": true,
+      "application": "Sapphire",
+      "scopes": [
+        "bot",
+        "applications.commands"
+      ],
+      "roleId": null,
+      "roleName": null
+    }
+  ],
+  "invites": [
+    {
+      "code": "926CGmQwu",
+      "channel": "🛜jacksonville",
+      "uses": 0,
+      "maxUses": 0,
+      "inviter": "jmaneski.",
+      "expiresAt": "2026-08-27T17:06:30.000Z"
+    },
+    {
+      "code": "Ede7cu2p9",
+      "channel": "🛜kannapolis",
+      "uses": 2,
+      "maxUses": 0,
+      "inviter": "owen.tullock",
+      "expiresAt": "2026-08-07T18:27:09.000Z"
+    },
+    {
+      "code": "FDUM5W6nt",
+      "channel": "🛜inman",
+      "uses": 1,
+      "maxUses": 0,
+      "inviter": "epalm747",
+      "expiresAt": "2026-08-16T22:58:00.000Z"
+    },
+    {
+      "code": "FTZzrqgnv",
+      "channel": "🛜jacksonville",
+      "uses": 2,
+      "maxUses": 0,
+      "inviter": "fibersales",
+      "expiresAt": "2026-08-09T05:06:30.000Z"
+    },
+    {
+      "code": "PaDd2zhyq",
+      "channel": "🛜inman",
+      "uses": 2,
+      "maxUses": 0,
+      "inviter": "dieops",
+      "expiresAt": "2026-08-15T17:42:27.000Z"
+    },
+    {
+      "code": "V5yMStTbs",
+      "channel": "🛜kannapolis",
+      "uses": 1,
+      "maxUses": 0,
+      "inviter": "litty29012",
+      "expiresAt": "2026-08-19T16:48:28.000Z"
+    },
+    {
+      "code": "XPQE4atYp",
+      "channel": "announcements",
+      "uses": 0,
+      "maxUses": 0,
+      "inviter": "itsfearlolz",
+      "expiresAt": "2026-08-06T21:29:20.000Z"
+    },
+    {
+      "code": "Y9w6HQFRV",
+      "channel": "pulse-help",
+      "uses": 1,
+      "maxUses": 0,
+      "inviter": "owen.tullock",
+      "expiresAt": "2026-08-05T00:54:24.000Z"
+    },
+    {
+      "code": "ZnHQnA8p7",
+      "channel": "announcements",
+      "uses": 10,
+      "maxUses": 0,
+      "inviter": "fibersales",
+      "expiresAt": "2026-08-16T04:19:18.000Z"
+    },
+    {
+      "code": "qMMAFuupb",
+      "channel": "pulse-help",
+      "uses": 2,
+      "maxUses": 0,
+      "inviter": "fibersales",
+      "expiresAt": "2026-08-06T15:05:45.000Z"
+    },
+    {
+      "code": "s95XpJHAf",
+      "channel": "🛜kannapolis",
+      "uses": 0,
+      "maxUses": 0,
+      "inviter": "jamezgod",
+      "expiresAt": "2026-08-13T16:45:24.000Z"
+    },
+    {
+      "code": "sHyGkEfHT",
+      "channel": "management",
+      "uses": 0,
+      "maxUses": 0,
+      "inviter": "fibersales",
+      "expiresAt": "2026-08-12T15:20:07.000Z"
+    },
+    {
+      "code": "uKeqqRUDW",
+      "channel": "announcements",
+      "uses": 2,
+      "maxUses": 0,
+      "inviter": "sizhoodieyt",
+      "expiresAt": "2026-08-15T18:46:14.000Z"
+    },
+    {
+      "code": "vSzWpDrK9",
+      "channel": "🛜ashtabuhla",
+      "uses": 2,
+      "maxUses": 0,
+      "inviter": "deventopa696969",
+      "expiresAt": "2026-07-28T23:14:30.000Z"
+    }
+  ],
+  "notes": []
+}

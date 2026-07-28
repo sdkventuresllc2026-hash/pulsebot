@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { REST, Routes, SlashCommandBuilder, ChannelType } = require('discord.js');
+const { REST, Routes, SlashCommandBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
 const { SPEEDS } = require('./constants');
 
 const token = process.env.DISCORD_TOKEN;
@@ -38,6 +38,9 @@ const commands = [
   new SlashCommandBuilder()
     .setName('market')
     .setDescription('Markets: create one, add reps, see who is where')
+    // Visibility gate only. canUseAdminCommands is still the security boundary - a Discord
+    // default can be changed in Server Settings, so it can never be the sole check.
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addSubcommand((s) =>
       s
         .setName('create')
@@ -175,12 +178,14 @@ const commands = [
   new SlashCommandBuilder()
     .setName('admin')
     .setDescription('Pulse admin controls')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((s) => s.setName('status').setDescription('Pulse runtime and storage status'))
     .addSubcommand((s) => s.setName('stats').setDescription('Deal stats'))
     .addSubcommand((s) => s.setName('export-csv').setDescription('Export active deal logs to CSV')),
   new SlashCommandBuilder()
     .setName('reset-weekly')
-    .setDescription('Archive weekly totals and advance the weekly board (admin only)'),
+    .setDescription('Archive weekly totals and advance the weekly board (admin only)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 ].map((c) => c.toJSON());
 
 (async () => {

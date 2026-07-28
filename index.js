@@ -26,6 +26,32 @@ const { SPEEDS, SPEED_LABELS, COLORS, GAMIFICATION_CONFIG, SLASH_HINTS, PULSE_BU
 
 /** customId for the self-service real-name button + modal (see the interaction handler). */
 const SET_NAME_ID = 'pulse:setname';
+
+// Channel names are looked up by name in a few places. Centralised so a rename is one edit, and
+// so the reliability audit has a single place to point at (R3). Overridable per deployment.
+const WELCOME_CHANNEL = (process.env.WELCOME_CHANNEL || 'welcome').trim();
+const MANAGEMENT_CHANNEL = (process.env.MANAGEMENT_CHANNEL || 'management').trim();
+
+/** The Set-My-Name button, attached directly to whatever message needs it. */
+function setNameRow() {
+  const { ActionRowBuilder: Row, ButtonBuilder: Btn, ButtonStyle: Style } = require('discord.js');
+  return new Row().addComponents(
+    new Btn().setCustomId(SET_NAME_ID).setLabel('Set My Name').setEmoji('✍️').setStyle(Style.Primary),
+  );
+}
+
+/** Post to the manager review queue. Never throws — a failed notice must not break onboarding. */
+async function notifyManagement(guild, content) {
+  try {
+    const ch = guild?.channels?.cache?.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
+    if (!ch) return false;
+    await ch.send({ content, allowedMentions: { parse: [] } });
+    return true;
+  } catch (err) {
+    console.error('[Pulse] notifyManagement failed:', err.message || err);
+    return false;
+  }
+}
 const {
   DATA_PATH,
   readLeaderboard,
@@ -154,7 +180,9 @@ const adminIds = (process.env.ADMIN_IDS || '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
-const managerRoleId = (process.env.MANAGER_ROLE_ID || '').trim();
+// Read through the validated config layer, never process.env directly. A null here means
+// 'refuse', never 'skip the tier' — skipping is what erased manager access from every market.
+const pulseConfig = require('./pulse-config');
 
 function isAdmin(userId) {
   return adminIds.includes(userId);
@@ -163,7 +191,8 @@ function isAdmin(userId) {
 function canUseAdminCommands(interaction) {
   if (isAdmin(interaction.user.id)) return true;
   if (interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) return true;
-  if (managerRoleId && interaction.member?.roles?.cache?.has(managerRoleId)) return true;
+  const mgrRole = pulseConfig.managerRoleId();
+  if (mgrRole && interaction.member?.roles?.cache?.has(mgrRole)) return true;
   return false;
 }
 
@@ -182,13 +211,14 @@ function canUseOwnerCommands(interaction) {
 }
 
 function marketAccessOpts() {
-  return { managerRoleId: managerRoleId || undefined };
+  return { managerRoleId: pulseConfig.managerRoleId() || undefined };
 }
 
 function canUseAdminMember(userId, member) {
   if (isAdmin(userId)) return true;
   if (member?.permissions?.has(PermissionsBitField.Flags.Administrator)) return true;
-  if (managerRoleId && member?.roles?.cache?.has(managerRoleId)) return true;
+  const mgrRole2 = pulseConfig.managerRoleId();
+  if (mgrRole2 && member?.roles?.cache?.has(mgrRole2)) return true;
   return false;
 }
 
@@ -2625,6 +2655,21 @@ async function bootstrap() {
   if (boot.length) {
     console.log(`[Pulse] Auto-registered markets: ${boot.map((m) => m.marketId).join(', ')}`);
   }
+  // Validate configuration against the LIVE guild before touching a single permission.
+  //
+  // This is the gate that would have prevented the manager-access outage: MANAGER_ROLE_ID was
+  // undefined on Railway, both consumers read it as "tier does not exist", and the incomplete
+  // desired state was written to every market channel on every restart. Now an invalid config
+  // marks the process unhealthy and BLOCKS permission reconciliation, so a bad config can never
+  // silently rewrite access.
+  const configReport = await pulseConfig.validateAgainstGuild(client.guilds.cache.first() ?? null);
+  pulseConfig.markHealth(configReport);
+  console.log(pulseConfig.formatReport(configReport));
+  if (!configReport.ok) {
+    console.error('[Pulse] UNHEALTHY — configuration invalid. Channel permission reconciliation is DISABLED');
+    console.error('[Pulse] until it is fixed, so an incomplete desired state cannot be written to market channels.');
+  }
+
   // Fail loud, before anything can write. readLeaderboard throws PULSE_DATA_CORRUPT rather than
   // replacing an unreadable file with an empty one, so this is the last moment we can stop while
   // the real data is still on disk and recoverable.
@@ -2641,6 +2686,13 @@ async function bootstrap() {
     // Rethrowing here surfaced as an unhandled rejection inside the ready handler and killed the
     // process — a far worse outcome than a noisy log, since deal logging stops for everyone.
     console.error(`[Pulse] Startup leaderboard read failed (continuing): ${err?.message || err}`);
+  }
+
+  // Reconciliation writes desired state with permissionOverwrites.set(). Running it from an
+  // invalid config is precisely how manager access was erased — so it does not run at all.
+  if (!pulseConfig.isHealthy()) {
+    console.error('[Pulse] Skipping market permission sync — configuration is unhealthy. Existing channel permissions left untouched.');
+    return;
   }
 
   for (const guild of client.guilds.cache.values()) {
@@ -2661,18 +2713,42 @@ async function bootstrap() {
  * greeting and the button now live in the same place, which is the whole point: someone joins,
  * sees their name, and the next step is one click away.
  */
+/** Members already greeted this process-lifetime. Discord can redeliver guildMemberAdd, and a
+ *  rejoin re-fires it, so without this a member can be welcomed several times. */
+const greeted = new Set();
+
 client.on('guildMemberAdd', async (member) => {
   try {
     if (member.user.bot) return;
-    const welcome = member.guild.channels.cache.find((c) => c.name === 'welcome' && c.isTextBased?.());
-    if (!welcome) return;
+    if (greeted.has(member.id)) return;
+    greeted.add(member.id);
+    setTimeout(() => greeted.delete(member.id), 10 * 60 * 1000).unref?.();
+
+    const welcome = member.guild.channels.cache.find((c) => c.name === WELCOME_CHANNEL && c.isTextBased?.());
+    if (!welcome) {
+      // Silence here meant nobody could onboard and nobody knew. Say it where leadership will see.
+      console.error(`[Pulse] #${WELCOME_CHANNEL} not found — ${member.user.username} received no welcome.`);
+      await notifyManagement(member.guild, `⚠ <@${member.id}> joined but **#${WELCOME_CHANNEL} was not found**, so they got no onboarding prompt. Create the channel or they cannot be set up.`);
+      return;
+    }
+    const perms = welcome.permissionsFor(member.guild.members.me);
+    if (!perms?.has(PermissionsBitField.Flags.SendMessages)) {
+      console.error(`[Pulse] No SendMessages in #${WELCOME_CHANNEL} — ${member.user.username} received no welcome.`);
+      await notifyManagement(member.guild, `⚠ <@${member.id}> joined but Pulse cannot post in **#${WELCOME_CHANNEL}**. Grant Send Messages there.`);
+      return;
+    }
+
+    // The button is attached to THIS message, not to a pinned panel elsewhere. Previously the text
+    // said "the button above" while every new join pushed that panel further up the channel — so
+    // for the second joiner onward the instruction was simply wrong.
     await welcome.send({
       content: [
         `👋 Welcome to **FiberSales**, <@${member.id}>.`,
         '',
-        '**Hit the “Set My Name” button above and enter your real name** — that is how your manager finds you and gets you into your market channel.',
-        'Until then you can read around, but your blitz channel stays hidden.',
+        '**Tap the button below and enter your real name.** That is how your manager finds you and gets you into your market channel.',
+        'Until then you can read around, but market channels stay hidden.',
       ].join('\n'),
+      components: [setNameRow()],
       allowedMentions: { users: [member.id] },
     });
   } catch (err) {
@@ -2897,21 +2973,52 @@ client.on('interactionCreate', async (interaction) => {
     const realName = interaction.fields.getTextInputValue('realname').trim();
     const handle = (interaction.fields.getTextInputValue('handle') || '').trim() || null;
     const nickname = buildNickname(realName, handle);
+    if (!realName || realName.length < 2) {
+      await interaction.editReply({ content: '❌ That does not look like a name. Tap the button again and enter your full name.' }).catch(() => {});
+      return;
+    }
+
+    let nicknameSet = false;
+    let failureReason = null;
     try {
       const member = await interaction.guild.members.fetch(interaction.user.id);
-      await member.setNickname(nickname, 'Self-service real-name capture');
-      await interaction.editReply({ content: `✅ Thanks — you'll show up as **${nickname}**.\nA manager will add you to your market shortly.` });
 
-      // Tell leadership so somebody actually picks them up, and flag anyone with no payroll record.
-      const mgmt = interaction.guild.channels.cache.find((c) => c.name === 'management');
-      if (mgmt?.isTextBased?.()) {
-        await mgmt.send({
-          content: `🆕 <@${interaction.user.id}> set their name to **${nickname}** (\`@${interaction.user.username}\`).\nAdd them with \`/market add rep:@${interaction.user.username} name:"${realName}" market:…\``,
-          allowedMentions: { parse: [] },
-        }).catch(() => {});
+      // Duplicate-name check. Two people showing the same nickname is exactly the confusion this
+      // whole flow exists to remove, so warn rather than silently create a second "Noah Mills".
+      await interaction.guild.members.fetch().catch(() => null);
+      const clash = interaction.guild.members.cache.find(
+        (m) => m.id !== member.id && m.displayName.replace(/\s*\(.*\)$/, '').toLowerCase() === realName.toLowerCase(),
+      );
+
+      try {
+        await member.setNickname(nickname, 'Self-service real-name capture');
+        nicknameSet = true;
+      } catch (err) {
+        // Discord refuses if their top role outranks Pulse, or they own the server. Expected for
+        // managers — not an error the member should see as a failure.
+        failureReason = err?.message || String(err);
       }
+
+      await interaction.editReply({
+        content: nicknameSet
+          ? [`✅ Thanks — you will show up as **${nickname}**.`,
+             clash ? `\n⚠ Heads up: **${clash.displayName}** already goes by that name. A manager will sort it out.` : '',
+             '\nA manager adds you to your market next — your market channel appears once they do.'].join('')
+          : `✅ Got it — **${nickname}**.\nPulse could not set it automatically (your role sits above the bot), so a manager will apply it. Nothing else needed from you.`,
+      }).catch(() => {});
+
+      const posted = await notifyManagement(interaction.guild, [
+        `🆕 **${nickname}** — \`@${interaction.user.username}\` (<@${interaction.user.id}>)`,
+        nicknameSet ? '' : '⚠ nickname NOT applied — role hierarchy. Set it by hand.',
+        clash ? `⚠ duplicate name: **${clash.displayName}** already uses it.` : '',
+        `\`/market add rep:@${interaction.user.username} name:"${realName}" market:…\``,
+      ].filter(Boolean).join('\n'));
+      // Privacy-safe log: ids and outcome, never the entered name.
+      console.log(`[Pulse] name capture user=${interaction.user.id} applied=${nicknameSet} clash=${Boolean(clash)} queued=${posted}`);
     } catch (err) {
-      await interaction.editReply({ content: `Could not set your nickname automatically (${err.message || err}). A manager will set it for you — you're still good.` }).catch(() => {});
+      console.error(`[Pulse] name capture failed user=${interaction.user.id}: ${err?.message || err}`);
+      await interaction.editReply({ content: 'Something went wrong saving that. A manager has been notified — you are not stuck.' }).catch(() => {});
+      await notifyManagement(interaction.guild, `⚠ Name capture failed for <@${interaction.user.id}> (\`@${interaction.user.username}\`). Set their nickname by hand.`);
     }
     return;
   }
