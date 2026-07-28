@@ -2077,10 +2077,72 @@ async function handleMarketAdd(interaction) {
   }
 }
 
+/** /market rename — fix a stale market NAME without touching its id.
+ *  The id is what historical deal logs are stamped with, so changing it would orphan them; the
+ *  name is only ever a label. Renaming "New York" to "Ashtabula" therefore also corrects every
+ *  past leaderboard line for that market, because those deals were only ever mislabelled. */
+async function handleMarketRename(interaction) {
+  if (!canUseAdminCommands(interaction)) return denyAdmin(interaction);
+  await interaction.deferReply({ ephemeral: true });
+  const query = interaction.options.getString('market', true);
+  const newName = interaction.options.getString('name', true).trim();
+  try {
+    const result = renameMarket(query, { marketName: newName });
+    const m = result?.market ?? result;
+    await interaction.editReply({
+      content: `✅ Renamed to **${m.marketName}** (id \`${m.marketId}\` unchanged, so past deals stay attached).\nUpdate the Discord role name to match if it hasn't already.`,
+    });
+  } catch (err) {
+    await interaction.editReply({ content: `Could not rename: ${err.message || err}` });
+  }
+}
+
+/** /market cleanup — retire markets whose channel is gone.
+ *  A market with no resolvable channel cannot receive deals, but it still clutters autocomplete
+ *  and /market list, which is what made "which market do I pick?" hard. Safe to delete: logs carry
+ *  their own marketName, so history keeps its label (see inferMarketForLog). Previews by default. */
+async function handleMarketCleanup(interaction) {
+  if (!canUseAdminCommands(interaction)) return denyAdmin(interaction);
+  await interaction.deferReply({ ephemeral: true });
+  const confirm = interaction.options.getBoolean('confirm') ?? false;
+
+  const dead = [];
+  const live = [];
+  for (const m of listMarkets()) {
+    const ids = m.channelIds || [];
+    const resolvable = ids.filter((id) => interaction.guild.channels.cache.get(id));
+    (resolvable.length ? live : dead).push({ m, had: ids.length });
+  }
+
+  if (!dead.length) {
+    return interaction.editReply({ content: `Nothing to clean up — all ${live.length} market(s) have a live channel.` });
+  }
+  const list = dead.map((d) => `• **${d.m.marketName}** (\`${d.m.marketId}\`)${d.had ? ` — channel gone` : ' — never had a channel'}`).join('\n');
+  if (!confirm) {
+    return interaction.editReply({
+      content: [`Would delete **${dead.length}** market(s) with no live channel:`, list, '',
+        `Keeping: ${live.map((l) => `**${l.m.marketName}**`).join(', ')}`, '',
+        'Run again with `confirm:true` to delete. Past deals keep their market name either way.'].join('\n'),
+    });
+  }
+  const done = [], failed = [];
+  for (const d of dead) {
+    try { deleteMarket(d.m.marketId); done.push(d.m.marketName); }
+    catch (err) { failed.push(`${d.m.marketName} (${err.message || err})`); }
+  }
+  await interaction.editReply({
+    content: [`✅ Deleted ${done.length} dead market(s): ${done.join(', ')}`,
+      failed.length ? `⚠ Failed: ${failed.join('; ')}` : '',
+      `Still live: ${live.map((l) => `**${l.m.marketName}**`).join(', ')}`].filter(Boolean).join('\n'),
+  });
+}
+
 async function handleMarketRouter(interaction) {
   const sub = interaction.options.getSubcommand();
   if (sub === 'create') return handleMarketCreate(interaction);
   if (sub === 'add') return handleMarketAdd(interaction);
+  if (sub === 'rename') return handleMarketRename(interaction);
+  if (sub === 'cleanup') return handleMarketCleanup(interaction);
   if (sub === 'remove') return handleAdminUnassignRep(interaction);
   if (sub === 'list') return handleAdminListMarkets(interaction);
   if (sub === 'status') return handleAdminMarketStatus(interaction);

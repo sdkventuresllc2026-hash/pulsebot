@@ -61,6 +61,19 @@ const commands = [
         .setDescription('Remove a rep from all markets')
         .addUserOption((o) => o.setName('rep').setDescription('Who to remove').setRequired(true)),
     )
+    .addSubcommand((s) =>
+      s
+        .setName('rename')
+        .setDescription('Fix a market name (e.g. "New York" -> "Ashtabula")')
+        .addStringOption((o) => o.setName('market').setDescription('Which market').setRequired(true).setAutocomplete(true))
+        .addStringOption((o) => o.setName('name').setDescription('Correct name, e.g. Ashtabula').setRequired(true).setMaxLength(80)),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('cleanup')
+        .setDescription('Delete every market whose channel no longer exists')
+        .addBooleanOption((o) => o.setName('confirm').setDescription('Set true to actually delete (otherwise just previews)').setRequired(false)),
+    )
     .addSubcommand((s) => s.setName('list').setDescription('All markets and their channels'))
     .addSubcommand((s) =>
       s
