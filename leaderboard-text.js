@@ -104,6 +104,41 @@ function parseLeaderboardTextIntent(raw) {
   return null;
 }
 
+/**
+ * Non-leaderboard commands that must ALSO work as plain text (owner decision 2026-07-28:
+ * "everything needs to work without the slash command").
+ *
+ * Reps log deals by typing "1g" — they never open the slash menu. Anything they need mid-shift has
+ * to work the same way, especially `undo`: a rep who logs the wrong speed needs to fix it in one
+ * word, not hunt for /remove-last.
+ */
+const TEXT_COMMANDS = {
+  mydeals: 'mydeals',
+  'my deals': 'mydeals',
+  me: 'mydeals',
+  mine: 'mydeals',
+  stats: 'mydeals',
+  undo: 'undo',
+  'remove last': 'undo',
+  'remove-last': 'undo',
+  oops: 'undo',
+  markets: 'markets',
+  'market board': 'markets',
+  quarter: 'quarter',
+};
+
+/**
+ * @param {string} raw
+ * @returns {{ cmd: 'mydeals'|'undo'|'markets'|'quarter' } | null}
+ */
+function parseTextCommandIntent(raw) {
+  const t = normalizedCommand(raw);
+  if (!t) return null;
+  const cmd = TEXT_COMMANDS[t];
+  return cmd ? { cmd } : null;
+}
+
 module.exports = {
   parseLeaderboardTextIntent,
+  parseTextCommandIntent,
 };

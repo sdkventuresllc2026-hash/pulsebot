@@ -7,11 +7,13 @@
  */
 
 const fs = require('fs/promises');
-const path = require('path');
 const crypto = require('crypto');
 const { dataPath } = require('./paths');
 
 const DATA_PATH = dataPath('leaderboard.json');
+
+/** Thrown by readLeaderboard when the file exists but is unreadable. Callers check `err.code`. */
+const CORRUPT_CODE = 'PULSE_DATA_CORRUPT';
 
 const defaultData = () => ({
   metadata: {
@@ -62,15 +64,21 @@ async function readLeaderboard() {
       parsed.metadata.weekId = 1;
     }
     return parsed;
-  } catch {
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const bak = `${DATA_PATH}.corrupt.${stamp}.bak`;
-    await fs.writeFile(bak, raw, 'utf8');
-    const fresh = defaultData();
-    fresh.metadata.recoveredFromCorruptionAt = new Date().toISOString();
-    fresh.metadata.corruptionBackupFile = path.basename(bak);
-    await fs.writeFile(DATA_PATH, JSON.stringify(fresh, null, 2), 'utf8');
-    return fresh;
+  } catch (parseError) {
+    // DO NOT overwrite. This used to back the bad file up and write a fresh empty dataset, which
+    // meant one unreadable byte silently zeroed every rep's all-time count while the bot carried
+    // on as if nothing happened — the failure only surfaced when somebody noticed the leaderboard
+    // was empty. An empty leaderboard is worse than a stopped bot: the real data is usually still
+    // recoverable right up until something writes over it. Leave the file exactly as-is and refuse.
+    const err = new Error(
+      `leaderboard.json could not be parsed and has NOT been modified (${parseError.message}).\n` +
+      `  File: ${DATA_PATH}\n` +
+      `  Restore a good copy there, then restart Pulse.\n` +
+      `  Refusing to continue — starting fresh here would erase every rep's history.`,
+    );
+    err.code = CORRUPT_CODE;
+    err.dataPath = DATA_PATH;
+    throw err;
   }
 }
 
@@ -130,6 +138,7 @@ function pickRandom(arr) {
 }
 
 exports.DATA_PATH = DATA_PATH;
+exports.CORRUPT_CODE = CORRUPT_CODE;
 exports.readLeaderboard = readLeaderboard;
 exports.writeLeaderboard = writeLeaderboard;
 exports.mutate = mutate;

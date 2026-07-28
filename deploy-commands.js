@@ -30,6 +30,46 @@ function marketIdOption(required = true) {
 }
 
 const commands = [
+  // ONE discoverable home for the whole market workflow. Everything here already existed, but it
+  // was scattered: market setup buried inside /admin next to unrelated things like export-csv,
+  // while assign-rep / unassign-rep / sync-permissions floated at the top level. Nobody could find
+  // "how do I make a market and connect a channel" by guessing. Type /market and the whole
+  // workflow is right there.
+  new SlashCommandBuilder()
+    .setName('market')
+    .setDescription('Markets: create one, add reps, see who is where')
+    .addSubcommand((s) =>
+      s
+        .setName('create')
+        .setDescription('Create a market AND wire up its channel in one step')
+        .addStringOption((o) => o.setName('name').setDescription('Market name, e.g. Ashtabula').setRequired(true).setMaxLength(80))
+        .addChannelOption((o) => o.setName('channel').setDescription('Its blitz channel (defaults to this one)').addChannelTypes(ChannelType.GuildText).setRequired(false))
+        .addStringOption((o) => o.setName('isp').setDescription('Optional ISP label, e.g. T-Fiber').setRequired(false)),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('add')
+        .setDescription('Add a rep to a market and set their real name')
+        .addUserOption((o) => o.setName('rep').setDescription('Who to add').setRequired(true))
+        .addStringOption((o) => o.setName('name').setDescription('Their REAL name, e.g. Riley Graves').setRequired(true).setMaxLength(60))
+        .addStringOption((o) => o.setName('market').setDescription('Which market').setRequired(true).setAutocomplete(true))
+        .addStringOption((o) => o.setName('handle').setDescription('What they go by, e.g. Mooch (optional)').setRequired(false).setMaxLength(20)),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('remove')
+        .setDescription('Remove a rep from all markets')
+        .addUserOption((o) => o.setName('rep').setDescription('Who to remove').setRequired(true)),
+    )
+    .addSubcommand((s) => s.setName('list').setDescription('All markets and their channels'))
+    .addSubcommand((s) =>
+      s
+        .setName('status')
+        .setDescription('Which market a channel belongs to')
+        .addChannelOption((o) => o.setName('channel').setDescription('Defaults to this channel').addChannelTypes(ChannelType.GuildText).setRequired(false)),
+    )
+    .addSubcommand((s) => s.setName('sync').setDescription('Re-lock every market channel to its own market')),
+
   new SlashCommandBuilder()
     .setName('log')
     .setDescription('Log a closed fiber deal')

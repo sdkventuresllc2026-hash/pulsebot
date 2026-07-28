@@ -11,3 +11,13 @@ backups/
 restore-bundle/
 .pulse-bot.lock
 .DS_Store
+
+# Local Discord audit output (contains member/channel metadata — never commit)
+discord-audit.json
+discord-audit.md
+fibersales-roster.json
+nickname-proposal.json
+nickname-proposal.md
+confirmed-names.json
+discord-rollback-*.json
+nickname-rollback-*.json

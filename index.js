@@ -16,21 +16,27 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   PermissionsBitField,
 } = require('discord.js');
 
 const { SPEEDS, SPEED_LABELS, COLORS, GAMIFICATION_CONFIG, SLASH_HINTS, PULSE_BUILD } = require('./constants');
+
+/** customId for the self-service real-name button + modal (see the interaction handler). */
+const SET_NAME_ID = 'pulse:setname';
 const {
   DATA_PATH,
   readLeaderboard,
+  CORRUPT_CODE,
   mutate,
   appendSingleDealLog,
   appendMessageLogsBatch,
   backfillLogMarketTags,
 } = require('./storage');
-const { startDashboard } = require('./dashboard-server');
 const { parseDealMessage, detectTextLogIntent, isQuickNaturalLog } = require('./deal-parser');
-const { parseLeaderboardTextIntent } = require('./leaderboard-text');
+const { parseLeaderboardTextIntent, parseTextCommandIntent } = require('./leaderboard-text');
 const {
   isApprovedDealChannel,
   resolveDealChannel,
@@ -158,6 +164,20 @@ function canUseAdminCommands(interaction) {
   if (isAdmin(interaction.user.id)) return true;
   if (interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) return true;
   if (managerRoleId && interaction.member?.roles?.cache?.has(managerRoleId)) return true;
+  return false;
+}
+
+/**
+ * Owner tier — deliberately does NOT accept the manager role.
+ *
+ * Everything a manager needs day to day (markets, channels, rep assignment) goes through
+ * canUseAdminCommands. These two are different in kind: /reset-weekly archives the competition
+ * week for EVERY market at once, and the CSV export dumps every rep's full deal history. Owner
+ * decision 2026-07-28: managers get the day-to-day commands, not these.
+ */
+function canUseOwnerCommands(interaction) {
+  if (isAdmin(interaction.user.id)) return true;
+  if (interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) return true;
   return false;
 }
 
@@ -699,6 +719,43 @@ function messageChannelIsDealApproved(message, dealChannel) {
   if (isApprovedDealChannelId(message.channel?.parentId)) return true;
   if (isApprovedDealChannelId(dealChannel?.id)) return true;
   return false;
+}
+
+/** Plain-text twins of /mydeals, /remove-last, /markets and /quarter. */
+async function handleTextCommand(message, intent) {
+  const reply = (content) => message.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
+  try {
+    if (intent.cmd === 'mydeals') {
+      const data = await readLeaderboard();
+      return reply(buildMyDealsContent(message.channel, message.author.id, data));
+    }
+    if (intent.cmd === 'markets') {
+      const data = await readLeaderboard();
+      return reply(buildMarketsBoardContent(data));
+    }
+    if (intent.cmd === 'quarter') {
+      return reply(formatQuarterStatus(localHour(new Date(), getTimeZone())));
+    }
+    if (intent.cmd === 'undo') {
+      const removed = await removeLastDealForUser(
+        message.author.id,
+        message.member?.displayName || message.author.username,
+        'text:undo',
+      );
+      if (!removed) return reply('Nothing to undo.');
+      await safeAppendActionLog({
+        action: 'remove-last.completed',
+        actorId: message.author.id,
+        actorName: message.member?.displayName || message.author.username,
+        details: { removedLogId: removed.id, removedSpeed: removed.correctedSpeed || removed.speed, removedTimestamp: removed.timestamp, channelId: removed.channelId || null, via: 'text' },
+      });
+      return reply(`↩️ Removed your last log — **${SPEED_LABELS[removed.correctedSpeed || removed.speed] || removed.speed}**.`);
+    }
+  } catch (err) {
+    console.error('[Pulse] Text command failed:', err.message || err);
+    return reply('That did not work. Try again in a moment.');
+  }
+  return undefined;
 }
 
 async function handleTextLeaderboard(message, intent) {
@@ -1484,29 +1541,42 @@ async function handleShare(interaction) {
   await interaction.editReply({ embeds: [embed] });
 }
 
-async function handleUndo(interaction) {
-  await interaction.deferReply();
-  const uid = interaction.user.id;
-
+/**
+ * Remove a rep's most recent deal log. Shared by /remove-last and the plain-text "undo" so the two
+ * paths can never drift — they must back up and audit identically, because this deletes real data.
+ * @returns {Promise<object|null>} the removed log, or null if they had nothing to undo.
+ */
+async function removeLastDealForUser(userId, actorName, via) {
   await backupAndLogAction({
     action: 'remove-last',
-    actorId: uid,
-    actorName: interaction.member?.displayName || interaction.user.username,
+    actorId: userId,
+    actorName,
     targetFilePath: DATA_PATH,
-    details: { command: '/remove-last' },
+    details: { command: via },
   });
-
-  let removedLog = null;
+  let removed = null;
   await mutate(async (d) => {
     for (let i = d.logs.length - 1; i >= 0; i--) {
-      if (d.logs[i].userId === uid) {
-        removedLog = d.logs[i];
+      if (d.logs[i].userId === userId) {
+        removed = d.logs[i];
         d.logs.splice(i, 1);
         break;
       }
     }
     return d;
   });
+  return removed;
+}
+
+async function handleUndo(interaction) {
+  await interaction.deferReply();
+  const uid = interaction.user.id;
+
+  const removedLog = await removeLastDealForUser(
+    uid,
+    interaction.member?.displayName || interaction.user.username,
+    '/remove-last',
+  );
 
   if (!removedLog) {
     await interaction.deleteReply().catch(() => {});
@@ -1932,6 +2002,92 @@ async function handleAdminConnectChannel(interaction) {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// /market — the whole market workflow in one discoverable command.
+// ---------------------------------------------------------------------------------------------
+
+/** Nickname format, owner decision 2026-07-28: "Real Name (Handle)" so the member list is
+ *  searchable by real name while the leaderboard keeps the name people actually go by. */
+function buildNickname(realName, handle) {
+  const full = handle ? `${realName} (${handle})` : realName;
+  return full.length <= 32 ? full : realName.slice(0, 32); // Discord hard limit; the real name wins.
+}
+
+/** /market create — market + role + channel mapping + channel lock, in one step.
+ *  This replaces the /admin add-market -> add-channel -> connect-channel sequence that nobody
+ *  could discover, and it is the single thing the owner named as the hardest part of the bot. */
+async function handleMarketCreate(interaction) {
+  if (!canUseAdminCommands(interaction)) return denyAdmin(interaction);
+  await interaction.deferReply({ ephemeral: true });
+  const marketName = interaction.options.getString('name', true);
+  const isp = interaction.options.getString('isp');
+  const channel = optionChannelOrCurrent(interaction);
+  const done = [];
+  try {
+    const { market } = addMarket({ marketName, marketId: null, isp, createdBy: interaction.user.id });
+    done.push(`Market **${market.marketName}** (\`${market.marketId}\`)`);
+
+    try { done.push(`Role <@&${await ensureMarketRole(interaction.guild, market)}>`); }
+    catch (err) { done.push(`⚠ Role not created — ${err.message || err} (bot needs **Manage Roles**)`); }
+
+    if (channel) {
+      connectChannelToMarket({ channel, marketId: market.marketId, connectedBy: interaction.user.id });
+      done.push(`Channel <#${channel.id}> connected`);
+      try {
+        await applyMarketChannelLock(channel, market, interaction.guild, client.user.id, marketAccessOpts());
+        done.push('Channel locked to this market only');
+      } catch (err) { done.push(`⚠ Lock failed — ${err.message || err}`); }
+    }
+    await interaction.editReply({
+      content: [`✅ ${done.join('\n✅ ').replace(/✅ ⚠/g, '⚠')}`, '', `Now add people: \`/market add rep:@them name:"Their Name" market:${market.marketName}\``].join('\n'),
+    });
+  } catch (err) {
+    await interaction.editReply({ content: `Could not create the market: ${err.message || err}\n${done.length ? `Completed before failing:\n${done.join('\n')}` : ''}` });
+  }
+}
+
+/** /market add — the one that actually saves time: real name + market access in a single step.
+ *  Setting the nickname HERE is the whole point. Assigning a role is something Discord already
+ *  does natively; capturing who the cryptic username belongs to is what it cannot do, and skipping
+ *  it is how the server ended up full of handles like dboy1011 that nobody could identify. */
+async function handleMarketAdd(interaction) {
+  if (!canUseAdminCommands(interaction)) return denyAdmin(interaction);
+  if (!(await safeDeferEphemeral(interaction))) return;
+  const user = interaction.options.getUser('rep', true);
+  const realName = interaction.options.getString('name', true).trim();
+  const marketId = interaction.options.getString('market', true);
+  const handle = interaction.options.getString('handle');
+  const lines = [];
+  try {
+    const member = await interaction.guild.members.fetch(user.id);
+    const nickname = buildNickname(realName, handle);
+    try {
+      await member.setNickname(nickname, `Added to a market by ${interaction.user.tag}`);
+      lines.push(`Name set to **${nickname}**`);
+    } catch {
+      // Discord refuses if their top role outranks the bot (managers) or they own the server.
+      lines.push(`⚠ Could not set their nickname to **${nickname}** — their role outranks Pulse. Set it by hand.`);
+    }
+    const { market, roleId } = await assignRepToMarket(interaction.guild, user.id, marketId, marketAccessOpts());
+    lines.push(`Added to **${market.marketName}** (<@&${roleId}>)`);
+    lines.push('They can see that market\'s channel only.');
+    await interaction.editReply({ content: `✅ <@${user.id}>\n• ${lines.join('\n• ')}` });
+  } catch (err) {
+    await interaction.editReply({ content: `Could not add them: ${err.message || err}${lines.length ? `\n\nDone before failing:\n• ${lines.join('\n• ')}` : ''}` });
+  }
+}
+
+async function handleMarketRouter(interaction) {
+  const sub = interaction.options.getSubcommand();
+  if (sub === 'create') return handleMarketCreate(interaction);
+  if (sub === 'add') return handleMarketAdd(interaction);
+  if (sub === 'remove') return handleAdminUnassignRep(interaction);
+  if (sub === 'list') return handleAdminListMarkets(interaction);
+  if (sub === 'status') return handleAdminMarketStatus(interaction);
+  if (sub === 'sync') return handleAdminSyncPermissions(interaction);
+  return interaction.reply({ content: 'Unknown /market subcommand.', ephemeral: true });
+}
+
 async function handleAdminAssignRep(interaction) {
   if (!canUseAdminCommands(interaction)) {
     await denyAdmin(interaction);
@@ -2124,7 +2280,7 @@ async function handleAdminStats(interaction) {
 }
 
 async function handleAdminExportCsv(interaction) {
-  if (!canUseAdminCommands(interaction)) {
+  if (!canUseOwnerCommands(interaction)) {
     await denyAdmin(interaction);
     return;
   }
@@ -2187,7 +2343,7 @@ async function handleAdmin(interaction) {
 }
 
 async function handleExport(interaction) {
-  if (!canUseAdminCommands(interaction)) {
+  if (!canUseOwnerCommands(interaction)) {
     await denyAdmin(interaction);
     return;
   }
@@ -2278,7 +2434,7 @@ async function handleBlitzChannels(interaction) {
 }
 
 async function handleResetWeekly(interaction) {
-  if (!canUseAdminCommands(interaction)) {
+  if (!canUseOwnerCommands(interaction)) {
     await denyAdmin(interaction);
     return;
   }
@@ -2394,10 +2550,17 @@ client.once('ready', async () => {
   if (boot.length) {
     console.log(`[Pulse] Auto-registered markets: ${boot.map((m) => m.marketId).join(', ')}`);
   }
+  // Fail loud, before anything can write. readLeaderboard throws PULSE_DATA_CORRUPT rather than
+  // replacing an unreadable file with an empty one, so this is the last moment we can stop while
+  // the real data is still on disk and recoverable.
   try {
-    startDashboard();
+    await readLeaderboard();
   } catch (err) {
-    console.error('Pulse dashboard failed to start:', err.message || err);
+    if (err?.code === CORRUPT_CODE) {
+      console.error(`\n[Pulse] REFUSING TO START — leaderboard data is unreadable.\n${err.message}\n`);
+      process.exit(1);
+    }
+    throw err;
   }
 
   for (const guild of client.guilds.cache.values()) {
@@ -2432,6 +2595,13 @@ client.on('messageCreate', async (message) => {
     const boardIntent = parseLeaderboardTextIntent(message.content);
     if (boardIntent) {
       await handleTextLeaderboard(message, boardIntent);
+      return;
+    }
+
+    // Everything a rep needs mid-shift has to work as plain text, same as logging "1g".
+    const textCmd = parseTextCommandIntent(message.content);
+    if (textCmd) {
+      await handleTextCommand(message, textCmd);
       return;
     }
 
@@ -2581,7 +2751,8 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isAutocomplete()) {
     try {
       const focused = interaction.options.getFocused(true);
-      if (focused.name !== 'market_id') {
+      // /admin uses "market_id"; /market uses the friendlier "market". Same picker behind both.
+      if (focused.name !== 'market_id' && focused.name !== 'market') {
         await interaction.respond([]);
         return;
       }
@@ -2589,6 +2760,51 @@ client.on('interactionCreate', async (interaction) => {
     } catch (err) {
       console.error('[Pulse] Autocomplete failed:', err.message || err);
       await interaction.respond([]).catch(() => {});
+    }
+    return;
+  }
+
+  // --- Self-service real-name capture -------------------------------------------------------
+  // Deliberately does NOT let people pick their own market (owner decision 2026-07-28) — someone
+  // would land in the wrong channel or one they should not see. All this does is answer "who is
+  // dboy1011?", which is the question that made the whole server hard to run. A manager still adds
+  // them to a market afterwards with /market add.
+  if (interaction.isButton() && interaction.customId === SET_NAME_ID) {
+    const modal = new ModalBuilder().setCustomId(SET_NAME_ID).setTitle('What is your real name?');
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId('realname').setLabel('Full name').setPlaceholder('Riley Graves')
+          .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(60),
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId('handle').setLabel('What do people call you? (optional)')
+          .setPlaceholder('Mooch').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(20),
+      ),
+    );
+    await interaction.showModal(modal).catch(() => {});
+    return;
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId === SET_NAME_ID) {
+    await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    const realName = interaction.fields.getTextInputValue('realname').trim();
+    const handle = (interaction.fields.getTextInputValue('handle') || '').trim() || null;
+    const nickname = buildNickname(realName, handle);
+    try {
+      const member = await interaction.guild.members.fetch(interaction.user.id);
+      await member.setNickname(nickname, 'Self-service real-name capture');
+      await interaction.editReply({ content: `✅ Thanks — you'll show up as **${nickname}**.\nA manager will add you to your market shortly.` });
+
+      // Tell leadership so somebody actually picks them up, and flag anyone with no payroll record.
+      const mgmt = interaction.guild.channels.cache.find((c) => c.name === 'management');
+      if (mgmt?.isTextBased?.()) {
+        await mgmt.send({
+          content: `🆕 <@${interaction.user.id}> set their name to **${nickname}** (\`@${interaction.user.username}\`).\nAdd them with \`/market add rep:@${interaction.user.username} name:"${realName}" market:…\``,
+          allowedMentions: { parse: [] },
+        }).catch(() => {});
+      }
+    } catch (err) {
+      await interaction.editReply({ content: `Could not set your nickname automatically (${err.message || err}). A manager will set it for you — you're still good.` }).catch(() => {});
     }
     return;
   }
@@ -2671,6 +2887,9 @@ client.on('interactionCreate', async (interaction) => {
         break;
       case 'markets':
         await handleMarkets(interaction);
+        break;
+      case 'market':
+        await handleMarketRouter(interaction);
         break;
       case 'mydeals':
         await handlePhase3MyDeals(interaction);
