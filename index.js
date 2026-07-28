@@ -2653,6 +2653,33 @@ async function bootstrap() {
   }
 }
 
+/**
+ * Greet a new member in #welcome, right next to the "Set My Name" button.
+ *
+ * Replaces Sapphire greeting people in #pulse-help — the one channel that was 93% bot noise with
+ * zero human conversation, and nowhere near the action a new person actually needs to take. The
+ * greeting and the button now live in the same place, which is the whole point: someone joins,
+ * sees their name, and the next step is one click away.
+ */
+client.on('guildMemberAdd', async (member) => {
+  try {
+    if (member.user.bot) return;
+    const welcome = member.guild.channels.cache.find((c) => c.name === 'welcome' && c.isTextBased?.());
+    if (!welcome) return;
+    await welcome.send({
+      content: [
+        `👋 Welcome to **FiberSales**, <@${member.id}>.`,
+        '',
+        '**Hit the “Set My Name” button above and enter your real name** — that is how your manager finds you and gets you into your market channel.',
+        'Until then you can read around, but your blitz channel stays hidden.',
+      ].join('\n'),
+      allowedMentions: { users: [member.id] },
+    });
+  } catch (err) {
+    console.error('[Pulse] Welcome message failed:', err.message || err);
+  }
+});
+
 async function replySlashHint(message, hintKey) {
   const text = SLASH_HINTS[hintKey];
   if (!text) return;

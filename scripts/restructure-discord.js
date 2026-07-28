@@ -230,6 +230,63 @@ const add = (label, undo, run) => plan.push({ label, undo, run });
     }
   }
 
+  // ---------------- PHASE 8 — intentional channel layout -----------------------------------
+  // Owner decision 2026-07-28: every channel must earn its place. "INFO" was a grab-bag holding
+  // both reference material AND conversation (#wins, #ask-anything), with #welcome buried 6th —
+  // below a dead channel — so the entry point was the hardest thing to find. The honest split is
+  // things you use DAILY vs things you LOOK UP, which is what these two categories encode.
+  if (PHASE === 8) {
+    const ORDER = {
+      'START HERE': ['welcome', 'announcements', 'wins', 'ask-anything', 'leaderboard'],
+      REFERENCE: ['training', 'resources', 'pulse-help'],
+    };
+
+    const info = cat('INFO');
+    if (info) {
+      add(`RENAME category "INFO" -> "START HERE"`, { channelId: info.id, previousName: info.name },
+        () => info.setName('START HERE'));
+    }
+
+    // #shoutouts was read-only, so only the owner could post recognition — which is why it died at
+    // 2 messages in 30 days. #wins does the same job and everyone can actually write in it.
+    const shout = chan('shoutouts');
+    if (shout) {
+      add(`DELETE #shoutouts (2 messages, superseded by #wins) — NOT reversible`,
+        { deletedChannelName: 'shoutouts', note: 'had 2 owner posts; re-post the Cancun graphic to #wins if wanted' },
+        () => shout.delete('Superseded by #wins (owner 2026-07-28)'));
+    }
+
+    add(`CREATE category "REFERENCE" (if missing)`, { createdCategoryName: 'REFERENCE' }, async () => {
+      if (!cat('REFERENCE')) {
+        const made = await guild.channels.create({ name: 'REFERENCE', type: ChannelType.GuildCategory });
+        rollback.push({ deleteChannelId: made.id });
+      }
+    });
+
+    // Positions are applied last, after every channel has its final parent.
+    add(`REORDER channels + categories`, { note: 'positions only; re-run phase 8 to reapply' }, async () => {
+      await guild.channels.fetch();
+      const startHere = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name === 'START HERE');
+      const reference = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name === 'REFERENCE');
+      const blitzes = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name.toUpperCase().includes('BLITZ'));
+      const leadership = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name.toUpperCase().includes('LEADERSHIP'));
+
+      for (const [catName, names] of Object.entries(ORDER)) {
+        const parent = catName === 'START HERE' ? startHere : reference;
+        if (!parent) continue;
+        for (let i = 0; i < names.length; i++) {
+          const ch = guild.channels.cache.find((c) => c.name === names[i] && c.isTextBased?.());
+          if (!ch) continue;
+          if (ch.parentId !== parent.id) await ch.setParent(parent.id, { lockPermissions: false });
+          await ch.setPosition(i);
+        }
+      }
+      // Daily-use first, reference after the markets, leadership last.
+      const cats = [startHere, blitzes, reference, leadership].filter(Boolean);
+      for (let i = 0; i < cats.length; i++) await cats[i].setPosition(i);
+    });
+  }
+
   // ---------------- report / execute ------------------------------------------------------
   console.log(`\n=== PHASE ${PHASE} — ${APPLY ? '⚡ APPLYING' : 'DRY RUN (nothing will change)'} ===\n`);
   if (!plan.length) console.log('  Nothing to do — already in the target state.');
