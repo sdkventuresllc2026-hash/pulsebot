@@ -183,6 +183,8 @@ const adminIds = (process.env.ADMIN_IDS || '')
 // Read through the validated config layer, never process.env directly. A null here means
 // 'refuse', never 'skip the tier' — skipping is what erased manager access from every market.
 const pulseConfig = require('./pulse-config');
+const { authorizeMarketCommand, auditLine } = require('./command-policy');
+const marketAssignments = require('./market-assignments');
 
 function isAdmin(userId) {
   return adminIds.includes(userId);
@@ -2088,17 +2090,26 @@ async function handleMarketAdd(interaction) {
   const marketId = interaction.options.getString('market', true);
   const handle = interaction.options.getString('handle');
   const lines = [];
+  let nicknameSet = false;
   try {
     const member = await interaction.guild.members.fetch(user.id);
     const nickname = buildNickname(realName, handle);
     try {
       await member.setNickname(nickname, `Added to a market by ${interaction.user.tag}`);
+      nicknameSet = true;
       lines.push(`Name set to **${nickname}**`);
     } catch {
       // Discord refuses if their top role outranks the bot (managers) or they own the server.
       lines.push(`⚠ Could not set their nickname to **${nickname}** — their role outranks Pulse. Set it by hand.`);
     }
+    // Write the ASSIGNMENT RECORD first — it is the authority. Reps are exclusive to one market;
+    // reconciliation then makes the member's Discord roles match the record exactly, which also
+    // strips any market role that was added by hand without a corresponding assignment.
+    marketAssignments.assignRepMarket(user.id, marketId);
     const { market, roleId } = await assignRepToMarket(interaction.guild, user.id, marketId, marketAccessOpts());
+    const recon = await marketAssignments.reconcileMemberMarketRoles(interaction.guild, user.id).catch(() => null);
+    if (recon?.remove?.length) lines.push(`Removed ${recon.remove.length} market role(s) with no assignment on record`);
+    console.log(auditLine({ actorId: interaction.user.id, action: 'market.add.applied', marketId, targetUserId: user.id, result: 'OK', detail: `nickname=${nicknameSet}` }));
     lines.push(`Added to **${market.marketName}** (<@&${roleId}>)`);
     lines.push('They can see that market\'s channel only.');
     await interaction.editReply({ content: `✅ <@${user.id}>\n• ${lines.join('\n• ')}` });
@@ -2167,8 +2178,40 @@ async function handleMarketCleanup(interaction) {
   });
 }
 
+/**
+ * Single authorization gate for every /market subcommand.
+ *
+ * Per-subcommand tiers live in command-policy.js — `/market list` is a harmless read while
+ * `/market cleanup` deletes market records, so one tier for the whole command was wrong.
+ * Manager scope is checked against the ASSIGNMENT RECORD, never against the Discord roles the
+ * caller happens to hold: roles are a mutable cache that can be hand-edited or left stale.
+ */
 async function handleMarketRouter(interaction) {
   const sub = interaction.options.getSubcommand();
+  const marketId = interaction.options.getString('market') ?? null;
+  const isOwner = canUseOwnerCommands(interaction);
+  const isManagerTier = canUseAdminCommands(interaction);
+
+  const decision = authorizeMarketCommand({
+    userId: interaction.user.id, isOwner, isManagerTier, subcommand: sub, marketId,
+  });
+
+  console.log(auditLine({
+    actorId: interaction.user.id,
+    action: `market.${sub}`,
+    marketId,
+    targetUserId: interaction.options.getUser?.('rep')?.id ?? null,
+    result: decision.ok ? 'ALLOWED' : 'DENIED',
+    detail: decision.ok ? decision.reason : decision.reason.slice(0, 120),
+  }));
+
+  if (!decision.ok) {
+    const reply = { content: `🚫 ${decision.reason}`, ephemeral: true };
+    return interaction.deferred || interaction.replied
+      ? interaction.editReply(reply).catch(() => {})
+      : interaction.reply(reply).catch(() => {});
+  }
+
   if (sub === 'create') return handleMarketCreate(interaction);
   if (sub === 'add') return handleMarketAdd(interaction);
   if (sub === 'rename') return handleMarketRename(interaction);
