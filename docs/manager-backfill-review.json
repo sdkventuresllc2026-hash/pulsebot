@@ -1,0 +1,273 @@
+{
+  "generatedAt": "2026-07-28T19:39:32.409Z",
+  "instructions": "Review each row. Set \"approved\": true and adjust \"proposedAssignments\" as needed. Then run with --apply --confirm. Rows left approved:false are skipped.",
+  "guild": "FiberSales HQ",
+  "managerRole": "Manager",
+  "activeMarkets": [
+    "ashtabula",
+    "inman",
+    "kannapolis",
+    "jacksonville"
+  ],
+  "managers": [
+    {
+      "userId": "521846693130534915",
+      "displayNameForReviewOnly": "Blake Lipson",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "ashtabula"
+      ],
+      "effectiveMarketVisibility": [
+        "ashtabula"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "ashtabula",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "ashtabula"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    },
+    {
+      "userId": "997526910827495486",
+      "displayNameForReviewOnly": "Deven Topa",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "ashtabula"
+      ],
+      "effectiveMarketVisibility": [
+        "ashtabula"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "ashtabula",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "ashtabula"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    },
+    {
+      "userId": "927499597453078589",
+      "displayNameForReviewOnly": "Steezydlo",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "kannapolis"
+      ],
+      "effectiveMarketVisibility": [
+        "kannapolis"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "kannapolis",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "kannapolis"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    },
+    {
+      "userId": "949541784126648330",
+      "displayNameForReviewOnly": "Ben Edwards",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "jacksonville"
+      ],
+      "effectiveMarketVisibility": [
+        "jacksonville"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "jacksonville",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "jacksonville"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    },
+    {
+      "userId": "699672451344236645",
+      "displayNameForReviewOnly": "Jonah McKinnon",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "jacksonville"
+      ],
+      "effectiveMarketVisibility": [
+        "jacksonville"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "jacksonville",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "jacksonville"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    },
+    {
+      "userId": "1234228856555045015",
+      "displayNameForReviewOnly": "Jacob Arnold",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "jacksonville"
+      ],
+      "effectiveMarketVisibility": [
+        "jacksonville"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "jacksonville",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "jacksonville"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    },
+    {
+      "userId": "1504984792758751423",
+      "displayNameForReviewOnly": "Henny Sells",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "kannapolis",
+        "jacksonville",
+        "inman"
+      ],
+      "effectiveMarketVisibility": [
+        "inman",
+        "kannapolis",
+        "jacksonville"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "inman",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        },
+        {
+          "marketId": "kannapolis",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        },
+        {
+          "marketId": "jacksonville",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "inman",
+        "kannapolis",
+        "jacksonville"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    },
+    {
+      "userId": "1475356377760272505",
+      "displayNameForReviewOnly": "iQRexy",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "kannapolis"
+      ],
+      "effectiveMarketVisibility": [
+        "kannapolis"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "kannapolis",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "kannapolis"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    },
+    {
+      "userId": "373653162042720266",
+      "displayNameForReviewOnly": "Caleb Head",
+      "hasManagerRole": true,
+      "isAdministrator": false,
+      "currentMarketRoles": [
+        "jacksonville"
+      ],
+      "effectiveMarketVisibility": [
+        "jacksonville"
+      ],
+      "alreadyRecorded": [],
+      "proposed": [
+        {
+          "marketId": "jacksonville",
+          "evidence": "E2 holds the market role",
+          "confidence": "HIGH"
+        }
+      ],
+      "proposedAssignments": [
+        "jacksonville"
+      ],
+      "confidence": "HIGH",
+      "conflicts": [],
+      "approved": false,
+      "note": ""
+    }
+  ]
+}

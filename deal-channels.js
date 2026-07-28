@@ -35,22 +35,75 @@ function displayNameFromMarketId(marketId) {
     .join(' ');
 }
 
+/**
+ * TRANSITIONAL AUTHORITY STORE.
+ *
+ * This file is the source of truth for market records AND for manager/rep assignments until the
+ * Postgres model in docs/discord-assignment-model.md exists. It lives on Railway's persistent
+ * /data volume: durable across restarts, but explicitly NOT the long-term canonical architecture.
+ *
+ * Schema version is stamped so a future migration can detect and upgrade old files.
+ */
+const ASSIGNMENT_SCHEMA_VERSION = 1;
+
+/** Set when the file exists but cannot be parsed. Authorization must fail CLOSED and LOUD, never
+ *  silently treat "unreadable" as "nobody is assigned" — that would deny every manager with no
+ *  explanation, which is indistinguishable from a permissions bug. */
+let storeCorrupt = null;
+
+function isStoreCorrupt() { return storeCorrupt; }
+
 function readApprovedChannels() {
+  let raw;
   try {
-    const raw = fs.readFileSync(APPROVED_CHANNELS_PATH, 'utf8');
+    raw = fs.readFileSync(APPROVED_CHANNELS_PATH, 'utf8');
+  } catch {
+    // Genuinely absent: a first run. An empty store is correct here.
+    storeCorrupt = null;
+    return { schemaVersion: ASSIGNMENT_SCHEMA_VERSION, channels: [], disabledChannelIds: [], markets: [] };
+  }
+  try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return { channels: [], disabledChannelIds: [] };
+    if (!parsed || typeof parsed !== 'object') throw new Error('root is not an object');
+    if (!Array.isArray(parsed.markets ?? [])) throw new Error('markets is not an array');
     parsed.channels = Array.isArray(parsed.channels) ? parsed.channels : [];
     parsed.disabledChannelIds = Array.isArray(parsed.disabledChannelIds) ? parsed.disabledChannelIds : [];
     parsed.markets = Array.isArray(parsed.markets) ? parsed.markets : [];
+    parsed.schemaVersion = parsed.schemaVersion ?? ASSIGNMENT_SCHEMA_VERSION;
+    storeCorrupt = null;
     return parsed;
-  } catch {
-    return { channels: [], disabledChannelIds: [], markets: [] };
+  } catch (err) {
+    // Do NOT return an empty store — that silently erases every market and assignment, and the
+    // next write would persist the erasure. Flag it; callers decide.
+    storeCorrupt = `approved-blitz-channels.json is unreadable (${err.message}). File left untouched at ${APPROVED_CHANNELS_PATH}.`;
+    return { schemaVersion: ASSIGNMENT_SCHEMA_VERSION, channels: [], disabledChannelIds: [], markets: [], __corrupt: true };
   }
 }
 
+/** Atomic write + timestamped backup. A crash mid-write previously truncated the authority file. */
 function writeApprovedChannels(data) {
-  fs.writeFileSync(APPROVED_CHANNELS_PATH, JSON.stringify(data, null, 2), 'utf8');
+  if (storeCorrupt) {
+    const err = new Error(`Refusing to write over an unreadable assignment store. ${storeCorrupt}`);
+    err.code = 'ASSIGNMENT_STORE_CORRUPT';
+    throw err;
+  }
+  const payload = JSON.stringify({ ...data, schemaVersion: ASSIGNMENT_SCHEMA_VERSION }, null, 2);
+
+  try {
+    if (fs.existsSync(APPROVED_CHANNELS_PATH)) {
+      const dir = path.join(path.dirname(APPROVED_CHANNELS_PATH), 'backups');
+      fs.mkdirSync(dir, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      fs.copyFileSync(APPROVED_CHANNELS_PATH, path.join(dir, `approved-blitz-channels.${stamp}.bak`));
+    }
+  } catch { /* a failed backup must not block the write */ }
+
+  const tmp = `${APPROVED_CHANNELS_PATH}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmp, payload, 'utf8');
+  // Validate what we are about to promote — a truncated tmp must never become the live file.
+  const check = JSON.parse(fs.readFileSync(tmp, 'utf8'));
+  if (!Array.isArray(check.markets)) throw new Error('post-write validation failed: markets missing');
+  fs.renameSync(tmp, APPROVED_CHANNELS_PATH);
 }
 
 function buildDealNameSubstrings(stored) {
@@ -569,4 +622,6 @@ module.exports = {
   channelApprovalDiagnostics,
   DEFAULT_NAME_SUBSTRINGS,
   APPROVED_CHANNELS_PATH,
+  ASSIGNMENT_SCHEMA_VERSION,
+  isStoreCorrupt,
 };

@@ -77,6 +77,35 @@ const commands = [
         .setDescription('Delete every market whose channel no longer exists')
         .addBooleanOption((o) => o.setName('confirm').setDescription('Set true to actually delete (otherwise just previews)').setRequired(false)),
     )
+    // Manager AUTHORITY. Owner/Admin only — a manager who could grant themselves a market would
+    // make scoping meaningless. Targets are always a Discord user object, so authority is keyed on
+    // an immutable user id, never a nickname or display name.
+    .addSubcommand((s) =>
+      s
+        .setName('manager-add')
+        .setDescription('OWNER: give a Manager authority over a market')
+        .addUserOption((o) => o.setName('user').setDescription('Must already hold the Manager role').setRequired(true))
+        .addStringOption((o) => o.setName('market').setDescription('Which market').setRequired(true).setAutocomplete(true)),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('manager-remove')
+        .setDescription('OWNER: revoke a Manager’s authority over ONE market')
+        .addUserOption((o) => o.setName('user').setDescription('Manager to revoke').setRequired(true))
+        .addStringOption((o) => o.setName('market').setDescription('Which market').setRequired(true).setAutocomplete(true)),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('manager-list')
+        .setDescription('OWNER: who manages a market')
+        .addStringOption((o) => o.setName('market').setDescription('Which market').setRequired(true).setAutocomplete(true)),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('manager-markets')
+        .setDescription('OWNER: which markets a person manages')
+        .addUserOption((o) => o.setName('user').setDescription('Manager to inspect').setRequired(true)),
+    )
     .addSubcommand((s) => s.setName('list').setDescription('All markets and their channels'))
     .addSubcommand((s) =>
       s

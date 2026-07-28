@@ -19,13 +19,22 @@
  * exists, this file is the source of truth and is deliberately the only place that decides.
  */
 
-const { listMarkets, resolveMarket, updateMarket, formatMarketNotFoundMessage } = require('./deal-channels');
+const { listMarkets, resolveMarket, updateMarket, formatMarketNotFoundMessage, isStoreCorrupt } = require('./deal-channels');
 
 const asArray = (v) => (Array.isArray(v) ? v.filter(Boolean).map(String) : []);
 const repsOf = (m) => asArray(m.repUserIds);
 const managersOf = (m) => asArray(m.managerUserIds);
 
 function mustResolve(marketId) {
+  // Check corruption FIRST. An unreadable store makes every market "not found", so without this
+  // the caller is told "No market matches inman" — a configuration fault dressed up as a typo,
+  // which is exactly the kind of misleading error this whole layer exists to prevent.
+  const corrupt = isStoreCorrupt();
+  if (corrupt) {
+    const err = new Error(`Cannot resolve markets — the assignment store is unreadable. ${corrupt}`);
+    err.code = 'ASSIGNMENT_STORE_CORRUPT';
+    throw err;
+  }
   const resolved = resolveMarket(marketId);
   if (!resolved) {
     const err = new Error(formatMarketNotFoundMessage(marketId));

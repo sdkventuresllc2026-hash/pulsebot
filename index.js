@@ -2186,6 +2186,84 @@ async function handleMarketCleanup(interaction) {
  * Manager scope is checked against the ASSIGNMENT RECORD, never against the Discord roles the
  * caller happens to hold: roles are a mutable cache that can be hand-edited or left stale.
  */
+/**
+ * OWNER-only manager authority management. Keyed on immutable Discord user ids.
+ * Guarded upstream by command-policy (tier OWNER) — these never run for a manager.
+ */
+async function handleManagerAuthority(interaction, sub) {
+  await interaction.deferReply({ ephemeral: true });
+  const user = interaction.options.getUser('user');
+  const marketId = interaction.options.getString('market');
+  const audit = (result, detail) => console.log(auditLine({
+    actorId: interaction.user.id, action: `market.${sub}`, marketId, targetUserId: user?.id ?? null, result, detail,
+  }));
+
+  try {
+    if (sub === 'manager-markets') {
+      const markets = marketAssignments.getManagerMarkets(user.id);
+      audit('OK', `${markets.length} market(s)`);
+      return interaction.editReply({
+        content: markets.length
+          ? `<@${user.id}> manages **${markets.length}** market(s):\n• ${markets.join('\n• ')}`
+          : `<@${user.id}> has **no** market assignments on record.`,
+      });
+    }
+
+    if (sub === 'manager-list') {
+      const market = listMarkets().find((m) => m.marketId === normalizeMarketId(marketId) || m.marketName === marketId);
+      if (!market) { audit('DENIED', 'unknown market'); return interaction.editReply({ content: `No market matches \`${marketId}\`.` }); }
+      const ids = Array.isArray(market.managerUserIds) ? market.managerUserIds : [];
+      audit('OK', `${ids.length} manager(s)`);
+      return interaction.editReply({
+        content: ids.length
+          ? `**${market.marketName}** is managed by:\n• ${ids.map((id) => `<@${id}>`).join('\n• ')}`
+          : `**${market.marketName}** has **no** managers assigned. Nobody can run scoped commands for it.`,
+      });
+    }
+
+    // add / remove both need a real, non-bot member.
+    const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+    if (!member) { audit('DENIED', 'not in guild'); return interaction.editReply({ content: `<@${user.id}> is not in this server.` }); }
+    if (member.user.bot) { audit('DENIED', 'bot'); return interaction.editReply({ content: 'Bots cannot hold market authority.' }); }
+
+    const before = marketAssignments.getManagerMarkets(user.id);
+
+    if (sub === 'manager-add') {
+      // Authority without the Manager role is inert — they still could not reach a manager command.
+      const mgrRole = pulseConfig.managerRoleId();
+      if (mgrRole && !member.roles.cache.has(mgrRole)) {
+        audit('DENIED', 'target lacks Manager role');
+        return interaction.editReply({ content: `<@${user.id}> does not hold the **Manager** role, so this authority would do nothing. Give them Manager first.` });
+      }
+      if (before.includes(normalizeMarketId(marketId))) {
+        audit('OK', 'idempotent');
+        return interaction.editReply({ content: `Already assigned — <@${user.id}> manages **${marketId}**. No change.` });
+      }
+      const r = marketAssignments.addManagerMarketAssignment(user.id, marketId);
+      audit('OK', `before=${before.length} after=${r.markets.length}`);
+      return interaction.editReply({
+        content: [`✅ <@${user.id}> now manages **${r.marketName}**.`,
+          `Before: ${before.length ? before.join(', ') : '(none)'}`,
+          `After:  ${r.markets.join(', ')}`].join('\n'),
+      });
+    }
+
+    if (sub === 'manager-remove') {
+      const r = marketAssignments.removeManagerMarketAssignment(user.id, marketId);
+      audit('OK', `before=${before.length} after=${r.remaining.length}`);
+      return interaction.editReply({
+        content: [`✅ Removed <@${user.id}> from **${r.marketName}**.`,
+          `Before: ${before.length ? before.join(', ') : '(none)'}`,
+          `After:  ${r.remaining.length ? r.remaining.join(', ') : '(none)'} — other markets untouched.`].join('\n'),
+      });
+    }
+    return interaction.editReply({ content: 'Unknown manager subcommand.' });
+  } catch (err) {
+    audit('ERROR', String(err?.message || err).slice(0, 120));
+    return interaction.editReply({ content: `Failed: ${err?.message || err}` }).catch(() => {});
+  }
+}
+
 async function handleMarketRouter(interaction) {
   const sub = interaction.options.getSubcommand();
   const marketId = interaction.options.getString('market') ?? null;
@@ -2212,6 +2290,7 @@ async function handleMarketRouter(interaction) {
       : interaction.reply(reply).catch(() => {});
   }
 
+  if (sub.startsWith('manager-')) return handleManagerAuthority(interaction, sub);
   if (sub === 'create') return handleMarketCreate(interaction);
   if (sub === 'add') return handleMarketAdd(interaction);
   if (sub === 'rename') return handleMarketRename(interaction);

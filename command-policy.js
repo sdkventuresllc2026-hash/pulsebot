@@ -13,6 +13,7 @@
  */
 
 const { isManagerOfMarket, getManagerMarkets } = require('./market-assignments');
+const { isStoreCorrupt } = require('./deal-channels');
 
 /** @typedef {'OWNER'|'MANAGER_SCOPED'|'MANAGER_ANY'|'PUBLIC'} Tier */
 
@@ -29,8 +30,16 @@ const POLICY = {
   sync:    { tier: 'OWNER', scoped: false, destructive: true,  why: 'rewrites channel overwrites server-wide; a bad desired state locks everyone out' },
   add:     { tier: 'MANAGER_SCOPED', scoped: true,  destructive: false, why: 'day-to-day rep movement inside a market they manage' },
   remove:  { tier: 'MANAGER_SCOPED', scoped: true,  destructive: false, why: 'day-to-day rep movement inside a market they manage' },
-  status:  { tier: 'MANAGER_ANY', scoped: false, destructive: false, why: 'read-only diagnostic' },
-  list:    { tier: 'MANAGER_ANY', scoped: false, destructive: false, why: 'read-only' },
+  // Read-only, but still SCOPED: operational detail about a market a manager does not run is
+  // cross-market information they have no business seeing. `list` filters rather than denies.
+  status:  { tier: 'MANAGER_SCOPED', scoped: true,  destructive: false, why: 'exposes operational detail for one market' },
+  list:    { tier: 'MANAGER_FILTERED', scoped: false, destructive: false, why: 'read-only; results filtered to assigned markets' },
+  // Granting or revoking manager authority is an organisational act, never a manager action —
+  // otherwise any manager could widen their own scope.
+  'manager-add':     { tier: 'OWNER', scoped: false, destructive: false, why: 'grants market authority to another person' },
+  'manager-remove':  { tier: 'OWNER', scoped: false, destructive: false, why: 'revokes market authority' },
+  'manager-list':    { tier: 'OWNER', scoped: false, destructive: false, why: 'shows who holds authority over a market' },
+  'manager-markets': { tier: 'OWNER', scoped: false, destructive: false, why: 'shows one person’s full authority' },
 };
 
 function policyFor(subcommand) {
@@ -47,6 +56,14 @@ function authorizeMarketCommand(req) {
   const policy = policyFor(req.subcommand);
   const deny = (reason) => ({ ok: false, reason, policy });
 
+  // An unreadable authority store must never read as "nobody is assigned". That silently denies
+  // every manager and looks identical to a permissions bug. Owner keeps access so the problem can
+  // be fixed; everyone else is told exactly what is wrong.
+  const corrupt = isStoreCorrupt();
+  if (corrupt && !req.isOwner) {
+    return deny(`Market assignment records are unreadable, so scope cannot be verified. This is a configuration fault, not a permission you are missing — an admin needs to restore the assignment file. (${corrupt})`);
+  }
+
   if (req.isOwner) return { ok: true, reason: 'owner', policy };
 
   if (policy.tier === 'OWNER') {
@@ -54,6 +71,15 @@ function authorizeMarketCommand(req) {
   }
   if (!req.isManagerTier) {
     return deny('You need the Manager role to use this.');
+  }
+
+  // `list` never denies — it filters. The handler must call scopedMarketsFor() and show only those.
+  if (policy.tier === 'MANAGER_FILTERED') {
+    const managed = getManagerMarkets(req.userId);
+    if (managed.length === 0) {
+      return deny('You have no market assignments on record yet, so there is nothing to list. An admin assigns markets with `/market manager-add`.');
+    }
+    return { ok: true, reason: 'manager-filtered', policy, filterTo: managed };
   }
 
   // Manager tier confirmed. Scoped subcommands additionally require a recorded assignment.
@@ -87,4 +113,38 @@ function auditLine({ actorId, action, marketId, targetUserId, result, detail }) 
   });
 }
 
-module.exports = { POLICY, policyFor, authorizeMarketCommand, auditLine };
+/**
+ * Deployment safety gate. Scoped manager commands are worse than useless if no assignments exist:
+ * every manager is denied, and the denial looks like a bug. This reports whether the assignment
+ * layer is fit to enforce scope, so the Owner sees a configuration problem rather than nine people
+ * quietly losing access.
+ *
+ * @param {{ guildMembers: Map<string,{bot:boolean, hasManagerRole:boolean}>, markets: Array, managerRoleIdValid: boolean, allowNoAssignments?: boolean }} ctx
+ */
+function assessScopeReadiness(ctx) {
+  const errors = [];
+  const warnings = [];
+
+  if (isStoreCorrupt()) errors.push(`Assignment store unreadable: ${isStoreCorrupt()}`);
+  if (!ctx.managerRoleIdValid) errors.push('MANAGER_ROLE_ID is missing or invalid — the manager tier cannot be identified.');
+
+  const active = (ctx.markets || []).filter((m) => m.active !== false);
+  if (active.length === 0) errors.push('No active markets.');
+
+  const assigned = active.filter((m) => Array.isArray(m.managerUserIds) && m.managerUserIds.length);
+  if (assigned.length === 0 && !ctx.allowNoAssignments) {
+    errors.push('No active market has a manager assignment. Enabling scoped commands now would deny every manager. Run the backfill, or pass an explicit Owner override.');
+  }
+
+  for (const m of active) {
+    for (const uid of m.managerUserIds || []) {
+      const member = ctx.guildMembers?.get?.(uid);
+      if (!member) { errors.push(`${m.marketId}: assigned user ${uid} is no longer in the guild.`); continue; }
+      if (member.bot) errors.push(`${m.marketId}: assigned user ${uid} is a bot.`);
+      if (!member.hasManagerRole) warnings.push(`${m.marketId}: assigned user ${uid} no longer holds the Manager role.`);
+    }
+  }
+  return { ready: errors.length === 0, errors, warnings, assignedMarkets: assigned.length, activeMarkets: active.length };
+}
+
+module.exports = { POLICY, policyFor, authorizeMarketCommand, auditLine, assessScopeReadiness };
