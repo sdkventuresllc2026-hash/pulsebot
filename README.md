@@ -149,6 +149,10 @@ TZ=America/New_York
 DASHBOARD_SECRET=change-me-to-a-long-random-string
 DASHBOARD_PORT=3050
 # DASHBOARD_HOST=127.0.0.1
+
+# Required for T-Fiber screenshot proof sync into FiberSales OS.
+FIBERSALES_OS_URL=https://fibersales.co
+PULSE_OS_SECRET=change-me-to-the-same-long-random-string
 ```
 
 Line explanations:
@@ -164,6 +168,8 @@ Line explanations:
 9. `DASHBOARD_SECRET` protects the optional local dashboard API.
 10. `DASHBOARD_PORT` controls the optional local dashboard port.
 11. `DASHBOARD_HOST` is optional.
+12. `FIBERSALES_OS_URL` is the FiberSales OS base URL Pulse posts proof events to.
+13. `PULSE_OS_SECRET` must match the FiberSales OS deployment secret.
 
 ## 12. How To Install Dependencies
 

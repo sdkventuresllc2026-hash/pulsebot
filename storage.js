@@ -27,6 +27,10 @@ const defaultData = () => ({
   gamification: {
     dailyMilestones: {},
   },
+  tfiberProofs: {
+    pending: {},
+    events: [],
+  },
 });
 
 let writeChain = Promise.resolve();
@@ -60,6 +64,10 @@ async function readLeaderboard() {
       parsed.gamification.dailyMilestones && typeof parsed.gamification.dailyMilestones === 'object'
         ? parsed.gamification.dailyMilestones
         : {};
+    parsed.tfiberProofs = parsed.tfiberProofs && typeof parsed.tfiberProofs === 'object' ? parsed.tfiberProofs : {};
+    parsed.tfiberProofs.pending =
+      parsed.tfiberProofs.pending && typeof parsed.tfiberProofs.pending === 'object' ? parsed.tfiberProofs.pending : {};
+    parsed.tfiberProofs.events = Array.isArray(parsed.tfiberProofs.events) ? parsed.tfiberProofs.events : [];
     if (typeof parsed.metadata.weekId !== 'number' || parsed.metadata.weekId < 1) {
       parsed.metadata.weekId = 1;
     }
@@ -128,7 +136,7 @@ async function appendSingleDealLog({
     next.users[userId].lastLogId = logEntry.id;
     next.users[userId].lastLogAt = logEntry.timestamp;
     await writeLeaderboard(next);
-    return { ok: true, dataBefore, data: next };
+    return { ok: true, dataBefore, data: next, logEntry };
   });
 }
 
@@ -157,17 +165,19 @@ async function appendMessageLogsBatch({ messageId, userId, speeds, buildLogEntry
     }
     const dataBefore = structuredClone(data);
     const next = structuredClone(data);
+    const logEntries = [];
     for (let idx = 0; idx < speeds.length; idx += 1) {
       const speed = speeds[idx];
       const logEntry = buildLogEntry(next, speed, idx);
       if (messageId != null) logEntry.sourceMessageId = messageId;
       next.logs.push(logEntry);
+      logEntries.push(logEntry);
       next.users[userId] = next.users[userId] || {};
       next.users[userId].lastLogId = logEntry.id;
       next.users[userId].lastLogAt = logEntry.timestamp;
     }
     await writeLeaderboard(next);
-    return { ok: true, dataBefore, data: next };
+    return { ok: true, dataBefore, data: next, logEntries };
   });
 }
 

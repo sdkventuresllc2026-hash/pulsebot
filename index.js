@@ -126,6 +126,20 @@ const {
   deriveLeaderboardMovement,
   buildLeaderboardContext,
 } = require('./gamification-engine');
+const { postTfiberDiscordProof } = require('./fiberSalesOsClient');
+const {
+  requiresTfiberProof,
+  hasScreenshotAttachment,
+  buildTfiberProofPayload,
+  buildTfiberDmPayload,
+  formatTfiberProofLine,
+} = require('./tfiber-proof');
+const {
+  recordTfiberProofAttempt,
+  markTfiberProofResolved,
+  latestPendingForUser,
+  collectDueTfiberProofActions,
+} = require('./tfiber-proof-store');
 const {
   createTimestampedBackup,
   appendActionLog,
@@ -1228,6 +1242,125 @@ function buildDealLogConfirmationPayload({ ctx, dataBefore, dataAfter, now, tz }
   };
 }
 
+async function syncTfiberProofForLog({ message, logEntry, speed, blitzName, marketIdentity, now }) {
+  if (!logEntry) return null;
+  const hasScreenshot = hasScreenshotAttachment(message);
+  const payload = buildTfiberProofPayload({
+    message,
+    logEntry,
+    speed,
+    blitzName,
+    marketIdentity,
+    hasScreenshot,
+    now,
+  });
+  let result;
+  try {
+    result = await postTfiberDiscordProof(payload);
+  } catch (err) {
+    console.error('[Pulse][T-Fiber] OS sync failed:', err.message || err);
+    result = { ok: false, status: hasScreenshot ? 'SYNC_FAILED' : 'NEEDS_SCREENSHOT', message: err.message || String(err) };
+  }
+  await recordTfiberProofAttempt({
+    logEntry,
+    guildId: message.guild?.id || null,
+    channelId: message.channel?.id || null,
+    blitzName,
+    marketIdentity,
+    result,
+    now,
+  });
+  return result;
+}
+
+function appendTfiberProofLine(content, result) {
+  const line = formatTfiberProofLine(result);
+  return line ? `${content}\n${line}` : content;
+}
+
+async function handleTfiberProofDm(message) {
+  const hasScreenshot = hasScreenshotAttachment(message);
+  if (!hasScreenshot && !String(message.content || '').trim()) return false;
+
+  const pending = await latestPendingForUser(message.author.id);
+  if (!pending) {
+    if (hasScreenshot) {
+      await message.reply({
+        content: 'I found the screenshot, but I do not see a pending T-Fiber proof request for you. Log the 1G deal in the blitz channel first, then send the screenshot here.',
+        allowedMentions: { parse: [] },
+      }).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
+  const payload = buildTfiberDmPayload({ message, pending, hasScreenshot });
+  let result;
+  try {
+    result = await postTfiberDiscordProof(payload);
+  } catch (err) {
+    console.error('[Pulse][T-Fiber] DM proof sync failed:', err.message || err);
+    result = { ok: false, status: 'SYNC_FAILED', message: err.message || String(err) };
+  }
+
+  if (result.status === 'ORDER_CREATED' || result.status === 'PROOF_ATTACHED' || result.status === 'IDEMPOTENT_REPLAY') {
+    await markTfiberProofResolved({ logId: pending.logId, result });
+  } else {
+    await recordTfiberProofAttempt({
+      logEntry: {
+        id: pending.logId,
+        userId: pending.userId,
+        displayName: pending.displayName,
+        username: pending.username,
+        speed: pending.speed,
+        timestamp: pending.timestamp,
+        channelId: pending.channelId,
+        blitzName: pending.blitzName,
+        marketId: pending.marketId,
+        marketName: pending.marketName,
+      },
+      guildId: pending.guildId,
+      channelId: pending.channelId,
+      blitzName: pending.blitzName,
+      marketIdentity: { marketId: pending.marketId, marketName: pending.marketName },
+      result,
+    });
+  }
+
+  await message.reply({
+    content: formatTfiberProofLine(result) || 'T-Fiber proof received.',
+    allowedMentions: { parse: [] },
+  }).catch(() => {});
+  return true;
+}
+
+function tfiberReminderText(type, pending) {
+  if (type === 'expired') {
+    return `T-Fiber proof expired for your ${pending.plan || '1G'} log in ${pending.marketName || pending.blitzName || 'the blitz'}. It was removed from official Pulse totals until the screenshot is received.`;
+  }
+  if (type === 'final') {
+    return `Final T-Fiber proof reminder: upload the order confirmation screenshot to this DM or the blitz channel before the 48-hour window closes.`;
+  }
+  return `T-Fiber proof reminder: upload the order confirmation screenshot to this DM or the blitz channel so the 1G order can sync into FiberSales OS.`;
+}
+
+async function runTfiberProofMaintenance() {
+  const actions = await collectDueTfiberProofActions().catch((err) => {
+    console.error('[Pulse][T-Fiber] proof maintenance failed:', err.message || err);
+    return [];
+  });
+  for (const action of actions) {
+    const user = action.pending?.userId ? await client.users.fetch(action.pending.userId).catch(() => null) : null;
+    const content = tfiberReminderText(action.type, action.pending);
+    const dmOk = user ? await user.send({ content, allowedMentions: { parse: [] } }).then(() => true).catch(() => false) : false;
+    if (dmOk) continue;
+    const channel = action.pending?.channelId ? await client.channels.fetch(action.pending.channelId).catch(() => null) : null;
+    if (channel?.isTextBased?.()) {
+      await channel.send({ content: `<@${action.pending.userId}> ${content}`, allowedMentions: { users: [action.pending.userId] } }).catch(() => {});
+    }
+  }
+}
+
 /** Milestone tracking only — deal logs never get a second channel message. */
 async function recordGamificationAfterLog(ctx) {
   try {
@@ -1331,6 +1464,7 @@ async function confirmSingleDealLog({
   tz,
   hasCustomerOnFile,
   editConfirmation,
+  extraConfirmationLine = null,
 }) {
   if (!appendResult?.ok) return false;
   const ctx = buildLogConfirmationCtx({
@@ -1352,7 +1486,7 @@ async function confirmSingleDealLog({
   });
 
   await editConfirmation({
-    content,
+    content: extraConfirmationLine ? `${content}\n${extraConfirmationLine}` : content,
     embeds: [],
     components: [],
   });
@@ -1452,6 +1586,27 @@ async function handleLog(interaction) {
     buildLogEntry,
   });
 
+  let tfiberProofLine = null;
+  if (requiresTfiberProof({ speeds: [speed], channelName: channel?.name, blitzName, marketName: marketIdentity.marketName })) {
+    const result = await syncTfiberProofForLog({
+      message: {
+        id: interaction.id,
+        content: '',
+        attachments: new Map(),
+        guild: interaction.guild,
+        channel,
+        author: interaction.user,
+        member,
+      },
+      logEntry: appendResult.logEntry,
+      speed,
+      blitzName,
+      marketIdentity,
+      now,
+    });
+    tfiberProofLine = formatTfiberProofLine(result);
+  }
+
   await confirmSingleDealLog({
     appendResult,
     channel,
@@ -1462,6 +1617,7 @@ async function handleLog(interaction) {
     now,
     tz,
     hasCustomerOnFile,
+    extraConfirmationLine: tfiberProofLine,
     editConfirmation: (payload) => interaction.editReply(payload),
   });
 }
@@ -2847,6 +3003,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
   ],
@@ -2858,6 +3015,7 @@ const client = new Client({
 // with a latch because both fire in the versions that emit both — running startup twice would
 // double-sync market permissions and double-register handlers.
 let bootstrapped = false;
+let tfiberProofMaintenanceStarted = false;
 const onClientReady = async () => {
   if (bootstrapped) return;
   bootstrapped = true;
@@ -2914,6 +3072,12 @@ async function bootstrap() {
     // Rethrowing here surfaced as an unhandled rejection inside the ready handler and killed the
     // process — a far worse outcome than a noisy log, since deal logging stops for everyone.
     console.error(`[Pulse] Startup leaderboard read failed (continuing): ${err?.message || err}`);
+  }
+
+  if (!tfiberProofMaintenanceStarted) {
+    tfiberProofMaintenanceStarted = true;
+    runTfiberProofMaintenance();
+    setInterval(runTfiberProofMaintenance, 15 * 60 * 1000).unref?.();
   }
 
   // Reconciliation writes desired state with permissionOverwrites.set(). Running it from an
@@ -2994,9 +3158,12 @@ async function replySlashHint(message, hintKey) {
 
 client.on('messageCreate', async (message) => {
   try {
-    if (!message.guild) return;
     if (message.author.bot) return;
     if (message.webhookId) return;
+    if (!message.guild) {
+      await handleTfiberProofDm(message);
+      return;
+    }
     if (typeof message.content !== 'string' || !message.content.trim()) return;
     if (!message.channel) return;
     const dealChannel = await resolveDealChannelForMessage(message);
@@ -3088,6 +3255,19 @@ client.on('messageCreate', async (message) => {
 
       if (appendResult.duplicateMessage) return;
 
+      let tfiberProofLine = null;
+      if (requiresTfiberProof({ speeds: [speed], channelName: channel.name, blitzName, marketName: marketIdentity.marketName })) {
+        const result = await syncTfiberProofForLog({
+          message,
+          logEntry: appendResult.logEntry,
+          speed,
+          blitzName,
+          marketIdentity,
+          now,
+        });
+        tfiberProofLine = formatTfiberProofLine(result);
+      }
+
       await confirmSingleDealLog({
         appendResult,
         channel,
@@ -3098,6 +3278,7 @@ client.on('messageCreate', async (message) => {
         now,
         tz,
         hasCustomerOnFile: false,
+        extraConfirmationLine: tfiberProofLine,
         editConfirmation: (payload) =>
           message.reply({ content: payload.content, embeds: payload.embeds, allowedMentions: { parse: [] } }),
       });
@@ -3135,7 +3316,25 @@ client.on('messageCreate', async (message) => {
       now,
       tz,
     });
-    await message.reply({ content, allowedMentions: { parse: [] } }).catch((err) => {
+
+    const tfiberLines = [];
+    if (requiresTfiberProof({ speeds: parsed.speeds, channelName: channel.name, blitzName, marketName: marketIdentity.marketName })) {
+      for (const [idx, logEntry] of (result.logEntries || []).entries()) {
+        if (logEntry.speed !== '1gig') continue;
+        const syncResult = await syncTfiberProofForLog({
+          message,
+          logEntry,
+          speed: logEntry.speed,
+          blitzName,
+          marketIdentity,
+          now,
+        });
+        const line = formatTfiberProofLine(syncResult);
+        if (line) tfiberLines.push(line);
+      }
+    }
+    const uniqueTfiberLines = [...new Set(tfiberLines)];
+    await message.reply({ content: uniqueTfiberLines.length ? `${content}\n${uniqueTfiberLines.join('\n')}` : content, allowedMentions: { parse: [] } }).catch((err) => {
       console.error('Natural log reply failed:', err.message || err);
     });
     await recordGamificationAfterLog({
