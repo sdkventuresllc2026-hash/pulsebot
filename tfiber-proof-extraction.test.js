@@ -6,6 +6,7 @@ const { mergeTfiberExtractions } = require('./tfiber-proof-extraction');
 test('merges multiple screenshots for one T-Fiber order without guessing missing repeated fields', () => {
   const merged = mergeTfiberExtractions([
     {
+      extractionStatus: 'ORDER_DETAILS',
       orderConfirmationNumber: 'TMO-20260729-ABC12',
       customerName: 'Jane Doe',
       customerPhone: null,
@@ -15,6 +16,7 @@ test('merges multiple screenshots for one T-Fiber order without guessing missing
       confidence: 0.94,
     },
     {
+      extractionStatus: 'ORDER_DETAILS',
       orderConfirmationNumber: null,
       customerName: null,
       customerPhone: '9105551212',
@@ -38,11 +40,28 @@ test('merges multiple screenshots for one T-Fiber order without guessing missing
 
 test('refuses to merge screenshots with conflicting T-Mobile order ids', () => {
   const merged = mergeTfiberExtractions([
-    { orderConfirmationNumber: 'TMO20260729AAAAA', customerName: 'Jane Doe', confidence: 0.95 },
-    { orderConfirmationNumber: 'TMO20260729BBBBB', customerName: 'Jane Doe', confidence: 0.95 },
+    { extractionStatus: 'ORDER_DETAILS', orderConfirmationNumber: 'TMO20260729AAAAA', customerName: 'Jane Doe', confidence: 0.95 },
+    { extractionStatus: 'ORDER_DETAILS', orderConfirmationNumber: 'TMO20260729BBBBB', customerName: 'Jane Doe', confidence: 0.95 },
   ]);
 
   assert.equal(merged.extracted.extractionStatus, 'NEEDS_REVIEW');
   assert.equal(merged.extracted.orderConfirmationNumber, null);
   assert.ok(merged.missingFields.includes('orderConfirmationNumberConflict'));
+});
+
+test('ignores non-order screenshots from the Jacksonville channel', () => {
+  const merged = mergeTfiberExtractions([
+    {
+      extractionStatus: 'NOT_ORDER_SCREENSHOT',
+      orderConfirmationNumber: null,
+      customerName: null,
+      customerPhone: null,
+      serviceAddress: null,
+      confidence: 0.98,
+    },
+  ]);
+
+  assert.equal(merged.extracted.orderScreenshotCount, 0);
+  assert.equal(merged.extracted.orderConfirmationNumber, null);
+  assert.ok(merged.missingFields.includes('orderScreenshot'));
 });

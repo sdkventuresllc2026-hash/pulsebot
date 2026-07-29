@@ -23,3 +23,6 @@ discord-rollback-*.json
 nickname-rollback-*.json
 assignments-export-*.json
 manager-assignments-backup-*.json
+
+# Local T-Fiber screenshot calibration data (customer/order PII)
+local-calibration/

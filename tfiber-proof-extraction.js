@@ -48,6 +48,13 @@ async function imageToDataUrl(att, fetchImpl = fetch) {
 function extractionPrompt({ rawText, index, total }) {
   return [
     'Extract T-Mobile Fiber order details from this screenshot.',
+    'Calibration: Jacksonville/T-Fiber screenshots usually show a mobile browser page from fiber.t-mobile.com with either "Order details" or "Thank you for your order!"',
+    'Common visible sections are: "Order number:", "Plans and equipment", "Service address", "Contact info", "Installation details", "Order summary", and "Payment info".',
+    'The order confirmation number is the value after "Order number:" and must start with TMO. Ignore Dealer Code, NTID, reference numbers, confirmation numbers from other providers, browser address bars, and timestamps.',
+    'Service address is the text under "Service address". Contact info usually appears as customer name, email, then phone; capture the name and phone, ignore the email unless it helps identify the contact section.',
+    'Installation date/time are only valid when the "Installation details" section is visible. If that section is below the fold or hidden by the browser bar, return null for install date/time.',
+    'Promotions usually appear as bullets under "Discounts and promotions", such as AutoPay discount or one month free. Capture visible promo text exactly and do not invent dollar amounts.',
+    'If the screenshot is a selfie/photo, generic text message, Kinetic review page, or anything that is not a T-Mobile Fiber order page, set extractionStatus to NOT_ORDER_SCREENSHOT and return null for all fields.',
     'Return only facts visibly present in the image or explicitly typed in the message context.',
     'Do not infer, guess, autocorrect names, invent promotions, or combine two customers.',
     'If a field is not visible, return null for that field.',
@@ -65,6 +72,10 @@ function extractionSchema() {
       type: 'object',
       additionalProperties: false,
       properties: {
+        extractionStatus: {
+          type: 'string',
+          enum: ['ORDER_DETAILS', 'ORDER_SUMMARY', 'NOT_ORDER_SCREENSHOT', 'UNCLEAR'],
+        },
         orderConfirmationNumber: { type: ['string', 'null'] },
         customerName: { type: ['string', 'null'] },
         customerPhone: { type: ['string', 'null'] },
@@ -81,6 +92,7 @@ function extractionSchema() {
         notes: { type: ['string', 'null'] },
       },
       required: [
+        'extractionStatus',
         'orderConfirmationNumber',
         'customerName',
         'customerPhone',
@@ -144,6 +156,9 @@ function normalizePhone(value) {
 
 function normalizeExtraction(item, attachment = null) {
   return {
+    extractionStatus: ['ORDER_DETAILS', 'ORDER_SUMMARY', 'NOT_ORDER_SCREENSHOT', 'UNCLEAR'].includes(item.extractionStatus)
+      ? item.extractionStatus
+      : 'UNCLEAR',
     attachmentId: attachment?.id || null,
     attachmentName: attachment?.name || null,
     orderConfirmationNumber: normalizeTmoOrderId(item.orderConfirmationNumber) || extractTmoOrderId(item.orderConfirmationNumber),
@@ -171,7 +186,8 @@ function pickUnique(items, field, conflicts) {
 }
 
 function mergeTfiberExtractions(items, { fallbackTmoOrderId = null } = {}) {
-  const normalizedItems = (items || []).filter(Boolean).map((item) => normalizeExtraction(item));
+  const allItems = (items || []).filter(Boolean).map((item) => normalizeExtraction(item));
+  const normalizedItems = allItems.filter((item) => item.extractionStatus !== 'NOT_ORDER_SCREENSHOT');
   const conflicts = [];
   const ids = [...new Set(normalizedItems.map((item) => normalizeTmoOrderId(item.orderConfirmationNumber)).filter(Boolean))];
   const fallbackId = normalizeTmoOrderId(fallbackTmoOrderId);
@@ -181,7 +197,8 @@ function mergeTfiberExtractions(items, { fallbackTmoOrderId = null } = {}) {
   const extracted = {
     extractionStatus: conflicts.includes('orderConfirmationNumber') ? 'NEEDS_REVIEW' : 'EXTRACTED',
     extractionSource: 'OPENAI_VISION',
-    screenshotCount: normalizedItems.length,
+    screenshotCount: allItems.length,
+    orderScreenshotCount: normalizedItems.length,
     orderConfirmationNumber: conflicts.includes('orderConfirmationNumber') ? null : (ids[0] || fallbackId || null),
     customerName: pickUnique(normalizedItems, 'customerName', conflicts),
     customerPhone: pickUnique(normalizedItems, 'customerPhone', conflicts),
@@ -195,10 +212,11 @@ function mergeTfiberExtractions(items, { fallbackTmoOrderId = null } = {}) {
     promotion: pickUnique(normalizedItems, 'promotion', conflicts),
     monthlyPrice: pickUnique(normalizedItems, 'monthlyPrice', conflicts),
     fieldConflicts: [...new Set(conflicts)],
-    screenshots: normalizedItems,
+    screenshots: allItems,
   };
 
   const missingFields = [];
+  if (!normalizedItems.length) missingFields.push('orderScreenshot');
   if (!extracted.orderConfirmationNumber) missingFields.push('orderConfirmationNumber');
   if (!extracted.customerName) missingFields.push('customerName');
   if (!extracted.customerPhone) missingFields.push('customerPhone');
