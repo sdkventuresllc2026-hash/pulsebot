@@ -133,11 +133,12 @@ const {
   buildTfiberProofPayload,
   buildTfiberDmPayload,
   formatTfiberProofLine,
+  extractTmoOrderId,
 } = require('./tfiber-proof');
 const {
   recordTfiberProofAttempt,
   markTfiberProofResolved,
-  latestPendingForUser,
+  selectPendingForUser,
   collectDueTfiberProofActions,
 } = require('./tfiber-proof-store');
 const {
@@ -1282,8 +1283,24 @@ async function handleTfiberProofDm(message) {
   const hasScreenshot = hasScreenshotAttachment(message);
   if (!hasScreenshot && !String(message.content || '').trim()) return false;
 
-  const pending = await latestPendingForUser(message.author.id);
+  const tmoOrderId = extractTmoOrderId(message.content);
+  const selection = await selectPendingForUser(message.author.id, { tmoOrderId });
+  const pending = selection.pending;
   if (!pending) {
+    if (selection.reason === 'ambiguous' || selection.reason === 'duplicate_tmo_pending') {
+      await message.reply({
+        content: `I found the screenshot, but you have ${selection.pendingCount} open T-Fiber proof requests. Send the screenshot again with the T-Mobile order confirmation number in the same DM so I attach it to the right deal.`,
+        allowedMentions: { parse: [] },
+      }).catch(() => {});
+      return true;
+    }
+    if (selection.reason === 'tmo_not_matched') {
+      await message.reply({
+        content: 'I found that T-Mobile order confirmation number, but it does not match your open T-Fiber proof requests. Check the number or log the 1G deal first, then send the screenshot with the confirmation number.',
+        allowedMentions: { parse: [] },
+      }).catch(() => {});
+      return true;
+    }
     if (hasScreenshot) {
       await message.reply({
         content: 'I found the screenshot, but I do not see a pending T-Fiber proof request for you. Log the 1G deal in the blitz channel first, then send the screenshot here.',
@@ -1339,9 +1356,9 @@ function tfiberReminderText(type, pending) {
     return `T-Fiber proof expired for your ${pending.plan || '1G'} log in ${pending.marketName || pending.blitzName || 'the blitz'}. It was removed from official Pulse totals until the screenshot is received.`;
   }
   if (type === 'final') {
-    return `Final T-Fiber proof reminder: upload the order confirmation screenshot to this DM or the blitz channel before the 48-hour window closes.`;
+    return `Final T-Fiber proof reminder: upload the order confirmation screenshot before the 48-hour window closes. If you send it here, include the T-Mobile order confirmation number in the same DM.`;
   }
-  return `T-Fiber proof reminder: upload the order confirmation screenshot to this DM or the blitz channel so the 1G order can sync into FiberSales OS.`;
+  return `T-Fiber proof reminder: upload the order confirmation screenshot so the 1G order can sync into FiberSales OS. If you send it here, include the T-Mobile order confirmation number in the same DM.`;
 }
 
 async function runTfiberProofMaintenance() {

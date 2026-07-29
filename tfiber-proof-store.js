@@ -1,5 +1,5 @@
 const { mutate, readLeaderboard } = require('./storage');
-const { proofExpiresAt } = require('./tfiber-proof');
+const { normalizeTmoOrderId, proofExpiresAt } = require('./tfiber-proof');
 
 function ensureTfiberProofState(data) {
   data.tfiberProofs = data.tfiberProofs && typeof data.tfiberProofs === 'object' ? data.tfiberProofs : {};
@@ -100,13 +100,42 @@ async function markTfiberProofResolved({ logId, result, now = new Date() }) {
   });
 }
 
-async function latestPendingForUser(userId) {
-  const data = await readLeaderboard();
-  const state = ensureTfiberProofState(data);
-  const pending = Object.values(state.pending || {})
+function activePendingForUser(state, userId) {
+  return Object.values(state.pending || {})
     .filter((item) => item && item.userId === userId && !item.reminders?.expiredAt)
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  return pending[0] || null;
+}
+
+function selectPendingTfiberProof(pendingItems, { tmoOrderId } = {}) {
+  const pending = (pendingItems || [])
+    .filter((item) => item && !item.reminders?.expiredAt)
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  if (!pending.length) return { pending: null, reason: 'none', pendingCount: 0 };
+
+  const normalizedTmoOrderId = normalizeTmoOrderId(tmoOrderId);
+  if (normalizedTmoOrderId) {
+    const matches = pending.filter((item) => normalizeTmoOrderId(item.tmoOrderId) === normalizedTmoOrderId);
+    if (matches.length === 1) return { pending: matches[0], reason: 'matched_tmo', pendingCount: pending.length };
+    if (matches.length > 1) return { pending: null, reason: 'duplicate_tmo_pending', pendingCount: pending.length };
+    if (pending.length === 1 && !normalizeTmoOrderId(pending[0].tmoOrderId)) {
+      return { pending: pending[0], reason: 'single_pending_with_tmo', pendingCount: pending.length };
+    }
+    return { pending: null, reason: 'tmo_not_matched', pendingCount: pending.length };
+  }
+
+  if (pending.length === 1) return { pending: pending[0], reason: 'single_pending', pendingCount: 1 };
+  return { pending: null, reason: 'ambiguous', pendingCount: pending.length };
+}
+
+async function selectPendingForUser(userId, { tmoOrderId } = {}) {
+  const data = await readLeaderboard();
+  const state = ensureTfiberProofState(data);
+  return selectPendingTfiberProof(activePendingForUser(state, userId), { tmoOrderId });
+}
+
+async function latestPendingForUser(userId) {
+  const { pending } = await selectPendingForUser(userId);
+  return pending;
 }
 
 async function collectDueTfiberProofActions(now = new Date()) {
@@ -154,6 +183,8 @@ module.exports = {
   ensureTfiberProofState,
   recordTfiberProofAttempt,
   markTfiberProofResolved,
+  selectPendingTfiberProof,
+  selectPendingForUser,
   latestPendingForUser,
   collectDueTfiberProofActions,
 };
