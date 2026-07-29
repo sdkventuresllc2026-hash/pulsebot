@@ -1587,7 +1587,7 @@ async function handleLog(interaction) {
   });
 
   let tfiberProofLine = null;
-  if (requiresTfiberProof({ speeds: [speed], channelName: channel?.name, blitzName, marketName: marketIdentity.marketName })) {
+  if (requiresTfiberProof({ speeds: [speed], channelName: channel?.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId })) {
     const result = await syncTfiberProofForLog({
       message: {
         id: interaction.id,
@@ -3256,7 +3256,7 @@ client.on('messageCreate', async (message) => {
       if (appendResult.duplicateMessage) return;
 
       let tfiberProofLine = null;
-      if (requiresTfiberProof({ speeds: [speed], channelName: channel.name, blitzName, marketName: marketIdentity.marketName })) {
+      if (requiresTfiberProof({ speeds: [speed], channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId })) {
         const result = await syncTfiberProofForLog({
           message,
           logEntry: appendResult.logEntry,
@@ -3318,7 +3318,7 @@ client.on('messageCreate', async (message) => {
     });
 
     const tfiberLines = [];
-    if (requiresTfiberProof({ speeds: parsed.speeds, channelName: channel.name, blitzName, marketName: marketIdentity.marketName })) {
+    if (requiresTfiberProof({ speeds: parsed.speeds, channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId })) {
       for (const [idx, logEntry] of (result.logEntries || []).entries()) {
         if (logEntry.speed !== '1gig') continue;
         const syncResult = await syncTfiberProofForLog({

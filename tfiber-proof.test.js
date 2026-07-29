@@ -23,7 +23,11 @@ test('normalizes and extracts TMO order ids', () => {
 
 test('requires proof only for 1G logs in T-Fiber contexts', () => {
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketName: 'Charlotte T-Fiber Blitz' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: '🛜wilmington' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: '🛜jacksonville' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketId: 'wilmington-nc' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['2gig'], marketName: 'Charlotte T-Fiber Blitz' }), false);
+  assert.equal(requiresTfiberProof({ speeds: ['2gig'], channelName: '🛜jacksonville' }), false);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketName: 'Greenville Kinetic' }), false);
 });
 
