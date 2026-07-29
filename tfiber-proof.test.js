@@ -9,6 +9,7 @@ const {
   buildTfiberProofPayload,
   proofExpiresAt,
   TFIBER_PROOF_EXPIRATION_HOURS,
+  formatTfiberProofLine,
 } = require('./tfiber-proof');
 
 function attachmentMap(items) {
@@ -76,4 +77,15 @@ test('proof clock is 48 hours', () => {
   const now = new Date('2026-07-29T12:00:00Z');
   assert.equal(TFIBER_PROOF_EXPIRATION_HOURS, 48);
   assert.equal(proofExpiresAt(now).toISOString(), '2026-07-31T12:00:00.000Z');
+});
+
+test('proof line is simple but calls out missing contact or install details', () => {
+  assert.equal(
+    formatTfiberProofLine({ status: 'ORDER_CREATED', missingFields: [] }),
+    'T-Fiber proof received. Synced to FiberSales OS with contact/install details.',
+  );
+  assert.equal(
+    formatTfiberProofLine({ status: 'PROOF_ATTACHED', missingFields: ['customerPhone'] }),
+    'T-Fiber proof received. Matched in FiberSales OS. Contact/install details still needed.',
+  );
 });

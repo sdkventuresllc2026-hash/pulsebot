@@ -101,8 +101,24 @@ function buildTfiberDmPayload({ message, pending, hasScreenshot }) {
 
 function formatTfiberProofLine(result) {
   if (!result) return null;
-  if (result.status === 'ORDER_CREATED') return 'T-Fiber proof received. Synced to FiberSales OS as a provisional order.';
-  if (result.status === 'PROOF_ATTACHED' || result.status === 'IDEMPOTENT_REPLAY') return 'T-Fiber proof received. Matched in FiberSales OS.';
+  const missing = Array.isArray(result.missingFields) ? result.missingFields : [];
+  const missingDetails = missing.some((field) => [
+    'customerName',
+    'customerPhone',
+    'serviceAddress',
+    'installationDate',
+    'installationTimeWindow',
+  ].includes(field));
+  if (result.status === 'ORDER_CREATED') {
+    return missingDetails
+      ? 'T-Fiber proof received. Synced to FiberSales OS. Contact/install details still needed.'
+      : 'T-Fiber proof received. Synced to FiberSales OS with contact/install details.';
+  }
+  if (result.status === 'PROOF_ATTACHED' || result.status === 'IDEMPOTENT_REPLAY') {
+    return missingDetails
+      ? 'T-Fiber proof received. Matched in FiberSales OS. Contact/install details still needed.'
+      : 'T-Fiber proof received. Matched in FiberSales OS with contact/install details.';
+  }
   if (result.status === 'NEEDS_SCREENSHOT') return 'T-Fiber proof needed: upload the order confirmation screenshot here or DM PulseBot within 48 hours.';
   if (result.status === 'UNLINKED_USER') return 'T-Fiber proof held: Discord user is not linked in FiberSales OS yet.';
   if (result.status === 'NEEDS_REVIEW') return 'T-Fiber proof needs review: reply with the TMO order ID or upload a clearer screenshot.';

@@ -136,6 +136,9 @@ const {
   extractTmoOrderId,
 } = require('./tfiber-proof');
 const {
+  enrichTfiberProofPayload,
+} = require('./tfiber-proof-extraction');
+const {
   recordTfiberProofAttempt,
   markTfiberProofResolved,
   selectPendingForUser,
@@ -1246,7 +1249,7 @@ function buildDealLogConfirmationPayload({ ctx, dataBefore, dataAfter, now, tz }
 async function syncTfiberProofForLog({ message, logEntry, speed, blitzName, marketIdentity, now }) {
   if (!logEntry) return null;
   const hasScreenshot = hasScreenshotAttachment(message);
-  const payload = buildTfiberProofPayload({
+  let payload = buildTfiberProofPayload({
     message,
     logEntry,
     speed,
@@ -1255,6 +1258,9 @@ async function syncTfiberProofForLog({ message, logEntry, speed, blitzName, mark
     hasScreenshot,
     now,
   });
+  if (hasScreenshot) {
+    payload = await enrichTfiberProofPayload(payload);
+  }
   let result;
   try {
     result = await postTfiberDiscordProof(payload);
@@ -1311,7 +1317,10 @@ async function handleTfiberProofDm(message) {
     return false;
   }
 
-  const payload = buildTfiberDmPayload({ message, pending, hasScreenshot });
+  let payload = buildTfiberDmPayload({ message, pending, hasScreenshot });
+  if (hasScreenshot) {
+    payload = await enrichTfiberProofPayload(payload);
+  }
   let result;
   try {
     result = await postTfiberDiscordProof(payload);
