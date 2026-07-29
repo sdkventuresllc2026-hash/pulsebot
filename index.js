@@ -129,12 +129,18 @@ const {
 const { postTfiberDiscordProof } = require('./fiberSalesOsClient');
 const {
   requiresTfiberProof,
+  extractDiscordAttachments,
   hasScreenshotAttachment,
   buildTfiberProofPayload,
   buildTfiberDmPayload,
   formatTfiberProofLine,
   extractTmoOrderId,
 } = require('./tfiber-proof');
+const {
+  DEFAULT_WINDOW_MS: TFIBER_CHANNEL_PROOF_WINDOW_MS,
+  createTfiberProofBuffer,
+  messageWithBufferedProof,
+} = require('./tfiber-proof-buffer');
 const {
   enrichTfiberProofPayload,
 } = require('./tfiber-proof-extraction');
@@ -195,6 +201,44 @@ function tryClaimLogReply(keys) {
     setTimeout(() => logReplyClaims.delete(k), 180_000);
   }
   return true;
+}
+
+const tfiberChannelProofBuffer = createTfiberProofBuffer();
+
+function channelNeedsTfiberProofContext(channel, marketIdentity = null, blitzName = null) {
+  const identity = marketIdentity || marketIdentityForChannel(channel);
+  return requiresTfiberProof({
+    speeds: ['1gig'],
+    channelName: channel?.name,
+    blitzName,
+    marketName: identity?.marketName,
+    marketId: identity?.marketId,
+  });
+}
+
+function rememberTfiberChannelScreenshot(message, channel) {
+  const attachments = extractDiscordAttachments(message).filter((att) => att.isScreenshot);
+  if (!attachments.length) return null;
+  return tfiberChannelProofBuffer.remember({
+    messageId: message.id,
+    userId: message.author.id,
+    channelId: channel.id,
+    createdTimestamp: message.createdTimestamp,
+    content: message.content || '',
+    attachments,
+  });
+}
+
+function proofMessageForTfiberLog(message, channel) {
+  if (hasScreenshotAttachment(message)) return message;
+  const selection = tfiberChannelProofBuffer.consume({
+    userId: message.author.id,
+    channelId: channel.id,
+    nowMs: message.createdTimestamp || Date.now(),
+    excludeMessageId: message.id,
+  });
+  if (!selection.entry) return message;
+  return messageWithBufferedProof(message, selection.entry);
 }
 const adminIds = (process.env.ADMIN_IDS || '')
   .split(',')
@@ -1285,6 +1329,72 @@ function appendTfiberProofLine(content, result) {
   return line ? `${content}\n${line}` : content;
 }
 
+async function submitTfiberProofForPending({ message, pending, hasScreenshot }) {
+  let payload = buildTfiberDmPayload({ message, pending, hasScreenshot });
+  if (hasScreenshot) {
+    payload = await enrichTfiberProofPayload(payload);
+  }
+  let result;
+  try {
+    result = await postTfiberDiscordProof(payload);
+  } catch (err) {
+    console.error('[Pulse][T-Fiber] proof sync failed:', err.message || err);
+    result = { ok: false, status: 'SYNC_FAILED', message: err.message || String(err) };
+  }
+
+  if (result.status === 'ORDER_CREATED' || result.status === 'PROOF_ATTACHED' || result.status === 'IDEMPOTENT_REPLAY') {
+    await markTfiberProofResolved({ logId: pending.logId, result });
+  } else {
+    await recordTfiberProofAttempt({
+      logEntry: {
+        id: pending.logId,
+        userId: pending.userId,
+        displayName: pending.displayName,
+        username: pending.username,
+        speed: pending.speed,
+        timestamp: pending.timestamp,
+        channelId: pending.channelId,
+        blitzName: pending.blitzName,
+        marketId: pending.marketId,
+        marketName: pending.marketName,
+      },
+      guildId: pending.guildId,
+      channelId: pending.channelId,
+      blitzName: pending.blitzName,
+      marketIdentity: { marketId: pending.marketId, marketName: pending.marketName },
+      result,
+    });
+  }
+
+  return result;
+}
+
+function channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId) {
+  if (tmoOrderId) return true;
+  const pendingAt = Date.parse(pending?.timestamp || pending?.createdAt || '');
+  if (!Number.isFinite(pendingAt)) return false;
+  const messageAt = message.createdTimestamp || Date.now();
+  const delta = messageAt - pendingAt;
+  return delta >= 0 && delta <= TFIBER_CHANNEL_PROOF_WINDOW_MS;
+}
+
+async function handleTfiberProofChannelUpload(message, channel) {
+  const hasScreenshot = hasScreenshotAttachment(message);
+  if (!hasScreenshot) return false;
+  const tmoOrderId = extractTmoOrderId(message.content);
+  const selection = await selectPendingForUser(message.author.id, { tmoOrderId });
+  const pending = selection.pending;
+  if (!pending) return false;
+  if (!channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId)) return false;
+
+  const result = await submitTfiberProofForPending({ message, pending, hasScreenshot });
+  await message.reply({
+    content: formatTfiberProofLine(result) || 'T-Fiber proof received.',
+    allowedMentions: { parse: [] },
+  }).catch(() => {});
+  return true;
+}
+
 async function handleTfiberProofDm(message) {
   const hasScreenshot = hasScreenshotAttachment(message);
   if (!hasScreenshot && !String(message.content || '').trim()) return false;
@@ -1317,42 +1427,7 @@ async function handleTfiberProofDm(message) {
     return false;
   }
 
-  let payload = buildTfiberDmPayload({ message, pending, hasScreenshot });
-  if (hasScreenshot) {
-    payload = await enrichTfiberProofPayload(payload);
-  }
-  let result;
-  try {
-    result = await postTfiberDiscordProof(payload);
-  } catch (err) {
-    console.error('[Pulse][T-Fiber] DM proof sync failed:', err.message || err);
-    result = { ok: false, status: 'SYNC_FAILED', message: err.message || String(err) };
-  }
-
-  if (result.status === 'ORDER_CREATED' || result.status === 'PROOF_ATTACHED' || result.status === 'IDEMPOTENT_REPLAY') {
-    await markTfiberProofResolved({ logId: pending.logId, result });
-  } else {
-    await recordTfiberProofAttempt({
-      logEntry: {
-        id: pending.logId,
-        userId: pending.userId,
-        displayName: pending.displayName,
-        username: pending.username,
-        speed: pending.speed,
-        timestamp: pending.timestamp,
-        channelId: pending.channelId,
-        blitzName: pending.blitzName,
-        marketId: pending.marketId,
-        marketName: pending.marketName,
-      },
-      guildId: pending.guildId,
-      channelId: pending.channelId,
-      blitzName: pending.blitzName,
-      marketIdentity: { marketId: pending.marketId, marketName: pending.marketName },
-      result,
-    });
-  }
-
+  const result = await submitTfiberProofForPending({ message, pending, hasScreenshot });
   await message.reply({
     content: formatTfiberProofLine(result) || 'T-Fiber proof received.',
     allowedMentions: { parse: [] },
@@ -3190,7 +3265,6 @@ client.on('messageCreate', async (message) => {
       await handleTfiberProofDm(message);
       return;
     }
-    if (typeof message.content !== 'string' || !message.content.trim()) return;
     if (!message.channel) return;
     const dealChannel = await resolveDealChannelForMessage(message);
     if (!dealChannel || typeof dealChannel.name !== 'string' || !dealChannel.name) return;
@@ -3215,6 +3289,21 @@ client.on('messageCreate', async (message) => {
 
     if (!isApprovedDealChannel(message.channel)) return;
 
+    const channel = message.channel;
+    const channelMarketIdentity = marketIdentityForChannel(channel);
+    const channelBlitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel.name);
+    const isTfiberProofChannel = channelNeedsTfiberProofContext(channel, channelMarketIdentity, channelBlitzName);
+    const messageHasScreenshot = hasScreenshotAttachment(message);
+    const hasMessageText = typeof message.content === 'string' && !!message.content.trim();
+
+    if (!hasMessageText) {
+      if (messageHasScreenshot && isTfiberProofChannel) {
+        const handled = await handleTfiberProofChannelUpload(message, channel);
+        if (!handled) rememberTfiberChannelScreenshot(message, channel);
+      }
+      return;
+    }
+
     const logIntent = detectTextLogIntent(message.content);
     if (logIntent) {
       await replySlashHint(message, logIntent);
@@ -3222,7 +3311,13 @@ client.on('messageCreate', async (message) => {
     }
 
     const parsed = parseDealMessage(message.content);
-    if (!parsed.ok || !parsed.speeds.length) return;
+    if (!parsed.ok || !parsed.speeds.length) {
+      if (messageHasScreenshot && isTfiberProofChannel) {
+        const handled = await handleTfiberProofChannelUpload(message, channel);
+        if (!handled) rememberTfiberChannelScreenshot(message, channel);
+      }
+      return;
+    }
     if (recentLogReplies.has(message.id)) return;
 
     if (!isQuickNaturalLog(parsed)) {
@@ -3234,9 +3329,8 @@ client.on('messageCreate', async (message) => {
 
     const tz = getTimeZone();
     const now = new Date();
-    const channel = message.channel;
-    const blitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel.name);
-    const marketIdentity = marketIdentityForChannel(channel);
+    const blitzName = channelBlitzName;
+    const marketIdentity = channelMarketIdentity;
     if (!marketIdentity.assigned) {
       console.warn(
         '[Pulse][UnassignedMarket] natural log allowed without market mapping',
@@ -3283,8 +3377,9 @@ client.on('messageCreate', async (message) => {
 
       let tfiberProofLine = null;
       if (requiresTfiberProof({ speeds: [speed], channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId })) {
+        const proofMessage = proofMessageForTfiberLog(message, channel);
         const result = await syncTfiberProofForLog({
-          message,
+          message: proofMessage,
           logEntry: appendResult.logEntry,
           speed,
           blitzName,
