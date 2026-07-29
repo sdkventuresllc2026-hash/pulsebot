@@ -214,6 +214,9 @@ const commands = [
     .setDescription('Pulse admin controls')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((s) => s.setName('status').setDescription('Pulse runtime and storage status'))
+    // The gate before MANAGER_SCOPING_ENABLED=true. Must run in production — anything that reads
+    // market records is meaningless off the /data volume.
+    .addSubcommand((s) => s.setName('readiness').setDescription('Can Manager scoping be safely enabled?'))
     .addSubcommand((s) => s.setName('stats').setDescription('Deal stats'))
     .addSubcommand((s) => s.setName('export-csv').setDescription('Export active deal logs to CSV')),
   new SlashCommandBuilder()

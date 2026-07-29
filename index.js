@@ -83,6 +83,7 @@ const {
   approvedBlitzNameForChannel,
   channelApprovalDiagnostics,
   normalizeMarketId,
+  isStoreCorrupt,
   ensureDefaultMarkets,
   deleteMarket,
   renameMarket,
@@ -184,7 +185,7 @@ const adminIds = (process.env.ADMIN_IDS || '')
 // Read through the validated config layer, never process.env directly. A null here means
 // 'refuse', never 'skip the tier' — skipping is what erased manager access from every market.
 const pulseConfig = require('./pulse-config');
-const { authorizeMarketCommand, auditLine } = require('./command-policy');
+const { authorizeMarketCommand, auditLine, assessScopeReadiness } = require('./command-policy');
 const marketAssignments = require('./market-assignments');
 
 function isAdmin(userId) {
@@ -2316,6 +2317,57 @@ async function handleManagerAuthority(interaction, sub) {
   }
 }
 
+/**
+ * /admin readiness — the gate before MANAGER_SCOPING_ENABLED=true.
+ *
+ * Deliberately a slash command rather than a script: assessScopeReadiness reads the market records,
+ * which live on Railway's /data volume. Run anywhere else it reports on a stale local file and is
+ * worse than useless, because it looks authoritative.
+ */
+async function handleAdminReadiness(interaction) {
+  await interaction.deferReply({ ephemeral: true });
+  const guild = interaction.guild;
+  await guild.members.fetch().catch(() => null);
+
+  const mgrRoleId = pulseConfig.managerRoleId();
+  const mgrRole = mgrRoleId ? guild.roles.cache.get(mgrRoleId) : null;
+  const guildMembers = new Map(
+    guild.members.cache.map((m) => [m.id, { bot: m.user.bot, hasManagerRole: Boolean(mgrRole && m.roles.cache.has(mgrRole.id)) }]),
+  );
+  const markets = listMarkets();
+  const scopingOn = pulseConfig.managerScopingEnabled();
+  const r = assessScopeReadiness({
+    guildMembers, markets,
+    managerRoleIdValid: Boolean(mgrRole) && pulseConfig.isHealthy(),
+    activated: scopingOn,   // after activation, one departed assignee warns instead of blocking
+  });
+
+  const tick = (ok) => (ok ? '✅' : '❌');
+  const lines = [
+    `**Scope readiness** — scoping is currently **${scopingOn ? 'ON' : 'OFF (Stage A hold)'}**`,
+    '',
+    `${tick(Boolean(mgrRole))} MANAGER_ROLE_ID valid${mgrRole ? ` — \`${mgrRole.name}\`` : ' — unresolved'}`,
+    `${tick(pulseConfig.isHealthy())} configuration healthy`,
+    `${tick(!isStoreCorrupt())} assignment store readable`,
+    `${tick(r.assignedMarkets > 0)} markets with a manager: **${r.assignedMarkets}/${r.activeMarkets}**`,
+    `${tick(!r.errors.some((e) => e.includes('no longer in the guild')))} every assignee is still in the server`,
+    `${tick(!r.errors.some((e) => e.includes('is a bot')))} no bot holds authority`,
+    '',
+    ...markets.filter((m) => m.active !== false).map((m) => {
+      const ids = m.managerUserIds || [];
+      return `• \`${m.marketId}\` — ${ids.length ? ids.map((i) => `<@${i}>`).join(', ') : '**no manager**'}`;
+    }),
+  ];
+  if (r.warnings.length) lines.push('', '**Warnings**', ...r.warnings.map((w) => `⚠ ${w}`));
+  if (r.errors.length) lines.push('', '**Errors**', ...r.errors.map((e) => `✗ ${e}`));
+  if (r.remediation?.length) lines.push('', '**Fix with**', ...r.remediation.map((c) => `\`${c}\``));
+  lines.push('', r.ready
+    ? '✅ **READY** — safe to set `MANAGER_SCOPING_ENABLED=true` in Railway.'
+    : '❌ **NOT READY** — do not enable scoping yet.');
+
+  await interaction.editReply({ content: lines.join('\n').slice(0, 1900), allowedMentions: { parse: [] } });
+}
+
 async function handleMarketRouter(interaction) {
   const sub = interaction.options.getSubcommand();
   const marketId = interaction.options.getString('market') ?? null;
@@ -2596,6 +2648,7 @@ async function handleAdmin(interaction) {
   if (subcommand === 'add-channel') return handleAdminAddChannel(interaction);
   if (subcommand === 'remove-channel') return handleAdminRemoveChannel(interaction);
   if (subcommand === 'list-channels') return handleAdminListChannels(interaction);
+  if (subcommand === 'readiness') return handleAdminReadiness(interaction);
   if (subcommand === 'status') return handleAdminStatus(interaction);
   if (subcommand === 'stats') return handleAdminStats(interaction);
   if (subcommand === 'export-csv') return handleAdminExportCsv(interaction);
