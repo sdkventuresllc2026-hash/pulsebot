@@ -74,6 +74,7 @@ const {
   approveDealChannel,
   unapproveDealChannel,
   addMarket,
+  updateMarket,
   listMarkets,
   marketForChannel,
   connectChannelToMarket,
