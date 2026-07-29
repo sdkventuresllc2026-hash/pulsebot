@@ -145,7 +145,10 @@ test('deleteMarket removes registry entry', () =>
 
 test('daily and weekly market views can be derived from market tags', () => {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  // Stamp the ET date, not the UTC one. filterToday() matches in America/New_York, so between
+  // 8pm ET and midnight ET the UTC date is already tomorrow and this test failed on the clock
+  // rather than on the code.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
   const logs = [
     { userId: 'u1', date: today, weekId: 9, marketId: 'new-haven-ct', marketName: 'New Haven CT' },
     { userId: 'u2', date: today, weekId: 9, marketId: 'new-haven-ct', marketName: 'New Haven CT' },

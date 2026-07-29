@@ -46,6 +46,11 @@ const commands = [
         .setName('create')
         .setDescription('Create a market AND wire up its channel in one step')
         .addStringOption((o) => o.setName('name').setDescription('Market name, e.g. Ashtabula').setRequired(true).setMaxLength(80))
+        // The id is IMMUTABLE once deal logs carry it. Supplying it explicitly is what prevents
+        // another Ashtabula, whose permanent id is "new-york" for an Ohio market.
+        .addStringOption((o) => o.setName('id').setDescription('Operational id, e.g. wilmington-nc (defaults to the name)').setRequired(false).setMaxLength(40))
+        .addStringOption((o) => o.setName('city').setDescription('City, e.g. Wilmington').setRequired(false).setMaxLength(60))
+        .addStringOption((o) => o.setName('state').setDescription('State, e.g. NC').setRequired(false).setMaxLength(30))
         .addChannelOption((o) => o.setName('channel').setDescription('Its blitz channel (defaults to this one)').addChannelTypes(ChannelType.GuildText).setRequired(false))
         .addStringOption((o) => o.setName('isp').setDescription('Optional ISP label, e.g. T-Fiber').setRequired(false)),
     )

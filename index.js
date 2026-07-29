@@ -2053,11 +2053,28 @@ async function handleMarketCreate(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const marketName = interaction.options.getString('name', true);
   const isp = interaction.options.getString('isp');
+  const explicitId = interaction.options.getString('id');
+  const city = interaction.options.getString('city');
+  const state = interaction.options.getString('state');
   const channel = optionChannelOrCurrent(interaction);
   const done = [];
   try {
-    const { market } = addMarket({ marketName, marketId: null, isp, createdBy: interaction.user.id });
+    // An explicit id wins. It is immutable once deal logs carry it, so deriving it from a display
+    // name is how "new-york" became the permanent id of an Ohio market.
+    const { market } = addMarket({ marketName, marketId: explicitId || null, isp, createdBy: interaction.user.id });
     done.push(`Market **${market.marketName}** (\`${market.marketId}\`)`);
+
+    // Location + the Palmetto future-mapping fields. Left null so the separate Palmetto
+    // integration has somewhere to write, without blocking the market on ids nobody has yet.
+    updateMarket(market.marketId, {
+      ...(city ? { city } : {}),
+      ...(state ? { state } : {}),
+      sourceSystem: 'palmetto',
+      externalMarketId: null,
+      externalMarketName: null,
+      lastImportedAt: null,
+    });
+    if (city || state) done.push(`Location ${[city, state].filter(Boolean).join(', ')}`);
 
     try { done.push(`Role <@&${await ensureMarketRole(interaction.guild, market)}>`); }
     catch (err) { done.push(`⚠ Role not created — ${err.message || err} (bot needs **Manage Roles**)`); }
