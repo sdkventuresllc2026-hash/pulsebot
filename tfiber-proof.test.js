@@ -22,13 +22,13 @@ test('normalizes and extracts TMO order ids', () => {
   assert.equal(normalizeTmoOrderId('abc123'), null);
 });
 
-test('requires proof only for 1G logs in T-Fiber contexts', () => {
+test('requires proof for all T-Fiber speed logs in T-Fiber contexts', () => {
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketName: 'Charlotte T-Fiber Blitz' }), true);
-  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: '🛜wilmington' }), true);
-  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: '🛜jacksonville' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'wilmington' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'jacksonville' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketId: 'wilmington-nc' }), true);
-  assert.equal(requiresTfiberProof({ speeds: ['2gig'], marketName: 'Charlotte T-Fiber Blitz' }), false);
-  assert.equal(requiresTfiberProof({ speeds: ['2gig'], channelName: '🛜jacksonville' }), false);
+  assert.equal(requiresTfiberProof({ speeds: ['2gig'], marketName: 'Charlotte T-Fiber Blitz' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['2gig'], channelName: 'jacksonville' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketName: 'Greenville Kinetic' }), false);
 });
 
@@ -71,6 +71,35 @@ test('builds OS proof payload from a logged T-Fiber deal', () => {
   assert.equal(payload.tmoOrderId, 'TMO20260725AK6OI');
   assert.equal(payload.hasScreenshot, true);
   assert.equal(payload.marketName, 'Charlotte T-Fiber Blitz');
+  assert.equal(payload.plan, 'T-Fiber 1 Gig');
+});
+
+test('builds the right T-Fiber plan label for 2 Gig logs', () => {
+  const now = new Date('2026-07-30T12:00:00Z');
+  const payload = buildTfiberProofPayload({
+    message: {
+      id: 'msg-2',
+      content: '2 gig TMO202607303GAAD',
+      attachments: attachmentMap([{ id: 'a2', name: 'order.png', contentType: 'image/png', url: 'https://cdn.example/order.png' }]),
+      guild: { id: 'guild-1' },
+      channel: { id: 'chan-1' },
+      author: { id: 'user-1', username: 'alex' },
+      member: { displayName: 'Alex Rep' },
+    },
+    logEntry: {
+      id: 'log-2',
+      displayName: 'Alex Rep',
+      timestamp: now.toISOString(),
+      channelId: 'chan-1',
+    },
+    speed: '2gig',
+    blitzName: 'Jacksonville',
+    marketIdentity: { marketId: 'jacksonville', marketName: 'Jacksonville' },
+    hasScreenshot: true,
+    now,
+  });
+
+  assert.equal(payload.plan, 'T-Fiber 2 Gig');
 });
 
 test('proof clock is 48 hours', () => {

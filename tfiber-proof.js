@@ -20,7 +20,7 @@ function looksLikeTfiberContext({ channelName, blitzName, marketName, marketId }
 }
 
 function requiresTfiberProof({ speeds, channelName, blitzName, marketName, marketId }) {
-  return Array.isArray(speeds) && speeds.includes('1gig') && looksLikeTfiberContext({ channelName, blitzName, marketName, marketId });
+  return Array.isArray(speeds) && speeds.length > 0 && looksLikeTfiberContext({ channelName, blitzName, marketName, marketId });
 }
 
 function attachmentIsScreenshot(att) {
@@ -51,6 +51,15 @@ function proofExpiresAt(now = new Date()) {
   return new Date(now.getTime() + TFIBER_PROOF_EXPIRATION_HOURS * 60 * 60 * 1000);
 }
 
+function tfiberPlanForSpeed(speed) {
+  if (speed === '2gig') return 'T-Fiber 2 Gig';
+  if (speed === '1gig') return 'T-Fiber 1 Gig';
+  if (speed === '500') return 'T-Fiber 500 Mbps';
+  if (speed === '300') return 'T-Fiber 300 Mbps';
+  if (speed === '200') return 'T-Fiber 200 Mbps';
+  return 'T-Fiber';
+}
+
 function buildTfiberProofPayload({ message, logEntry, speed, blitzName, marketIdentity, hasScreenshot, now = new Date() }) {
   const attachments = extractDiscordAttachments(message);
   const tmoOrderId = extractTmoOrderId(message?.content);
@@ -67,7 +76,7 @@ function buildTfiberProofPayload({ message, logEntry, speed, blitzName, marketId
     hasScreenshot,
     attachments,
     rawText: message.content || null,
-    plan: speed === '1gig' ? 'T-Fiber 1 Gig' : 'T-Fiber',
+    plan: tfiberPlanForSpeed(speed),
     saleDate: logEntry.timestamp || now.toISOString(),
     marketId: marketIdentity?.marketId || null,
     marketName: marketIdentity?.marketName || blitzName || null,
@@ -91,7 +100,7 @@ function buildTfiberDmPayload({ message, pending, hasScreenshot }) {
     hasScreenshot,
     attachments,
     rawText: message.content || null,
-    plan: pending.plan || 'T-Fiber 1 Gig',
+    plan: pending.plan || tfiberPlanForSpeed(pending.speed),
     saleDate: pending.timestamp || null,
     marketId: pending.marketId || null,
     marketName: pending.marketName || pending.blitzName || null,
@@ -138,4 +147,5 @@ module.exports = {
   buildTfiberProofPayload,
   buildTfiberDmPayload,
   formatTfiberProofLine,
+  tfiberPlanForSpeed,
 };

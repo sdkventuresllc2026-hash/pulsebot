@@ -1,5 +1,5 @@
 const { mutate, readLeaderboard } = require('./storage');
-const { normalizeTmoOrderId, proofExpiresAt } = require('./tfiber-proof');
+const { normalizeTmoOrderId, proofExpiresAt, tfiberPlanForSpeed } = require('./tfiber-proof');
 
 function ensureTfiberProofState(data) {
   data.tfiberProofs = data.tfiberProofs && typeof data.tfiberProofs === 'object' ? data.tfiberProofs : {};
@@ -19,7 +19,7 @@ function pendingFromLog({ logEntry, guildId, channelId, blitzName, marketIdentit
     channelId: channelId || logEntry.channelId || null,
     messageId: logEntry.sourceMessageId || null,
     speed: logEntry.speed,
-    plan: logEntry.speed === '1gig' ? 'T-Fiber 1 Gig' : 'T-Fiber',
+    plan: tfiberPlanForSpeed(logEntry.speed),
     timestamp: logEntry.timestamp,
     blitzName: blitzName || logEntry.blitzName || null,
     marketId: marketIdentity?.marketId || logEntry.marketId || null,
@@ -137,7 +137,7 @@ function pendingFromRecentLog(log, { guildId = null, marketIdentity = null, blit
     channelId: log.channelId || null,
     messageId: log.sourceMessageId || null,
     speed: log.speed,
-    plan: log.speed === '1gig' ? 'T-Fiber 1 Gig' : 'T-Fiber',
+    plan: tfiberPlanForSpeed(log.speed),
     timestamp: log.timestamp,
     blitzName: blitzName || log.blitzName || null,
     marketId: marketIdentity?.marketId || log.marketId || null,
