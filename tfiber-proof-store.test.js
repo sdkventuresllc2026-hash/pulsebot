@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { selectPendingTfiberProof } = require('./tfiber-proof-store');
+const { selectPendingTfiberProof, selectRecentTfiberProofLog } = require('./tfiber-proof-store');
 
 function pending(overrides) {
   return {
@@ -51,4 +51,51 @@ test('selectPendingTfiberProof allows one open request when the rep provides the
 
   assert.equal(result.pending.logId, 'only');
   assert.equal(result.reason, 'single_pending_with_tmo');
+});
+
+test('selectRecentTfiberProofLog recovers one recent proof-missing channel log', () => {
+  const result = selectRecentTfiberProofLog([
+    {
+      id: 'log-1',
+      userId: 'rep-1',
+      displayName: 'Rep One',
+      speed: '1gig',
+      channelId: 'chan-1',
+      timestamp: '2026-07-30T17:47:55.896Z',
+      tfiberProofStatus: 'NEEDS_SCREENSHOT',
+    },
+  ], {
+    userId: 'rep-1',
+    channelId: 'chan-1',
+    messageTimestamp: Date.parse('2026-07-30T17:48:01.688Z'),
+    windowMs: 2 * 60 * 1000,
+    guildId: 'guild-1',
+    marketIdentity: { marketId: 'wilmington', marketName: 'Wilmington' },
+    blitzName: 'Wilmington',
+  });
+
+  assert.equal(result.reason, 'single_recent_log');
+  assert.equal(result.pending.logId, 'log-1');
+  assert.equal(result.pending.marketName, 'Wilmington');
+});
+
+test('selectRecentTfiberProofLog refuses multiple recent proof-missing logs', () => {
+  const logs = ['old', 'new'].map((id, index) => ({
+    id,
+    userId: 'rep-1',
+    displayName: 'Rep One',
+    speed: '1gig',
+    channelId: 'chan-1',
+    timestamp: `2026-07-30T17:4${index}:55.896Z`,
+    tfiberProofStatus: 'NEEDS_SCREENSHOT',
+  }));
+  const result = selectRecentTfiberProofLog(logs, {
+    userId: 'rep-1',
+    channelId: 'chan-1',
+    messageTimestamp: Date.parse('2026-07-30T17:42:01.688Z'),
+    windowMs: 2 * 60 * 1000,
+  });
+
+  assert.equal(result.pending, null);
+  assert.equal(result.reason, 'ambiguous_recent_logs');
 });

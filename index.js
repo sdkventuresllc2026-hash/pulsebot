@@ -148,6 +148,7 @@ const {
   recordTfiberProofAttempt,
   markTfiberProofResolved,
   selectPendingForUser,
+  selectRecentTfiberProofLog,
   collectDueTfiberProofActions,
 } = require('./tfiber-proof-store');
 const {
@@ -1369,6 +1370,46 @@ async function submitTfiberProofForPending({ message, pending, hasScreenshot, en
   return result;
 }
 
+async function submitStandaloneTfiberProofUpload({ message, channel, hasScreenshot, enrichedPayload = null }) {
+  const marketIdentity = marketIdentityForChannel(channel);
+  const blitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel.name);
+  const member = message.member ?? (message.guild ? await message.guild.members.fetch(message.author.id).catch(() => null) : null);
+  const tmoOrderId = extractTmoOrderId(
+    enrichedPayload?.tmoOrderId ||
+    enrichedPayload?.extracted?.orderConfirmationNumber ||
+    message.content,
+  );
+  if (!tmoOrderId) return null;
+
+  const payload = {
+    idempotencyKey: `tfiber-channel-upload:${message.guild?.id || 'unknown-guild'}:${channel.id}:${message.id}:${message.author.id}`,
+    discordGuildId: message.guild?.id || null,
+    discordChannelId: channel.id,
+    discordMessageId: message.id,
+    discordUserId: message.author.id,
+    discordNickname: member?.displayName || message.author.globalName || message.author.username,
+    tmoOrderId,
+    tmoOrderIdSource: enrichedPayload?.tmoOrderIdSource || 'SCREENSHOT_OCR',
+    confidence: enrichedPayload?.confidence ?? null,
+    hasScreenshot,
+    attachments: extractDiscordAttachments(message),
+    rawText: message.content || null,
+    plan: 'T-Fiber',
+    saleDate: message.createdAt?.toISOString?.() || new Date().toISOString(),
+    marketId: marketIdentity?.marketId || null,
+    marketName: marketIdentity?.marketName || blitzName || null,
+    extracted: enrichedPayload?.extracted || null,
+    missingFields: enrichedPayload?.missingFields || undefined,
+  };
+
+  try {
+    return await postTfiberDiscordProof(payload);
+  } catch (err) {
+    console.error('[Pulse][T-Fiber] standalone proof sync failed:', err.message || err);
+    return { ok: false, status: 'SYNC_FAILED', message: err.message || String(err) };
+  }
+}
+
 function channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId) {
   if (tmoOrderId) return true;
   const pendingAt = Date.parse(pending?.timestamp || pending?.createdAt || '');
@@ -1382,6 +1423,8 @@ async function handleTfiberProofChannelUpload(message, channel) {
   const hasScreenshot = hasScreenshotAttachment(message);
   if (!hasScreenshot) return false;
 
+  const marketIdentity = marketIdentityForChannel(channel);
+  const blitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel.name);
   let tmoOrderId = extractTmoOrderId(message.content);
   let enrichedPayload = null;
   if (!tmoOrderId) {
@@ -1394,8 +1437,30 @@ async function handleTfiberProofChannelUpload(message, channel) {
   }
 
   const selection = await selectPendingForUser(message.author.id, { tmoOrderId });
-  const pending = selection.pending;
-  if (!pending) return false;
+  let pending = selection.pending;
+  if (!pending) {
+    const data = await readLeaderboard().catch(() => null);
+    const recent = selectRecentTfiberProofLog(data?.logs || [], {
+      userId: message.author.id,
+      channelId: channel.id,
+      messageTimestamp: message.createdTimestamp || Date.now(),
+      windowMs: TFIBER_CHANNEL_PROOF_WINDOW_MS,
+      guildId: message.guild?.id || null,
+      marketIdentity,
+      blitzName,
+    });
+    pending = recent.pending;
+  }
+  if (!pending) {
+    if (!tmoOrderId) return false;
+    const result = await submitStandaloneTfiberProofUpload({ message, channel, hasScreenshot, enrichedPayload });
+    if (!result) return false;
+    await message.reply({
+      content: formatTfiberProofLine(result) || 'T-Fiber proof received.',
+      allowedMentions: { parse: [] },
+    }).catch(() => {});
+    return true;
+  }
   if (!channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId)) return false;
 
   const result = await submitTfiberProofForPending({

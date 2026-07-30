@@ -127,6 +127,66 @@ function selectPendingTfiberProof(pendingItems, { tmoOrderId } = {}) {
   return { pending: null, reason: 'ambiguous', pendingCount: pending.length };
 }
 
+function pendingFromRecentLog(log, { guildId = null, marketIdentity = null, blitzName = null } = {}) {
+  return {
+    logId: log.id,
+    userId: log.userId,
+    displayName: log.displayName,
+    username: log.username,
+    guildId,
+    channelId: log.channelId || null,
+    messageId: log.sourceMessageId || null,
+    speed: log.speed,
+    plan: log.speed === '1gig' ? 'T-Fiber 1 Gig' : 'T-Fiber',
+    timestamp: log.timestamp,
+    blitzName: blitzName || log.blitzName || null,
+    marketId: marketIdentity?.marketId || log.marketId || null,
+    marketName: marketIdentity?.marketName || log.marketName || null,
+    tmoOrderId: log.tfiberTmoOrderId || null,
+    proofStatus: log.tfiberProofStatus || 'NEEDS_SCREENSHOT',
+    osOrderId: log.tfiberOsOrderId || null,
+    osProofId: log.tfiberProofId || null,
+    createdAt: log.timestamp,
+    expiresAt: log.tfiberProofExpiresAt || proofExpiresAt(new Date(log.timestamp || Date.now())).toISOString(),
+    reminders: {},
+  };
+}
+
+function selectRecentTfiberProofLog(logs, {
+  userId,
+  channelId,
+  messageTimestamp,
+  windowMs,
+  guildId = null,
+  marketIdentity = null,
+  blitzName = null,
+} = {}) {
+  const at = Number(messageTimestamp);
+  const effectiveWindowMs = Number(windowMs);
+  if (!userId || !channelId || !Number.isFinite(at) || !Number.isFinite(effectiveWindowMs)) {
+    return { pending: null, reason: 'invalid', candidateCount: 0 };
+  }
+  const candidates = (logs || [])
+    .filter((log) => log && !log.removed)
+    .filter((log) => log.userId === userId && log.channelId === channelId)
+    .filter((log) => log.speed === '1gig')
+    .filter((log) => !log.tfiberOsOrderId)
+    .filter((log) => !log.tfiberProofStatus || ['NEEDS_SCREENSHOT', 'NEEDS_REVIEW', 'UNLINKED_USER'].includes(log.tfiberProofStatus))
+    .map((log) => ({ log, timestamp: Date.parse(log.timestamp || '') }))
+    .filter((item) => Number.isFinite(item.timestamp))
+    .filter((item) => item.timestamp <= at && at - item.timestamp <= effectiveWindowMs)
+    .sort((a, b) => b.timestamp - a.timestamp);
+
+  if (candidates.length !== 1) {
+    return { pending: null, reason: candidates.length ? 'ambiguous_recent_logs' : 'none', candidateCount: candidates.length };
+  }
+  return {
+    pending: pendingFromRecentLog(candidates[0].log, { guildId, marketIdentity, blitzName }),
+    reason: 'single_recent_log',
+    candidateCount: 1,
+  };
+}
+
 async function selectPendingForUser(userId, { tmoOrderId } = {}) {
   const data = await readLeaderboard();
   const state = ensureTfiberProofState(data);
@@ -184,6 +244,7 @@ module.exports = {
   recordTfiberProofAttempt,
   markTfiberProofResolved,
   selectPendingTfiberProof,
+  selectRecentTfiberProofLog,
   selectPendingForUser,
   latestPendingForUser,
   collectDueTfiberProofActions,
