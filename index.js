@@ -1329,9 +1329,9 @@ function appendTfiberProofLine(content, result) {
   return line ? `${content}\n${line}` : content;
 }
 
-async function submitTfiberProofForPending({ message, pending, hasScreenshot }) {
-  let payload = buildTfiberDmPayload({ message, pending, hasScreenshot });
-  if (hasScreenshot) {
+async function submitTfiberProofForPending({ message, pending, hasScreenshot, enrichedPayload = null }) {
+  let payload = enrichedPayload || buildTfiberDmPayload({ message, pending, hasScreenshot });
+  if (hasScreenshot && !payload.extracted) {
     payload = await enrichTfiberProofPayload(payload);
   }
   let result;
@@ -1381,13 +1381,38 @@ function channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId) {
 async function handleTfiberProofChannelUpload(message, channel) {
   const hasScreenshot = hasScreenshotAttachment(message);
   if (!hasScreenshot) return false;
-  const tmoOrderId = extractTmoOrderId(message.content);
+
+  let tmoOrderId = extractTmoOrderId(message.content);
+  let enrichedPayload = null;
+  if (!tmoOrderId) {
+    enrichedPayload = await enrichTfiberProofPayload({
+      rawText: message.content || null,
+      attachments: extractDiscordAttachments(message),
+      hasScreenshot,
+    });
+    tmoOrderId = extractTmoOrderId(enrichedPayload?.tmoOrderId || enrichedPayload?.extracted?.orderConfirmationNumber);
+  }
+
   const selection = await selectPendingForUser(message.author.id, { tmoOrderId });
   const pending = selection.pending;
   if (!pending) return false;
   if (!channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId)) return false;
 
-  const result = await submitTfiberProofForPending({ message, pending, hasScreenshot });
+  const result = await submitTfiberProofForPending({
+    message,
+    pending,
+    hasScreenshot,
+    enrichedPayload: enrichedPayload
+      ? {
+          ...buildTfiberDmPayload({ message, pending, hasScreenshot }),
+          tmoOrderId: enrichedPayload.tmoOrderId || tmoOrderId || null,
+          tmoOrderIdSource: enrichedPayload.tmoOrderIdSource || (tmoOrderId ? 'SCREENSHOT_OCR' : null),
+          confidence: enrichedPayload.confidence ?? null,
+          extracted: enrichedPayload.extracted || null,
+          missingFields: enrichedPayload.missingFields || undefined,
+        }
+      : null,
+  });
   await message.reply({
     content: formatTfiberProofLine(result) || 'T-Fiber proof received.',
     allowedMentions: { parse: [] },
