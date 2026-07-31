@@ -15,8 +15,8 @@ function pending(overrides) {
 
 test('selectPendingTfiberProof does not guess when multiple proof requests are open without a TMO id', () => {
   const result = selectPendingTfiberProof([
-    pending({ logId: 'old', createdAt: '2026-07-29T12:00:00.000Z', tmoOrderId: 'TMO111111AA' }),
-    pending({ logId: 'new', createdAt: '2026-07-29T13:00:00.000Z', tmoOrderId: 'TMO222222BB' }),
+    pending({ logId: 'old', createdAt: '2026-07-29T12:00:00.000Z', tmoOrderId: 'TMO20260729111AA' }),
+    pending({ logId: 'new', createdAt: '2026-07-29T13:00:00.000Z', tmoOrderId: 'TMO20260729222BB' }),
   ]);
 
   assert.equal(result.pending, null);
@@ -26,9 +26,9 @@ test('selectPendingTfiberProof does not guess when multiple proof requests are o
 
 test('selectPendingTfiberProof matches the pending deal by TMO id instead of latest-created order', () => {
   const result = selectPendingTfiberProof([
-    pending({ logId: 'old', createdAt: '2026-07-29T12:00:00.000Z', tmoOrderId: 'TMO111111AA' }),
-    pending({ logId: 'new', createdAt: '2026-07-29T13:00:00.000Z', tmoOrderId: 'TMO222222BB' }),
-  ], { tmoOrderId: 'tmo-111111-aa' });
+    pending({ logId: 'old', createdAt: '2026-07-29T12:00:00.000Z', tmoOrderId: 'TMO20260729111AA' }),
+    pending({ logId: 'new', createdAt: '2026-07-29T13:00:00.000Z', tmoOrderId: 'TMO20260729222BB' }),
+  ], { tmoOrderId: 'tmo-20260729-111aa' });
 
   assert.equal(result.pending.logId, 'old');
   assert.equal(result.reason, 'matched_tmo');
@@ -36,9 +36,9 @@ test('selectPendingTfiberProof matches the pending deal by TMO id instead of lat
 
 test('selectPendingTfiberProof refuses a TMO id that does not match any open request', () => {
   const result = selectPendingTfiberProof([
-    pending({ logId: 'old', createdAt: '2026-07-29T12:00:00.000Z', tmoOrderId: 'TMO111111AA' }),
-    pending({ logId: 'new', createdAt: '2026-07-29T13:00:00.000Z', tmoOrderId: 'TMO222222BB' }),
-  ], { tmoOrderId: 'TMO333333CC' });
+    pending({ logId: 'old', createdAt: '2026-07-29T12:00:00.000Z', tmoOrderId: 'TMO20260729111AA' }),
+    pending({ logId: 'new', createdAt: '2026-07-29T13:00:00.000Z', tmoOrderId: 'TMO20260729222BB' }),
+  ], { tmoOrderId: 'TMO20260729333CC' });
 
   assert.equal(result.pending, null);
   assert.equal(result.reason, 'tmo_not_matched');
@@ -47,7 +47,7 @@ test('selectPendingTfiberProof refuses a TMO id that does not match any open req
 test('selectPendingTfiberProof allows one open request when the rep provides the TMO id later', () => {
   const result = selectPendingTfiberProof([
     pending({ logId: 'only', createdAt: '2026-07-29T12:00:00.000Z' }),
-  ], { tmoOrderId: 'TMO333333CC' });
+  ], { tmoOrderId: 'TMO20260729333CC' });
 
   assert.equal(result.pending.logId, 'only');
   assert.equal(result.reason, 'single_pending_with_tmo');
@@ -77,6 +77,29 @@ test('selectRecentTfiberProofLog recovers one recent proof-missing channel log',
   assert.equal(result.reason, 'single_recent_log');
   assert.equal(result.pending.logId, 'log-1');
   assert.equal(result.pending.marketName, 'Wilmington');
+});
+
+test('selectRecentTfiberProofLog recovers 2 Gig proof-missing channel logs too', () => {
+  const result = selectRecentTfiberProofLog([
+    {
+      id: 'log-2g',
+      userId: 'rep-1',
+      displayName: 'Rep One',
+      speed: '2gig',
+      channelId: 'chan-1',
+      timestamp: '2026-07-30T17:47:55.896Z',
+      tfiberProofStatus: 'NEEDS_SCREENSHOT',
+    },
+  ], {
+    userId: 'rep-1',
+    channelId: 'chan-1',
+    messageTimestamp: Date.parse('2026-07-30T17:48:01.688Z'),
+    windowMs: 2 * 60 * 1000,
+  });
+
+  assert.equal(result.reason, 'single_recent_log');
+  assert.equal(result.pending.logId, 'log-2g');
+  assert.equal(result.pending.plan, 'T-Fiber 2 Gig');
 });
 
 test('selectRecentTfiberProofLog refuses multiple recent proof-missing logs', () => {

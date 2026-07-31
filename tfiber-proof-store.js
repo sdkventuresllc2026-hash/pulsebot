@@ -169,7 +169,7 @@ function selectRecentTfiberProofLog(logs, {
   const candidates = (logs || [])
     .filter((log) => log && !log.removed)
     .filter((log) => log.userId === userId && log.channelId === channelId)
-    .filter((log) => log.speed === '1gig')
+    .filter((log) => ['2gig', '1gig', '500mb', '300mb', '200mb'].includes(log.speed))
     .filter((log) => !log.tfiberOsOrderId)
     .filter((log) => !log.tfiberProofStatus || ['NEEDS_SCREENSHOT', 'NEEDS_REVIEW', 'UNLINKED_USER'].includes(log.tfiberProofStatus))
     .map((log) => ({ log, timestamp: Date.parse(log.timestamp || '') }))

@@ -3531,7 +3531,6 @@ client.on('messageCreate', async (message) => {
     const tfiberLines = [];
     if (requiresTfiberProof({ speeds: parsed.speeds, channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId })) {
       for (const [idx, logEntry] of (result.logEntries || []).entries()) {
-        if (logEntry.speed !== '1gig') continue;
         const syncResult = await syncTfiberProofForLog({
           message,
           logEntry,

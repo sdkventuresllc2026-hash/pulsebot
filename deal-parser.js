@@ -14,9 +14,9 @@ const BARE_SPEED_NUM = new Set(['200', '300', '500', '1000', '2000']);
 const SLICE = {
   '2gig': /^(2000\s*mbps|2000mbps|2000|2\s*gigs?|2gig|2\s*gbps|2gbps|2\s*gb|2gb|2g)$/i,
   '1gig': /^(1000\s*mbps|1000mbps|1000|1\s*gigs?|1gig|1\s*gbps|1gbps|1\s*gb|1gb|1g)$/i,
-  '500mb': /^(500\s*(megs?|mbps|mb)|500mbps|500mb|500m|500)$/i,
-  '300mb': /^(300\s*(megs?|mbps|mb)|300mbps|300mb|300m|300)$/i,
-  '200mb': /^(200\s*(megs?|mbps|mb)|200mbps|200mb|200m|200)$/i,
+  '500mb': /^(500\s*(megs?|mbps|mbs|mb)|500mbps|500mbs|500mb|500m|500)$/i,
+  '300mb': /^(300\s*(megs?|mbps|mbs|mb)|300mbps|300mbs|300mb|300m|300)$/i,
+  '200mb': /^(200\s*(megs?|mbps|mbs|mb)|200mbps|200mbs|200mb|200m|200)$/i,
 };
 
 const SPEED_ORDER = ['2gig', '1gig', '500mb', '300mb', '200mb'];

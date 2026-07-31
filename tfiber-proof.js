@@ -6,11 +6,15 @@ function normalizeTmoOrderId(value) {
     .trim()
     .toUpperCase()
     .replace(/[\s-]+/g, '');
-  return /^TMO[A-Z0-9]{6,24}$/.test(normalized) ? normalized : null;
+  const match = normalized.match(/^TMO(20\d{2})(\d{2})(\d{2})([A-Z0-9]{5})$/);
+  if (!match) return null;
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return month >= 1 && month <= 12 && day >= 1 && day <= 31 ? normalized : null;
 }
 
 function extractTmoOrderId(value) {
-  const match = String(value || '').match(/\bTMO(?:-?[A-Z0-9]){6,24}\b/i);
+  const match = String(value || '').match(/\bTMO(?:-?[A-Z0-9]){13}\b/i);
   return normalizeTmoOrderId(match && match[0]);
 }
 

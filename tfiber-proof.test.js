@@ -18,8 +18,12 @@ function attachmentMap(items) {
 
 test('normalizes and extracts TMO order ids', () => {
   assert.equal(normalizeTmoOrderId(' tmo-20260725 ak6oi '), 'TMO20260725AK6OI');
+  assert.equal(normalizeTmoOrderId(' tmo-20260730 04w0t '), 'TMO2026073004W0T');
   assert.equal(extractTmoOrderId('order is TMO20260725AK6OI thanks'), 'TMO20260725AK6OI');
+  assert.equal(extractTmoOrderId('Order number: TMO20260731MRT34'), 'TMO20260731MRT34');
   assert.equal(normalizeTmoOrderId('abc123'), null);
+  assert.equal(normalizeTmoOrderId('TMO02026073004W0T'), null);
+  assert.equal(normalizeTmoOrderId('TMO2026603004W0T'), null);
 });
 
 test('requires proof for all T-Fiber speed logs in T-Fiber contexts', () => {

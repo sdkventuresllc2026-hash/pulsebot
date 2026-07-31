@@ -19,19 +19,19 @@ test('1 Gig variants', () => {
 });
 
 test('500 / 300 / 200 Mbps variants', () => {
-  const five = ['500', '500m', '500M', '500 mb', '500MB', '500mb', '500 mbps', '500mbps', '500 meg', '500 megs'];
+  const five = ['500', '500m', '500M', '500 mb', '500MB', '500mb', '500 mbs', '500mbs', '500 mbps', '500mbps', '500 meg', '500 megs'];
   for (const s of five) {
     const r = parseDealMessage(s);
     assert.equal(r.ok, true, s);
     assert.deepEqual(r.speeds, ['500mb'], s);
   }
-  const three = ['300', '300m', '300M', '300 mb', '300mb', '300 mbps', '300 meg'];
+  const three = ['300', '300m', '300M', '300 mb', '300mb', '300 mbs', '300mbs', '300 mbps', '300 meg'];
   for (const s of three) {
     const r = parseDealMessage(s);
     assert.equal(r.ok, true, s);
     assert.deepEqual(r.speeds, ['300mb'], s);
   }
-  const two = ['200', '200m', '200M', '200 mb', '200mb', '200 mbps', '200 meg'];
+  const two = ['200', '200m', '200M', '200 mb', '200mb', '200 mbs', '200mbs', '200 mbps', '200 meg'];
   for (const s of two) {
     const r = parseDealMessage(s);
     assert.equal(r.ok, true, s);
