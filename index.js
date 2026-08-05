@@ -90,6 +90,10 @@ const {
   APPROVED_CHANNELS_PATH,
 } = require('./deal-channels');
 const { buildMarketAutocompleteChoices } = require('./market-autocomplete');
+const {
+  buildChannelAutocompleteChoices,
+  resolveGuildTextChannel,
+} = require('./channel-picker');
 const { acquireProcessLock } = require('./process-lock');
 const {
   buildPremiumDealConfirmation,
@@ -1999,6 +2003,34 @@ function optionChannelOrCurrent(interaction) {
   return interaction.options.getChannel('channel') || interaction.channel;
 }
 
+function safeGetOption(interaction, getter, name) {
+  try {
+    return getter.call(interaction.options, name);
+  } catch {
+    return null;
+  }
+}
+
+async function marketCreateChannel(interaction) {
+  const picked = safeGetOption(interaction, interaction.options.getChannel, 'channel');
+  if (picked) return picked;
+
+  const ref =
+    safeGetOption(interaction, interaction.options.getString, 'channel') ||
+    safeGetOption(interaction, interaction.options.getString, 'channel_ref');
+  if (ref) {
+    const resolved = await resolveGuildTextChannel(interaction.guild, ref);
+    if (!resolved) {
+      const err = new Error(`I could not find one text channel matching \`${ref}\`. Try the exact channel name like \`goldsboro\`, a channel mention, or the raw channel ID.`);
+      err.code = 'CHANNEL_NOT_FOUND';
+      throw err;
+    }
+    return resolved;
+  }
+
+  return interaction.channel;
+}
+
 function channelBlitzName(channel, fallback) {
   return approvedBlitzNameForChannel(channel) || String(fallback || '').trim() || titleCaseBlitzName(blitzFromChannelName(channel?.name));
 }
@@ -2405,9 +2437,9 @@ async function handleMarketCreate(interaction) {
   const explicitId = interaction.options.getString('id');
   const city = interaction.options.getString('city');
   const state = interaction.options.getString('state');
-  const channel = optionChannelOrCurrent(interaction);
   const done = [];
   try {
+    const channel = await marketCreateChannel(interaction);
     // An explicit id wins. It is immutable once deal logs carry it, so deriving it from a display
     // name is how "new-york" became the permanent id of an Ohio market.
     const { market } = addMarket({ marketName, marketId: explicitId || null, isp, createdBy: interaction.user.id });
@@ -3571,6 +3603,15 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isAutocomplete()) {
     try {
       const focused = interaction.options.getFocused(true);
+      const subcommand = interaction.options.getSubcommand(false);
+      const isMarketCreateChannel =
+        interaction.commandName === 'market' &&
+        subcommand === 'create' &&
+        focused.name === 'channel';
+      if (focused.name === 'channel_ref' || isMarketCreateChannel) {
+        await interaction.respond(await buildChannelAutocompleteChoices(interaction.guild, focused.value));
+        return;
+      }
       // /admin uses "market_id"; /market uses the friendlier "market". Same picker behind both.
       if (focused.name !== 'market_id' && focused.name !== 'market') {
         await interaction.respond([]);

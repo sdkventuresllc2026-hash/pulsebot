@@ -51,7 +51,14 @@ const commands = [
         .addStringOption((o) => o.setName('id').setDescription('Operational id, e.g. wilmington-nc (defaults to the name)').setRequired(false).setMaxLength(40))
         .addStringOption((o) => o.setName('city').setDescription('City, e.g. Wilmington').setRequired(false).setMaxLength(60))
         .addStringOption((o) => o.setName('state').setDescription('State, e.g. NC').setRequired(false).setMaxLength(30))
-        .addChannelOption((o) => o.setName('channel').setDescription('Its blitz channel (defaults to this one)').addChannelTypes(ChannelType.GuildText).setRequired(false))
+        .addStringOption((o) =>
+          o
+            .setName('channel')
+            .setDescription('Its blitz channel: type #channel, channel name, or ID')
+            .setRequired(false)
+            .setMaxLength(100)
+            .setAutocomplete(true),
+        )
         .addStringOption((o) => o.setName('isp').setDescription('Optional ISP label, e.g. T-Fiber').setRequired(false)),
     )
     .addSubcommand((s) =>
