@@ -53,7 +53,7 @@ function extractionPrompt({ rawText, index, total }) {
     'The order confirmation number is the value after "Order number:" and must start with TMO. Ignore Dealer Code, NTID, reference numbers, confirmation numbers from other providers, browser address bars, and timestamps.',
     'If the screenshot is a photo of another phone or an email confirmation, still extract the TMO order number and any visible facts, but do not infer hidden service/contact/install details.',
     'Capture the visible Dealer Code and dealer/operator label near "ASSISTED FLOW" when present. Do not decide whether the dealer code is correct; only return what is visible.',
-    'Service address is the text under "Service address". Contact info usually appears as customer name, email, then phone; capture the name and phone, ignore the email unless it helps identify the contact section.',
+    'Service address is the text under "Service address". Contact info usually appears as customer name, email, then phone; capture all visible contact facts: customer name, email address, and phone number.',
     'Installation date/time are only valid when the "Installation details" section is visible. If that section is below the fold or hidden by the browser bar, return null for install date/time.',
     'Promotions usually appear as bullets under "Discounts and promotions", such as AutoPay discount or one month free. Capture visible promo text exactly and do not invent dollar amounts.',
     'If the screenshot is a selfie/photo, generic text message, Kinetic review page, or anything that is not a T-Mobile Fiber order page, set extractionStatus to NOT_ORDER_SCREENSHOT and return null for all fields.',
@@ -80,6 +80,7 @@ function extractionSchema() {
         },
         orderConfirmationNumber: { type: ['string', 'null'] },
         customerName: { type: ['string', 'null'] },
+        customerEmail: { type: ['string', 'null'] },
         customerPhone: { type: ['string', 'null'] },
         serviceAddress: { type: ['string', 'null'] },
         unit: { type: ['string', 'null'] },
@@ -99,6 +100,7 @@ function extractionSchema() {
         'extractionStatus',
         'orderConfirmationNumber',
         'customerName',
+        'customerEmail',
         'customerPhone',
         'serviceAddress',
         'unit',
@@ -160,6 +162,13 @@ function normalizePhone(value) {
   return text;
 }
 
+function normalizeEmail(value) {
+  const text = clean(value);
+  if (!text) return null;
+  const match = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0].toLowerCase() : text.toLowerCase();
+}
+
 function normalizeExtraction(item, attachment = null) {
   return {
     extractionStatus: ['ORDER_DETAILS', 'ORDER_SUMMARY', 'NOT_ORDER_SCREENSHOT', 'UNCLEAR'].includes(item.extractionStatus)
@@ -169,6 +178,7 @@ function normalizeExtraction(item, attachment = null) {
     attachmentName: attachment?.name || null,
     orderConfirmationNumber: normalizeTmoOrderId(item.orderConfirmationNumber) || extractTmoOrderId(item.orderConfirmationNumber),
     customerName: clean(item.customerName),
+    customerEmail: normalizeEmail(item.customerEmail),
     customerPhone: normalizePhone(item.customerPhone),
     serviceAddress: clean(item.serviceAddress),
     unit: clean(item.unit),
@@ -209,6 +219,7 @@ function mergeTfiberExtractions(items, { fallbackTmoOrderId = null } = {}) {
     orderScreenshotCount: normalizedItems.length,
     orderConfirmationNumber: conflicts.includes('orderConfirmationNumber') ? null : (ids[0] || fallbackId || null),
     customerName: pickUnique(normalizedItems, 'customerName', conflicts),
+    customerEmail: pickUnique(normalizedItems, 'customerEmail', conflicts),
     customerPhone: pickUnique(normalizedItems, 'customerPhone', conflicts),
     serviceAddress: pickUnique(normalizedItems, 'serviceAddress', conflicts),
     unit: pickUnique(normalizedItems, 'unit', conflicts),

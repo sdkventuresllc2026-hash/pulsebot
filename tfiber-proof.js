@@ -115,22 +115,27 @@ function buildTfiberDmPayload({ message, pending, hasScreenshot }) {
 function formatTfiberProofLine(result) {
   if (!result) return null;
   const missing = Array.isArray(result.missingFields) ? result.missingFields : [];
-  const missingDetails = missing.some((field) => [
-    'customerName',
-    'customerPhone',
-    'serviceAddress',
-    'installationDate',
-    'installationTimeWindow',
-  ].includes(field));
+  const missingContact = missing.some((field) => ['customerName', 'customerPhone', 'customerEmail'].includes(field));
+  const missingAddress = missing.includes('serviceAddress');
+  const missingInstall = missing.some((field) => ['installationDate', 'installationTimeWindow'].includes(field));
+  const missingDetails = missingContact || missingAddress || missingInstall;
+  const detailText = () => {
+    if (missingContact && missingInstall) return 'Customer contact and install details still needed.';
+    if (missingContact) return 'Customer contact details still needed.';
+    if (missingAddress && missingInstall) return 'Service address and install details still needed.';
+    if (missingAddress) return 'Service address still needed.';
+    if (missingInstall) return 'Install details still needed.';
+    return 'Details still needed.';
+  };
   if (result.status === 'ORDER_CREATED') {
     return missingDetails
-      ? 'T-Fiber proof received. Synced to FiberSales OS. Contact/install details still needed.'
-      : 'T-Fiber proof received. Synced to FiberSales OS with contact/install details.';
+      ? `T-Fiber proof received. Synced to FiberSales OS. ${detailText()}`
+      : 'T-Fiber proof received. Synced to FiberSales OS with customer details.';
   }
   if (result.status === 'PROOF_ATTACHED' || result.status === 'IDEMPOTENT_REPLAY') {
     return missingDetails
-      ? 'T-Fiber proof received. Matched in FiberSales OS. Contact/install details still needed.'
-      : 'T-Fiber proof received. Matched in FiberSales OS with contact/install details.';
+      ? `T-Fiber proof received. Matched in FiberSales OS. ${detailText()}`
+      : 'T-Fiber proof received. Matched in FiberSales OS with customer details.';
   }
   if (result.status === 'NEEDS_SCREENSHOT') return 'T-Fiber proof needed: upload the order confirmation screenshot here or DM PulseBot within 48 hours.';
   if (result.status === 'UNLINKED_USER') return 'T-Fiber proof held: Discord user is not linked in FiberSales OS yet.';

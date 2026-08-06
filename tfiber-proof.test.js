@@ -119,10 +119,14 @@ test('proof clock is 48 hours', () => {
 test('proof line is simple but calls out missing contact or install details', () => {
   assert.equal(
     formatTfiberProofLine({ status: 'ORDER_CREATED', missingFields: [] }),
-    'T-Fiber proof received. Synced to FiberSales OS with contact/install details.',
+    'T-Fiber proof received. Synced to FiberSales OS with customer details.',
   );
   assert.equal(
     formatTfiberProofLine({ status: 'PROOF_ATTACHED', missingFields: ['customerPhone'] }),
-    'T-Fiber proof received. Matched in FiberSales OS. Contact/install details still needed.',
+    'T-Fiber proof received. Matched in FiberSales OS. Customer contact details still needed.',
+  );
+  assert.equal(
+    formatTfiberProofLine({ status: 'ORDER_CREATED', missingFields: ['installationDate', 'installationTimeWindow'] }),
+    'T-Fiber proof received. Synced to FiberSales OS. Install details still needed.',
   );
 });

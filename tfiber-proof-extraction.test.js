@@ -9,6 +9,7 @@ test('merges multiple screenshots for one T-Fiber order without guessing missing
       extractionStatus: 'ORDER_DETAILS',
       orderConfirmationNumber: 'TMO-20260729-ABC12',
       customerName: 'Jane Doe',
+      customerEmail: 'JANE@EXAMPLE.COM',
       customerPhone: null,
       serviceAddress: null,
       installationDate: null,
@@ -32,6 +33,7 @@ test('merges multiple screenshots for one T-Fiber order without guessing missing
 
   assert.equal(merged.extracted.orderConfirmationNumber, 'TMO20260729ABC12');
   assert.equal(merged.extracted.customerName, 'Jane Doe');
+  assert.equal(merged.extracted.customerEmail, 'jane@example.com');
   assert.equal(merged.extracted.customerPhone, '910-555-1212');
   assert.equal(merged.extracted.serviceAddress, '123 Main St');
   assert.equal(merged.extracted.installationTimeWindow, '8 AM - 10 AM');
