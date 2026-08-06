@@ -240,6 +240,7 @@ function mergeTfiberExtractions(items, { fallbackTmoOrderId = null } = {}) {
   if (!normalizedItems.length) missingFields.push('orderScreenshot');
   if (!extracted.orderConfirmationNumber) missingFields.push('orderConfirmationNumber');
   if (!extracted.customerName) missingFields.push('customerName');
+  if (!extracted.customerEmail) missingFields.push('customerEmail');
   if (!extracted.customerPhone) missingFields.push('customerPhone');
   if (!extracted.serviceAddress) missingFields.push('serviceAddress');
   if (!extracted.installationDate) missingFields.push('installationDate');
