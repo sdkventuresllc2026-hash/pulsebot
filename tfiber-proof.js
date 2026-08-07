@@ -20,7 +20,7 @@ function extractTmoOrderId(value) {
 
 function looksLikeTfiberContext({ channelName, blitzName, marketName, marketId }) {
   const haystack = [channelName, blitzName, marketName, marketId].filter(Boolean).join(' ').toLowerCase();
-  return /\bt[-\s]?fiber\b|\bt[-\s]?mobile\b|\btmo\b|\bwilmington(?:-nc)?\b|\bjacksonville\b|\bgoldsboro\b|\bdayton\b/.test(haystack);
+  return /\bt[-\s]?fiber\b|\bt[-\s]?mobile\b|\btmo\b|\bwilmington(?:-nc)?\b|\bjacksonville\b|\bgoldsboro\b|\bdayton\b|\bohio\b/.test(haystack);
 }
 
 function requiresTfiberProof({ speeds, channelName, blitzName, marketName, marketId }) {
