@@ -1425,7 +1425,9 @@ function channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId) {
 
 async function handleTfiberProofChannelUpload(message, channel) {
   const hasScreenshot = hasScreenshotAttachment(message);
-  if (!hasScreenshot) return false;
+  // No image but a TMO id in the text is a rep answering "what's the order number?" for a
+  // screenshot the OS is already holding. Anything else with no image is not proof of anything.
+  if (!hasScreenshot && !extractTmoOrderId(message.content)) return false;
 
   const marketIdentity = marketIdentityForChannel(channel);
   const blitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel.name);
@@ -3434,7 +3436,7 @@ client.on('messageCreate', async (message) => {
 
     const parsed = parseDealMessage(message.content);
     if (!parsed.ok || !parsed.speeds.length) {
-      if (messageHasScreenshot && isTfiberProofChannel) {
+      if (isTfiberProofChannel && (messageHasScreenshot || extractTmoOrderId(message.content))) {
         const handled = await handleTfiberProofChannelUpload(message, channel);
         if (!handled) rememberTfiberChannelScreenshot(message, channel);
       }
