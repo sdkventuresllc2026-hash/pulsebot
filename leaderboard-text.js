@@ -32,6 +32,8 @@ function normalizedCommand(raw) {
 }
 
 const MARKET_DIRECT = {
+  lb: 'daily',
+  leaderboard: 'daily',
   daily: 'daily',
   today: 'daily',
   yesterday: 'yesterday',

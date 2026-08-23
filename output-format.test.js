@@ -44,16 +44,32 @@ test('formatLeaderboard renders exact market daily style', () => {
   assert.equal(
     out,
     [
-      '**Virginia Leaderboard**',
+      '🏆 **Virginia Leaderboard**',
       'Today · Thursday, May 21',
       '',
-      '🥇 **Henny Sells** · 6',
-      '🥈 **Caleb Head** · 5',
-      '🥉 **iQRexy** · 4',
+      '🥇 **Henny Sells** · **6** ▰▰▰▰▰▰',
+      '🥈 **Caleb Head** · **5** ▰▰▰▰▰▱',
+      '🥉 **iQRexy** · **4** ▰▰▰▰▱▱',
       '',
-      '**Virginia Total** · 15 deals',
+      '**Virginia Total** · **15** deals · 3 reps',
+      '🔥 Henny Sells leads by 1',
     ].join('\n'),
   );
+});
+
+test('formatLeaderboard shows quarter line and tie at the top', () => {
+  const out = formatLeaderboard({
+    scope: 'market',
+    period: 'daily',
+    rows: [SAMPLE_ROWS[0], { ...SAMPLE_ROWS[1], total: 6 }, SAMPLE_ROWS[2]],
+    total: 16,
+    market: 'Virginia',
+    dateContext: 'Today · Thursday, May 21',
+    quarterLine: '_Q3 — **EXTEND THE LEAD**_',
+  });
+  assert.equal(out.split('\n')[2], '_Q3 — **EXTEND THE LEAD**_');
+  assert.match(out, /\n🔥 Tied at the top — Henny Sells, Caleb Head$/);
+  assert.doesNotMatch(out, /leads by/);
 });
 
 test('formatLeaderboard renders exact master all-time style', () => {
@@ -67,14 +83,15 @@ test('formatLeaderboard renders exact master all-time style', () => {
   assert.equal(
     out,
     [
-      '**Master Leaderboard**',
+      '🏆 **Master Leaderboard**',
       'All-Time · All Markets',
       '',
-      '🥇 **Henny Sells** · 6 · Virginia',
-      '🥈 **Caleb Head** · 5 · Greenville',
-      '🥉 **iQRexy** · 4 · Virginia',
+      '🥇 **Henny Sells** · **6** · Virginia ▰▰▰▰▰▰',
+      '🥈 **Caleb Head** · **5** · Greenville ▰▰▰▰▰▱',
+      '🥉 **iQRexy** · **4** · Virginia ▰▰▰▰▱▱',
       '',
-      '**All Markets Total** · 15 deals',
+      '**All Markets Total** · **15** deals · 3 reps',
+      '🔥 Henny Sells leads by 1',
     ].join('\n'),
   );
 });
@@ -91,12 +108,12 @@ test('formatLeaderboard renders empty state', () => {
   assert.equal(
     out,
     [
-      '**Greenville Leaderboard**',
+      '🏆 **Greenville Leaderboard**',
       'This Week · May 18–24',
       '',
-      'No deals logged yet.',
+      '_No deals logged yet — first door wins the board._',
       '',
-      '**Greenville Total** · 0 deals',
+      '**Greenville Total** · **0** deals',
     ].join('\n'),
   );
 });
@@ -114,19 +131,32 @@ test('formatLeaderboard shows all rows up to soft cap and notes overflow', () =>
     market: 'Evansville',
     dateContext: 'Today · Thursday, May 21',
   });
-  assert.match(out, /🥇 \*\*Very\\_Long\\_\\\*Rep\\\*\\_Name\\_Wit…\*\* · 12/);
-  assert.match(out, /^#10 \*\*Rep 10\*\* · 3$/m);
-  assert.match(out, /^#11 \*\*Rep 11\*\* · 2$/m);
-  assert.match(out, /^#12 \*\*Rep 12\*\* · 1$/m);
+  assert.match(out, /🥇 \*\*Very\\_Long\\_\\\*Rep\\\*\\_Name\\_Wit…\*\* · \*\*12\*\* ▰▰▰▰▰▰/);
+  assert.match(out, /^\*\*#10\*\* \*\*Rep 10\*\* · \*\*3\*\* ▰▰▱▱▱▱$/m);
+  assert.match(out, /^\*\*#11\*\* \*\*Rep 11\*\* · \*\*2\*\* ▰▱▱▱▱▱$/m);
+  assert.match(out, /^\*\*#12\*\* \*\*Rep 12\*\* · \*\*1\*\* ▰▱▱▱▱▱$/m);
   assert.doesNotMatch(out, /and \d+ more/);
 });
 
 test('formatLeaderboard applies soft cap with overflow note past 50 rows', () => {
   const rows = Array.from({ length: 55 }, (_, i) => ({ displayName: `Rep ${i + 1}`, total: 55 - i }));
-  const out = formatLeaderboard({ scope: 'master', period: 'alltime', rows, total: 100 });
-  assert.match(out, /^#50 /m);
+  const out = formatLeaderboard({ scope: 'market', period: 'alltime', rows, total: 100, market: 'Virginia' });
+  assert.match(out, /^\*\*#50\*\* /m);
   assert.doesNotMatch(out, /Rep 51/);
   assert.match(out, /…and 5 more/);
+  assert.ok(out.length <= 1900, `too long: ${out.length}`);
+});
+
+test('formatLeaderboard stays under the Discord 2000-char limit with long names', () => {
+  const rows = Array.from({ length: 50 }, (_, i) => ({
+    displayName: `Representative Longname ${i + 1}`,
+    total: 50 - i,
+    market: 'Some Longer Market Name',
+  }));
+  const out = formatLeaderboard({ scope: 'master', period: 'alltime', rows, total: 1275 });
+  assert.ok(out.length <= 1900, `too long: ${out.length}`);
+  assert.match(out, /…and \d+ more/);
+  assert.match(out, /\*\*All Markets Total\*\* · \*\*1275\*\* deals · 50 reps/);
 });
 
 test('resolveDateContext formats daily and weekly labels', () => {

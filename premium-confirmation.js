@@ -32,7 +32,7 @@ function formatMultiSpeedLine(speeds) {
     const label = SPEED_DISPLAY[key];
     parts.push(n > 1 ? `${n}× ${label}` : label);
   }
-  return parts.join(' | ');
+  return parts.join(' · ');
 }
 
 const PERSONAL_EVENTS = new Set([
@@ -168,11 +168,13 @@ function buildDealHypeLine({ picked, displayName, movement }) {
 function buildPremiumDealConfirmation(ctx) {
   const { displayName, speeds } = ctx;
 
+  // "· 3 today" only once there's a count to show; the first deal of the day is already the hype line's job.
+  const today = Number(ctx.dealsTodayAfter) > 1 ? ` · **${ctx.dealsTodayAfter} today**` : '';
   let header;
   if (speeds.length === 1) {
-    header = `✅ **Logged** — **${displayName}** · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}`;
+    header = `✅ **Logged** — **${displayName}** · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}${today}`;
   } else {
-    header = `✅ **Logged** — **${displayName}** · **${speeds.length}** deals\n${formatMultiSpeedLine(speeds)}`;
+    header = `✅ **Logged** — **${displayName}** · **${speeds.length}** deals${today}\n${formatMultiSpeedLine(speeds)}`;
   }
 
   const parts = [header];

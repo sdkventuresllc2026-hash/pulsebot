@@ -5,6 +5,8 @@ const { parseLeaderboardTextIntent } = require('./leaderboard-text');
 test('parseLeaderboardTextIntent recognizes market commands', () => {
   assert.deepEqual(parseLeaderboardTextIntent('daily'), { cmd: 'blitz', timeframe: 'daily' });
   assert.deepEqual(parseLeaderboardTextIntent('!daily'), { cmd: 'blitz', timeframe: 'daily' });
+  assert.deepEqual(parseLeaderboardTextIntent('!lb'), { cmd: 'blitz', timeframe: 'daily' });
+  assert.deepEqual(parseLeaderboardTextIntent('leaderboard'), { cmd: 'blitz', timeframe: 'daily' });
   assert.deepEqual(parseLeaderboardTextIntent('yesterday'), { cmd: 'blitz', timeframe: 'yesterday' });
   assert.deepEqual(parseLeaderboardTextIntent('weekly'), { cmd: 'blitz', timeframe: 'weekly' });
   assert.deepEqual(parseLeaderboardTextIntent('weekly last'), { cmd: 'blitz', timeframe: 'lastweek' });
@@ -31,7 +33,7 @@ test('parseLeaderboardTextIntent recognizes master commands (bare master => dail
 });
 
 test('parseLeaderboardTextIntent rejects unrelated text', () => {
-  for (const raw of ['', '   ', 'master gibberish', 'banana', '1gig', '500', '2x 1g', 'lb']) {
+  for (const raw of ['', '   ', 'master gibberish', 'banana', '1gig', '500', '2x 1g', 'lbs']) {
     assert.equal(parseLeaderboardTextIntent(raw), null, JSON.stringify(raw));
   }
 });

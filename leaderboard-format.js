@@ -29,14 +29,14 @@ function dealCount(row) {
 }
 
 function rankLabel(index) {
-  return MEDALS[index] || `#${index + 1}`;
+  return MEDALS[index] || `**#${index + 1}**`;
 }
 
 function formatPhase3SpeedBreakdown(speeds) {
   const parts = PHASE3_SPEED_ORDER.map((speed) => [speed, speeds?.[speed] || 0])
     .filter(([, count]) => count > 0)
     .map(([speed, count]) => `${count}x ${PHASE3_SPEED_LABELS[speed] || speed}`);
-  return parts.length ? parts.join(' | ') : '-';
+  return parts.length ? parts.join(' · ') : '-';
 }
 
 function getDateParts(date, timeZone) {
@@ -159,34 +159,69 @@ function resolveDateContext(period, now = new Date(), tz = process.env.TZ || DEF
   return 'All-Time';
 }
 
-function formatLeaderboard({ scope, period, rows, total, market, dateContext }) {
+const BAR_LEN = 6;
+const MAX_CONTENT = 1900; // Discord hard cap is 2000 chars per message
+
+/** Six-block bar scaled against the leader: ▰▰▰▰▱▱ */
+function progressBar(count, top) {
+  if (!top || !count) return '▱'.repeat(BAR_LEN);
+  const filled = Math.max(1, Math.round((count / top) * BAR_LEN));
+  return '▰'.repeat(filled) + '▱'.repeat(BAR_LEN - filled);
+}
+
+/** "🔥 Henny Sells leads by 2" / "🔥 Tied at the top — A, B" / null when nothing to say. */
+function leaderLine(rows) {
+  if (rows.length < 2) return null;
+  const top = dealCount(rows[0]);
+  if (!top) return null;
+  const leaders = rows.filter((r) => dealCount(r) === top);
+  if (leaders.length > 1) {
+    const names = leaders.slice(0, 3).map(displayRepName).join(', ');
+    const extra = leaders.length > 3 ? ` +${leaders.length - 3}` : '';
+    return `🔥 Tied at the top — ${names}${extra}`;
+  }
+  return `🔥 ${displayRepName(rows[0])} leads by ${top - dealCount(rows[1])}`;
+}
+
+function formatLeaderboard({ scope, period, rows, total, market, dateContext, quarterLine }) {
   const isMaster = scope === 'master';
-  const title = isMaster ? '**Master Leaderboard**' : `**${market || 'Unknown Market'} Leaderboard**`;
+  const name = isMaster ? 'Master' : market || 'Unknown Market';
   const baseContext = dateContext || resolveDateContext(period);
   const context = isMaster ? `${baseContext} · All Markets` : baseContext;
   const SOFT_CAP = 50;
   const allRows = Array.isArray(rows) ? rows : [];
   const safeRows = allRows.slice(0, SOFT_CAP);
-  const overflow = allRows.length - safeRows.length;
-  const lines = [title, context, ''];
+  const top = dealCount(safeRows[0] || {});
 
-  if (safeRows.length) {
-    safeRows.forEach((row, index) => {
-      const fields = [`${rankLabel(index)} **${displayRepName(row)}**`, String(dealCount(row))];
-      if (isMaster) fields.push(row.market || 'Unassigned');
-      lines.push(fields.join(' · '));
-    });
-    if (overflow > 0) lines.push(`…and ${overflow} more`);
-  } else {
-    lines.push('No deals logged yet.');
-  }
+  const header = [`🏆 **${name} Leaderboard**`, context];
+  if (quarterLine) header.push(quarterLine);
 
-  lines.push('');
-  lines.push(isMaster ? `**All Markets Total** · ${total} deals` : `**${market || 'Unknown Market'} Total** · ${total} deals`);
-  return lines.join('\n').replace(/[ \t]+$/gm, '');
+  const rowLine = (row, index) => {
+    const fields = [`${rankLabel(index)} **${displayRepName(row)}** · **${dealCount(row)}**`];
+    if (isMaster) fields.push(row.market || 'Unassigned');
+    return `${fields.join(' · ')} ${progressBar(dealCount(row), top)}`;
+  };
+
+  const totalLabel = isMaster ? 'All Markets Total' : `${name} Total`;
+  const reps = allRows.length ? ` · ${allRows.length} rep${allRows.length === 1 ? '' : 's'}` : '';
+  const footer = [`**${totalLabel}** · **${total}** deals${reps}`];
+  const leader = leaderLine(safeRows);
+  if (leader) footer.push(leader);
+
+  // ponytail: shrink rows until under Discord's limit; the overflow note absorbs what's cut.
+  let shown = safeRows.length;
+  let out;
+  do {
+    const body = shown ? safeRows.slice(0, shown).map(rowLine) : ['_No deals logged yet — first door wins the board._'];
+    const overflow = allRows.length - shown;
+    if (overflow > 0) body.push(`…and ${overflow} more`);
+    out = [...header, '', ...body, '', ...footer].join('\n').replace(/[ \t]+$/gm, '');
+    shown -= 1;
+  } while (out.length > MAX_CONTENT && shown > 0);
+  return out;
 }
 
-function formatPhase3Leaderboard({ title, rows, totalDeals, dateHeader }) {
+function formatPhase3Leaderboard({ title, rows, totalDeals, dateHeader, quarterHeader }) {
   const [market = title] = String(title || '').split(' · ');
   const t = String(title || '');
   const period = t.includes('Last Week') ? 'lastweek'
@@ -203,10 +238,11 @@ function formatPhase3Leaderboard({ title, rows, totalDeals, dateHeader }) {
     total: totalDeals,
     market,
     dateContext: dateHeader || resolveDateContext(period),
+    quarterLine: quarterHeader,
   });
 }
 
-function formatPhase3Master(rows, totalDeals, periodLabel, _quarterHeader, dateHeader) {
+function formatPhase3Master(rows, totalDeals, periodLabel, quarterHeader, dateHeader) {
   const labelToPeriod = {
     'Today': 'daily',
     'Yesterday': 'yesterday',
@@ -223,6 +259,7 @@ function formatPhase3Master(rows, totalDeals, periodLabel, _quarterHeader, dateH
     rows,
     total: totalDeals,
     dateContext: dateHeader || resolveDateContext(period),
+    quarterLine: quarterHeader,
   });
 }
 

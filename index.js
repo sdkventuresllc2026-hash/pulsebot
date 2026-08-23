@@ -1,5 +1,5 @@
 ﻿/**
- * Pulse â€” discord.js v14 bot (slash commands, local JSON DB)
+ * Pulse — discord.js v14 bot (slash commands, local JSON DB)
  */
 
 require('dotenv').config();
@@ -97,6 +97,7 @@ const {
 const { acquireProcessLock } = require('./process-lock');
 const {
   buildPremiumDealConfirmation,
+  SPEED_DISPLAY,
   buildDealHypeLine,
   selectHypeLine,
   PERSONAL_EVENTS,
@@ -310,28 +311,6 @@ async function safeAppendActionLog(entry) {
   } catch (err) {
     console.error('[Pulse][ActionLogError]', err.message || err);
   }
-}
-
-function leaderboardEmbed({ title, rows, timeframeLabel, blitzFilter }) {
-  const embed = new EmbedBuilder().setColor(COLORS.primary).setTitle(title).setTimestamp(new Date());
-
-  if (blitzFilter) embed.setFooter({ text: `Filter: ${blitzFilter}` });
-
-  if (!rows.length) {
-    embed.setDescription('No deals yet for this view.');
-    return embed;
-  }
-
-  const lines = rows.slice(0, 25).map((r, i) => {
-    const medal = i === 0 ? 'ðŸ¥‡' : i === 1 ? 'ðŸ¥ˆ' : i === 2 ? 'ðŸ¥‰' : `**#${i + 1}**`;
-    const streak = r.streakDays > 1 ? ` â€¢ ðŸ”¥ ${r.streakDays}d streak` : '';
-    const block = [`${medal} **${r.displayName}** â€” **${r.total}** deals`, formatSpeedBreakdown(r.speeds)].join('\n');
-    return `${block}${streak}`;
-  });
-
-  embed.setDescription(lines.join('\n\n'));
-  embed.addFields({ name: 'Timeframe', value: timeframeLabel, inline: true });
-  return embed;
 }
 
 function buildRowsForLogs(logs, allLogsForStreak) {
@@ -643,7 +622,7 @@ async function handlePhase3Leaderboard(interaction, { timeframe, label }) {
   const market = marketForChannel(interaction.channel);
   const heading = market?.marketName || titleCaseBlitzName(currentBlitzName(interaction));
   const hour = localHour(new Date(), getTimeZone());
-  const showQuarter = timeframe === 'alltime';
+  const showQuarter = timeframe === 'daily';
 
   await interaction.editReply({
     content: formatPhase3Leaderboard({
@@ -680,7 +659,7 @@ async function handlePhase3Master(interaction, period = 'alltime') {
   const allLogs = approvedDealLogs(activeDealLogs(data));
   const logs = filterPhase3Timeframe(allLogs, timeframe, data);
   const hour = localHour(new Date(), getTimeZone());
-  const showQuarter = period === 'alltime';
+  const showQuarter = timeframe === 'daily';
 
   await interaction.editReply({
     content: formatPhase3Master(
@@ -724,17 +703,18 @@ function buildMarketsBoardContent(data) {
     })
     .sort((a, b) => b.week - a.week || b.today - a.today || a.marketName.localeCompare(b.marketName));
 
-  const lines = ['**Market Board**'];
+  const lines = ['🗺️ **Market Board**'];
   for (let i = 0; i < rows.length; i += 1) {
     const r = rows[i];
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
     lines.push(`${medal} **${r.marketName}** · **${r.week}** week · **${r.today}** today`);
   }
-  lines.push(`**${week.length}** week · **${today.length}** today company-wide`);
+  if (!rows.length) lines.push('_No deals logged this week yet._');
+  lines.push(`**Company-wide** · **${week.length}** week · **${today.length}** today`);
   return compactJoin(lines);
 }
 
-function buildMyDealsContent(channel, userId, data) {
+function buildMyDealsContent(channel, userId, data, displayName) {
   const allLogs = approvedDealLogs(activeDealLogs(data));
   const userLogs = allLogs.filter((log) => log.userId === userId);
   const marketLogs = logsForCurrentMarketChannel(allLogs, channel);
@@ -745,14 +725,15 @@ function buildMyDealsContent(channel, userId, data) {
   const overallRank = competitionRankForUser(phase3Rows(allLogs), userId);
   const market = marketForChannel(channel);
   const marketName = market?.marketName || titleCaseBlitzName(approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel?.name));
+  const speedMix = formatPhase3SpeedBreakdown(speedCountsForLogs(userMarketLogs));
 
   return compactJoin([
-    '**Your Deals**',
-    `Today **${todayUserLogs.length}** · Week **${weekUserLogs.length}** · Market **${userMarketLogs.length}** · All-time **${userLogs.length}**`,
-    formatPhase3SpeedBreakdown(speedCountsForLogs(userMarketLogs)),
+    `📊 **Your Deals**${displayName ? ` — ${displayName}` : ''}`,
+    `Today **${todayUserLogs.length}** · Week **${weekUserLogs.length}** · ${marketName} **${userMarketLogs.length}** · All-time **${userLogs.length}**`,
+    speedMix === '-' ? null : `Mix · ${speedMix}`,
     marketRank
-      ? `**#${marketRank}** ${marketName}${overallRank ? ` · **#${overallRank}** overall` : ''}`
-      : `_No rank in ${marketName} yet_`,
+      ? `🏅 **#${marketRank}** in ${marketName}${overallRank ? ` · **#${overallRank}** overall` : ''}`
+      : `_No rank in ${marketName} yet — log a deal to get on the board._`,
   ]);
 }
 
@@ -768,6 +749,7 @@ async function buildTextLeaderboardContent(channel, intent, data) {
       rows: phase3Rows(logs),
       total: logs.length,
       dateContext: resolveDateContext(timeframe, new Date(), getTimeZone()),
+      quarterLine: timeframe === 'daily' ? formatQuarterHeader(localHour(new Date(), getTimeZone())) : null,
     });
   }
 
@@ -788,6 +770,7 @@ async function buildTextLeaderboardContent(channel, intent, data) {
       total: logs.length,
       market: heading,
       dateContext: resolveDateContext(timeframe, new Date(), getTimeZone()),
+      quarterLine: timeframe === 'daily' ? formatQuarterHeader(localHour(new Date(), getTimeZone())) : null,
     });
   }
 
@@ -828,7 +811,7 @@ async function handleTextCommand(message, intent) {
   try {
     if (intent.cmd === 'mydeals') {
       const data = await readLeaderboard();
-      return reply(buildMyDealsContent(message.channel, message.author.id, data));
+      return reply(buildMyDealsContent(message.channel, message.author.id, data, message.member?.displayName || message.author.username));
     }
     if (intent.cmd === 'markets') {
       const data = await readLeaderboard();
@@ -850,7 +833,7 @@ async function handleTextCommand(message, intent) {
         actorName: message.member?.displayName || message.author.username,
         details: { removedLogId: removed.id, removedSpeed: removed.correctedSpeed || removed.speed, removedTimestamp: removed.timestamp, channelId: removed.channelId || null, via: 'text' },
       });
-      return reply(`↩️ Removed your last log — **${SPEED_LABELS[removed.correctedSpeed || removed.speed] || removed.speed}**.`);
+      return reply(`↩️ **Undone** — removed your last log · ${SPEED_DISPLAY[removed.correctedSpeed || removed.speed] || removed.speed}`);
     }
   } catch (err) {
     console.error('[Pulse] Text command failed:', err.message || err);
@@ -929,29 +912,9 @@ async function handlePhase3MyDeals(interaction) {
 
   await interaction.deferReply({ ephemeral: true });
   const data = await readLeaderboard();
-  const userId = interaction.user.id;
-  const allLogs = approvedDealLogs(activeDealLogs(data));
-  const userLogs = allLogs.filter((log) => log.userId === userId);
-  const marketLogs = logsForCurrentMarket(allLogs, interaction);
-  const userMarketLogs = marketLogs.filter((log) => log.userId === userId);
-  const todayUserLogs = filterPhase3Timeframe(userLogs, 'daily', data);
-  const weekUserLogs = filterPhase3Timeframe(userLogs, 'weekly', data);
-  const marketRank = competitionRankForUser(phase3Rows(marketLogs), userId);
-  const overallRank = competitionRankForUser(phase3Rows(allLogs), userId);
-  const market = marketForChannel(interaction.channel);
-  const marketName = market?.marketName || titleCaseBlitzName(currentBlitzName(interaction));
-
+  const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
   await interaction.editReply({
-    content: [
-      '**Your Deals**',
-      `Today **${todayUserLogs.length}** · Week **${weekUserLogs.length}** · Market **${userMarketLogs.length}** · All-time **${userLogs.length}**`,
-      formatPhase3SpeedBreakdown(speedCountsForLogs(userMarketLogs)),
-      marketRank
-        ? `**#${marketRank}** ${marketName}${overallRank ? ` · **#${overallRank}** overall` : ''}`
-        : `_No rank in ${marketName} yet_`,
-    ]
-      .filter(Boolean)
-      .join('\n'),
+    content: buildMyDealsContent(interaction.channel, interaction.user.id, data, displayName),
     embeds: [],
   });
 }
@@ -1819,78 +1782,6 @@ async function handleLog(interaction) {
   });
 }
 
-async function handleLeaderboard(interaction, { timeframe, blitz }) {
-  await interaction.deferReply();
-  const data = await readLeaderboard();
-  const logs = logsForTimeframe(data, timeframe);
-  const rows = applyBlitzFilter(buildRowsForLogs(logs, data.logs), blitz);
-
-  const labels = { today: 'Today', weekly: 'This week', alltime: 'All-time' };
-  const embed = leaderboardEmbed({
-    title: `ðŸ† ${labels[timeframe]} Leaderboard`,
-    rows,
-    timeframeLabel: labels[timeframe],
-    blitzFilter: blitz || null,
-  });
-  await interaction.editReply({ embeds: [embed] });
-}
-
-async function handleMyStats(interaction) {
-  await interaction.deferReply();
-  const data = await readLeaderboard();
-  const tz = getTimeZone();
-  const uid = interaction.user.id;
-  const logs = activeDealLogs(data);
-
-  const todayLogs = filterToday(logs, tz);
-  const weekLogs = filterByWeekId(logs, data.metadata.weekId);
-  const userLogs = logs.filter((l) => l.userId === uid);
-
-  const speedsToday = aggregateUsers(todayLogs.filter((l) => l.userId === uid))[0]?.speeds || {};
-  const speedsWeek = aggregateUsers(weekLogs.filter((l) => l.userId === uid))[0]?.speeds || {};
-  const speedsAll = aggregateUsers(userLogs)[0]?.speeds || {};
-
-  const dealsToday = todayLogs.filter((l) => l.userId === uid).length;
-  const dealsWeek = weekLogs.filter((l) => l.userId === uid).length;
-  const dealsAll = userLogs.length;
-
-  const streak = currentStreakDays(logs, uid);
-  const best = bestDayEver(userLogs, uid);
-
-  const rowsToday = buildRowsForLogs(todayLogs, logs);
-  const rowsWeek = buildRowsForLogs(weekLogs, logs);
-
-  const embed = new EmbedBuilder()
-    .setColor(COLORS.primary)
-    .setTitle(`ðŸ“Š ${interaction.member?.displayName || interaction.user.username} â€” My Stats`)
-    .addFields(
-      { name: 'Today', value: `${dealsToday} deals`, inline: true },
-      { name: 'This week', value: `${dealsWeek} deals`, inline: true },
-      { name: 'All-time', value: `${dealsAll} deals`, inline: true },
-      {
-        name: 'Speed breakdown',
-        value: [
-          `**Today**\n${formatSpeedBreakdown(speedsToday)}`,
-          `**Week**\n${formatSpeedBreakdown(speedsWeek)}`,
-          `**All-time**\n${formatSpeedBreakdown(speedsAll)}`,
-        ].join('\n\n'),
-        inline: false,
-      },
-      { name: 'Current streak', value: `${streak} day(s)`, inline: true },
-      { name: 'Best day ever', value: `${best} deals`, inline: true },
-      {
-        name: 'Rank',
-        value: `Today: ${rankUser(rowsToday, uid) ? `#${rankUser(rowsToday, uid)}` : 'â€”'}\nWeek: ${
-          rankUser(rowsWeek, uid) ? `#${rankUser(rowsWeek, uid)}` : 'â€”'
-        }`,
-        inline: false,
-      },
-    )
-    .setTimestamp(new Date());
-
-  await interaction.editReply({ embeds: [embed] });
-}
-
 async function handleShare(interaction) {
   await interaction.deferReply();
   const data = await readLeaderboard();
@@ -1905,11 +1796,11 @@ async function handleShare(interaction) {
   const rowsWeek = buildRowsForLogs(filterByWeekId(logs, data.metadata.weekId), logs);
   const r = rankUser(rowsWeek, uid);
 
-  const team = agg ? primaryBlitz(agg) : 'â€”';
+  const team = agg ? primaryBlitz(agg) : '—';
 
   const embed = new EmbedBuilder()
     .setColor(0x111111)
-    .setTitle('ðŸ”¥ WEEKLY PRODUCTION')
+    .setTitle('🔥 WEEKLY PRODUCTION')
     .setDescription(
       [
         `**${displayName}**`,
@@ -1918,7 +1809,7 @@ async function handleShare(interaction) {
         '**Speed Breakdown**',
         formatSpeedBreakdown(speeds),
         '',
-        `**Rank:** ${r ? `#${r} This Week` : 'â€”'}`,
+        `**Rank:** ${r ? `#${r} This Week` : '—'}`,
         `**Team:** ${team}`,
         '',
         '*Built different.*',
@@ -1984,14 +1875,8 @@ async function handleUndo(interaction) {
   });
 
   await interaction.editReply({
-    embeds: [
-      new EmbedBuilder()
-        .setColor(COLORS.danger)
-        .setTitle('Undid last log')
-        .setDescription(
-          `Removed: **${SPEED_LABELS[removedLog.speed] || removedLog.speed}** at ${removedLog.timestamp}`,
-        ),
-    ],
+    content: `↩️ **Undone** — removed your last log · ${SPEED_DISPLAY[removedLog.speed] || removedLog.speed}`,
+    embeds: [],
   });
 }
 
@@ -2887,33 +2772,7 @@ async function handleAdminMarketStatus(interaction) {
 async function handleMarkets(interaction) {
   await interaction.deferReply();
   const data = await readLeaderboard();
-  const logs = approvedDealLogs(activeDealLogs(data));
-  const today = filterToday(logs, getTimeZone());
-  const week = filterByWeekId(logs, data.metadata.weekId);
-  const todayRows = aggregateMarkets(today);
-  const weekRows = aggregateMarkets(week);
-  const weekMap = new Map(weekRows.map((r) => [r.marketId || `name:${r.marketName}`, r]));
-  const todayMap = new Map(todayRows.map((r) => [r.marketId || `name:${r.marketName}`, r]));
-  const keys = new Set([...weekMap.keys(), ...todayMap.keys()]);
-  const rows = [...keys].map((k) => {
-    const w = weekMap.get(k);
-    const t = todayMap.get(k);
-    return {
-      marketName: w?.marketName || t?.marketName || 'Unassigned',
-      week: w?.total || 0,
-      today: t?.total || 0,
-    };
-  }).sort((a, b) => b.week - a.week || b.today - a.today || a.marketName.localeCompare(b.marketName));
-
-  const lines = ['**Market Board**'];
-  for (let i = 0; i < rows.length; i += 1) {
-    const r = rows[i];
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
-    lines.push(`${medal} **${r.marketName}** · **${r.week}** week · **${r.today}** today`);
-  }
-  lines.push('', `**${week.length}** week · **${today.length}** today company-wide`);
-
-  await interaction.editReply({ content: lines.join('\n') });
+  await interaction.editReply({ content: buildMarketsBoardContent(data), embeds: [] });
 }
 
 async function handleAdminStatus(interaction) {
@@ -3203,7 +3062,7 @@ async function handleResetWeekly(interaction) {
         .setDescription(
           [
             `Archived **week id ${archiveEntry.weekId}** to \`leaderboard_archive.json\`.`,
-            `New active **week id ${archiveEntry.weekId + 1}** â€” weekly leaderboards now start from this id.`,
+            `New active **week id ${archiveEntry.weekId + 1}** — weekly leaderboards now start from this id.`,
             '',
             '_All-time logs stay in `leaderboard.json`. Weekly views filter by `weekId`._',
           ].join('\n'),
