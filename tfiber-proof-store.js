@@ -198,6 +198,13 @@ async function latestPendingForUser(userId) {
   return pending;
 }
 
+/** Every open (not expired) proof request, for combined per-rep reminders and the admin view. */
+async function listOpenPending() {
+  const data = await readLeaderboard();
+  const state = ensureTfiberProofState(data);
+  return Object.values(state.pending || {}).filter((item) => item && !item.reminders?.expiredAt);
+}
+
 async function collectDueTfiberProofActions(now = new Date()) {
   const due = [];
   await mutate((data) => {
@@ -247,5 +254,6 @@ module.exports = {
   selectRecentTfiberProofLog,
   selectPendingForUser,
   latestPendingForUser,
+  listOpenPending,
   collectDueTfiberProofActions,
 };

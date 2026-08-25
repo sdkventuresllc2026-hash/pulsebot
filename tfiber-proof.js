@@ -144,8 +144,78 @@ function formatTfiberProofLine(result) {
   return `T-Fiber proof status: ${result.message || result.status}.`;
 }
 
+// ---- Reminder / admin text. Reps only ever post "1g", so the identifiers a reminder CAN name are
+// the plan, the channel, the time posted, the TMO number if known, and a jump link to their post.
+const DEFAULT_TZ = 'America/New_York';
+
+function formatWhen(iso, tz = DEFAULT_TZ) {
+  const d = new Date(iso || '');
+  if (Number.isNaN(d.getTime())) return 'unknown time';
+  return d.toLocaleString('en-US', { timeZone: tz, weekday: 'short', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function pendingJumpLink(pending) {
+  return pending?.guildId && pending?.channelId && pending?.messageId
+    ? `https://discord.com/channels/${pending.guildId}/${pending.channelId}/${pending.messageId}`
+    : null;
+}
+
+function pendingNeeds(pending) {
+  return pending?.proofStatus === 'NEEDS_REVIEW'
+    ? 'the T-Mobile order number (TMO…), plus a clearer screenshot if you have one'
+    : 'the order confirmation screenshot';
+}
+
+function describePendingProof(pending, { tz } = {}) {
+  const parts = [
+    pending?.plan || tfiberPlanForSpeed(pending?.speed),
+    pending?.channelId ? `<#${pending.channelId}>` : pending?.marketName || pending?.blitzName || null,
+    `posted ${formatWhen(pending?.timestamp || pending?.createdAt, tz)}`,
+    pending?.tmoOrderId ? `order ${pending.tmoOrderId}` : null,
+  ].filter(Boolean);
+  const link = pendingJumpLink(pending);
+  return `${parts.join(' · ')}${link ? ` → ${link}` : ''}`;
+}
+
+/** One DM per rep listing EVERY open deal, so "which account?" is never a question. */
+function formatTfiberReminderDm(type, pendings, { tz } = {}) {
+  const list = (pendings || []).filter(Boolean);
+  if (type === 'expired') {
+    return `T-Fiber proof expired — ${describePendingProof(list[0], { tz })}. It was removed from official Pulse totals until the screenshot is received.`;
+  }
+  const many = list.length > 1;
+  const header = type === 'final'
+    ? `⏰ Final reminder — ${many ? `these ${list.length} T-Fiber deals expire` : 'this T-Fiber deal expires'} in about 4 hours:`
+    : `T-Fiber proof needed for ${many ? `these ${list.length} deals` : 'this deal'}:`;
+  const lines = list.map((p, i) => `${many ? `${i + 1}) ` : ''}${describePendingProof(p, { tz })} — needs ${pendingNeeds(p)} · expires ${formatWhen(p.expiresAt, tz)}`);
+  return [header, ...lines, '', 'Reply here with the screenshot AND the T-Mobile order number (TMO…) in the same message so I attach it to the right deal.'].join('\n');
+}
+
+/** Admin view (`pulse proofs`): everything open, grouped by rep, oldest first. */
+function formatOpenProofsForAdmin(pendings, { tz, now = new Date() } = {}) {
+  const list = (pendings || []).filter((p) => p && !p.reminders?.expiredAt);
+  if (!list.length) return 'No open T-Fiber proof requests.';
+  const byRep = new Map();
+  for (const p of list) {
+    const key = p.displayName || p.username || p.userId;
+    byRep.set(key, [...(byRep.get(key) || []), p]);
+  }
+  const out = [`Open T-Fiber proof requests: ${list.length} across ${byRep.size} rep${byRep.size === 1 ? '' : 's'}`];
+  for (const [rep, items] of [...byRep].sort((a, b) => b[1].length - a[1].length)) {
+    out.push(`\n**${rep}** — ${items.length}`);
+    for (const p of [...items].sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))) {
+      const hoursLeft = Math.max(0, Math.round((Date.parse(p.expiresAt || '') - now.getTime()) / 36e5));
+      out.push(`• ${describePendingProof(p, { tz })} — needs ${pendingNeeds(p)} · ${hoursLeft}h left`);
+    }
+  }
+  return out.join('\n');
+}
+
 module.exports = {
   TFIBER_PROOF_EXPIRATION_HOURS,
+  describePendingProof,
+  formatTfiberReminderDm,
+  formatOpenProofsForAdmin,
   normalizeTmoOrderId,
   extractTmoOrderId,
   looksLikeTfiberContext,

@@ -132,3 +132,55 @@ test('proof line is simple but calls out missing contact or install details', ()
     'T-Fiber proof received. Synced to FiberSales OS. Install details still needed.',
   );
 });
+
+const { describePendingProof, formatTfiberReminderDm, formatOpenProofsForAdmin } = require('./tfiber-proof');
+
+const pendingFixture = (over = {}) => ({
+  logId: 'log-1', userId: 'u1', displayName: 'Ben Edwards', guildId: 'g', channelId: 'c1', messageId: 'm1',
+  speed: '2gig', plan: 'T-Fiber 2 Gig', timestamp: '2026-08-24T21:57:00.000Z', createdAt: '2026-08-24T21:57:00.000Z',
+  expiresAt: '2026-08-26T21:57:00.000Z', proofStatus: 'NEEDS_SCREENSHOT', tmoOrderId: null, reminders: {}, ...over,
+});
+
+test('reminder names the deal: plan, channel, ET time, jump link, what is needed', () => {
+  const text = formatTfiberReminderDm('end_of_day', [pendingFixture()], { tz: 'America/New_York' });
+  assert.match(text, /T-Fiber 2 Gig · <#c1> · posted Mon, 8\/24, 5:57 PM → https:\/\/discord\.com\/channels\/g\/c1\/m1/);
+  assert.match(text, /needs the order confirmation screenshot/);
+  assert.match(text, /expires Wed, 8\/26, 5:57 PM/);
+  assert.match(text, /Reply here with the screenshot AND the T-Mobile order number/);
+  assert.doesNotMatch(text, /^1\)/m); // single deal: no numbering
+});
+
+test('one DM lists every open deal, numbered, and NEEDS_REVIEW asks for the TMO number', () => {
+  const a = pendingFixture();
+  const b = pendingFixture({ logId: 'log-2', messageId: 'm2', speed: '1gig', plan: 'T-Fiber 1 Gig', proofStatus: 'NEEDS_REVIEW', timestamp: '2026-08-24T22:38:00.000Z', createdAt: '2026-08-24T22:38:00.000Z' });
+  const text = formatTfiberReminderDm('final', [a, b], { tz: 'America/New_York' });
+  assert.match(text, /these 2 T-Fiber deals expire/);
+  assert.match(text, /^1\) T-Fiber 2 Gig/m);
+  assert.match(text, /^2\) T-Fiber 1 Gig .* — needs the T-Mobile order number \(TMO…\)/m);
+});
+
+test('expired message identifies the deal instead of a generic 1G blurb', () => {
+  const text = formatTfiberReminderDm('expired', [pendingFixture({ tmoOrderId: 'TMO20260824FPOLS' })], { tz: 'America/New_York' });
+  assert.match(text, /expired — T-Fiber 2 Gig · <#c1> · posted Mon, 8\/24, 5:57 PM · order TMO20260824FPOLS/);
+});
+
+test('describePendingProof degrades without a message id (no link) or channel (market name)', () => {
+  const text = describePendingProof(pendingFixture({ messageId: null, channelId: null, marketName: 'Durham T-Fiber' }), { tz: 'America/New_York' });
+  assert.equal(text, 'T-Fiber 2 Gig · Durham T-Fiber · posted Mon, 8/24, 5:57 PM');
+});
+
+test('admin view groups open requests by rep, oldest first, skips expired, shows hours left', () => {
+  const now = new Date('2026-08-25T21:57:00.000Z');
+  const list = [
+    pendingFixture({ logId: 'l1' }),
+    pendingFixture({ logId: 'l2', displayName: 'Henry Sells', userId: 'u2', reminders: { expiredAt: '2026-08-25T00:00:00Z' } }),
+    pendingFixture({ logId: 'l3', displayName: 'Henry Sells', userId: 'u2', messageId: 'm3', createdAt: '2026-08-24T21:27:00.000Z' }),
+    pendingFixture({ logId: 'l4', displayName: 'Henry Sells', userId: 'u2', messageId: 'm4', createdAt: '2026-08-24T23:00:00.000Z' }),
+  ];
+  const text = formatOpenProofsForAdmin(list, { tz: 'America/New_York', now });
+  assert.match(text, /^Open T-Fiber proof requests: 3 across 2 reps/);
+  assert.ok(text.indexOf('**Henry Sells** — 2') < text.indexOf('**Ben Edwards** — 1'));
+  assert.ok(text.indexOf('/m3') < text.indexOf('/m4'));
+  assert.match(text, /24h left/);
+  assert.equal(formatOpenProofsForAdmin([], { tz: 'America/New_York', now }), 'No open T-Fiber proof requests.');
+});

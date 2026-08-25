@@ -140,6 +140,9 @@ const {
   buildTfiberDmPayload,
   formatTfiberProofLine,
   extractTmoOrderId,
+  describePendingProof,
+  formatTfiberReminderDm,
+  formatOpenProofsForAdmin,
 } = require('./tfiber-proof');
 const {
   DEFAULT_WINDOW_MS: TFIBER_CHANNEL_PROOF_WINDOW_MS,
@@ -155,6 +158,7 @@ const {
   selectPendingForUser,
   selectRecentTfiberProofLog,
   collectDueTfiberProofActions,
+  listOpenPending,
 } = require('./tfiber-proof-store');
 const {
   createTimestampedBackup,
@@ -1463,8 +1467,16 @@ async function handleTfiberProofDm(message) {
   const pending = selection.pending;
   if (!pending) {
     if (selection.reason === 'ambiguous' || selection.reason === 'duplicate_tmo_pending') {
+      const mine = (await listOpenPending().catch(() => []))
+        .filter((p) => p.userId === message.author.id)
+        .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
       await message.reply({
-        content: `I found the screenshot, but you have ${selection.pendingCount} open T-Fiber proof requests. Send the screenshot again with the T-Mobile order confirmation number in the same DM so I attach it to the right deal.`,
+        content: [
+          `I found the screenshot, but you have ${selection.pendingCount} open T-Fiber proof requests:`,
+          ...mine.map((p, i) => `${i + 1}) ${describePendingProof(p, { tz: getTimeZone() })}`),
+          '',
+          'Send the screenshot again with the T-Mobile order number (TMO…) in the same message so I attach it to the right deal.',
+        ].join('\n'),
         allowedMentions: { parse: [] },
       }).catch(() => {});
       return true;
@@ -1494,14 +1506,14 @@ async function handleTfiberProofDm(message) {
   return true;
 }
 
-function tfiberReminderText(type, pending) {
-  if (type === 'expired') {
-    return `T-Fiber proof expired for your ${pending.plan || '1G'} log in ${pending.marketName || pending.blitzName || 'the blitz'}. It was removed from official Pulse totals until the screenshot is received.`;
+async function sendTfiberProofMessage(userId, channelId, content) {
+  const user = userId ? await client.users.fetch(userId).catch(() => null) : null;
+  const dmOk = user ? await user.send({ content, allowedMentions: { parse: [] } }).then(() => true).catch(() => false) : false;
+  if (dmOk) return;
+  const channel = channelId ? await client.channels.fetch(channelId).catch(() => null) : null;
+  if (channel?.isTextBased?.()) {
+    await channel.send({ content: `<@${userId}> ${content}`, allowedMentions: { users: [userId] } }).catch(() => {});
   }
-  if (type === 'final') {
-    return `Final T-Fiber proof reminder: upload the order confirmation screenshot before the 48-hour window closes. If you send it here, include the T-Mobile order confirmation number in the same DM.`;
-  }
-  return `T-Fiber proof reminder: upload the order confirmation screenshot so the 1G order can sync into FiberSales OS. If you send it here, include the T-Mobile order confirmation number in the same DM.`;
 }
 
 async function runTfiberProofMaintenance() {
@@ -1509,15 +1521,27 @@ async function runTfiberProofMaintenance() {
     console.error('[Pulse][T-Fiber] proof maintenance failed:', err.message || err);
     return [];
   });
+  if (!actions.length) return;
+  const tz = getTimeZone();
+  // Expiries are per deal (it's about that log being removed). Reminders are ONE DM per rep that
+  // lists every open deal with a jump link — never a generic "upload the screenshot" a rep can't place.
+  const reminderByUser = new Map();
   for (const action of actions) {
-    const user = action.pending?.userId ? await client.users.fetch(action.pending.userId).catch(() => null) : null;
-    const content = tfiberReminderText(action.type, action.pending);
-    const dmOk = user ? await user.send({ content, allowedMentions: { parse: [] } }).then(() => true).catch(() => false) : false;
-    if (dmOk) continue;
-    const channel = action.pending?.channelId ? await client.channels.fetch(action.pending.channelId).catch(() => null) : null;
-    if (channel?.isTextBased?.()) {
-      await channel.send({ content: `<@${action.pending.userId}> ${content}`, allowedMentions: { users: [action.pending.userId] } }).catch(() => {});
+    const pending = action.pending;
+    if (!pending?.userId) continue;
+    if (action.type === 'expired') {
+      await sendTfiberProofMessage(pending.userId, pending.channelId, formatTfiberReminderDm('expired', [pending], { tz }));
+      continue;
     }
+    const prev = reminderByUser.get(pending.userId);
+    reminderByUser.set(pending.userId, { type: prev?.type === 'final' || action.type === 'final' ? 'final' : action.type, channelId: pending.channelId });
+  }
+  if (!reminderByUser.size) return;
+  const open = await listOpenPending().catch(() => []);
+  for (const [userId, info] of reminderByUser) {
+    const mine = open.filter((p) => p.userId === userId).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+    if (!mine.length) continue;
+    await sendTfiberProofMessage(userId, info.channelId, formatTfiberReminderDm(info.type, mine, { tz }));
   }
 }
 
@@ -1540,6 +1564,9 @@ function parseTextAdminCommand(content) {
 
   const list = text.match(/^(?:pulse\s+)?(?:list|show)\s+(?:blitzes|channels|deal channels)$/i);
   if (list) return { action: 'list' };
+
+  const proofs = text.match(/^(?:pulse\s+)?(?:proofs|open proofs|proof requests)$/i);
+  if (proofs) return { action: 'proofs' };
 
   return null;
 }
@@ -1605,6 +1632,17 @@ async function handleTextAdminCommand(message) {
       content: channels.length
         ? ['Approved deal channels:', ...channels.map((c) => `• <#${c.id}> — ${c.blitzName}`)].join('\n')
         : 'No approved deal channels yet. Type `approve blitz Your Blitz Name` in a deal channel.',
+      allowedMentions: { parse: [] },
+    }).catch(() => {});
+    return true;
+  }
+
+  if (parsed.action === 'proofs') {
+    const open = await listOpenPending().catch(() => []);
+    const content = formatOpenProofsForAdmin(open, { tz: getTimeZone() });
+    // Discord caps a message at 2000 chars; the list is oldest-first per rep so a cut loses the newest.
+    await message.reply({
+      content: content.length > 1900 ? `${content.slice(0, 1900)}\n…(truncated — clear some and run again)` : content,
       allowedMentions: { parse: [] },
     }).catch(() => {});
     return true;
