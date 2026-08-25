@@ -32,11 +32,11 @@ test('requires proof for all T-Fiber speed logs in T-Fiber contexts', () => {
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'jacksonville' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'goldsboro' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['2gig'], channelName: 'dayton' }), true);
-  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: '🛜ohio' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: '🛜ohio' }), false); // Ohio sells Kinetic — no TMO proof
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketId: 'wilmington-nc' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketName: 'Goldsboro' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketId: 'dayton' }), true);
-  assert.equal(requiresTfiberProof({ speeds: ['2gig'], marketName: 'Ohio' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['2gig'], marketName: 'Ohio' }), false);
   assert.equal(requiresTfiberProof({ speeds: ['2gig'], marketName: 'Charlotte T-Fiber Blitz' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['2gig'], channelName: 'jacksonville' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketName: 'Greenville Kinetic' }), false);
