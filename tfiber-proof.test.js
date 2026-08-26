@@ -47,6 +47,9 @@ test('requires proof for all T-Fiber speed logs in T-Fiber contexts', () => {
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'ohio', marketIsp: 'T-Fiber' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'ohio', marketIsp: 'T-Mobile Fiber' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'dayton', marketIsp: '' }), true); // blank ISP = no opinion
+  // Pinned Kinetic channel (Ohio crew) wins over everything, mapped or not.
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelId: '1535388250967904327', channelName: 'tmo-dayton', marketIsp: 'T-Fiber' }), false);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelId: '999', channelName: 'tmo-dayton' }), true);
 });
 
 test('detects image attachments as screenshots', () => {

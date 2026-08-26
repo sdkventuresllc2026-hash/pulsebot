@@ -251,34 +251,57 @@ async function collectDueTfiberProofActions(now = new Date()) {
  * Drops every open proof request for the rep and restores ONLY deals the proof expiry removed —
  * a deal an admin removed for any other reason stays removed.
  */
-async function waiveTfiberProofsForUser(userId, { waivedBy = null, now = new Date() } = {}) {
+const removedByProofExpiry = (log) => Boolean(log && log.removed && log.tfiberProofStatus === 'EXPIRED');
+
+/** Deals the 48h proof expiry took out of totals (and nothing else did). */
+async function listProofRemovedLogs() {
+  const data = await readLeaderboard();
+  return (data.logs || []).filter(removedByProofExpiry);
+}
+
+/**
+ * Drop open proof requests (by log id) and put expiry-removed deals (by log id) back in totals.
+ * Restores ONLY deals the proof expiry removed — a deal an admin removed for any other reason
+ * stays removed. Shared by "pulse waive" and the rule reconcile.
+ */
+async function releaseTfiberProofs({ dropLogIds = [], restoreLogIds = [], reason = null, actorId = null, now = new Date() } = {}) {
   const result = { pendingCleared: 0, logsRestored: 0 };
-  if (!userId) return result;
+  const drop = new Set(dropLogIds), restore = new Set(restoreLogIds);
+  if (!drop.size && !restore.size) return result;
   await mutate((data) => {
     const state = ensureTfiberProofState(data);
-    for (const [logId, pending] of Object.entries(state.pending || {})) {
-      if (pending?.userId !== userId) continue;
+    for (const logId of drop) {
+      if (!state.pending[logId]) continue;
       delete state.pending[logId];
       result.pendingCleared += 1;
     }
     for (const log of data.logs || []) {
-      if (!log || log.userId !== userId) continue;
-      const expiredByProof = log.tfiberProofStatus === 'EXPIRED' && log.removed;
-      if (expiredByProof) {
+      if (!log) continue;
+      if (restore.has(log.id) && removedByProofExpiry(log)) {
         log.removed = false;
         log.removedAt = null;
         log.removedReason = null;
         result.logsRestored += 1;
       }
-      if (log.tfiberProofStatus && log.tfiberProofStatus !== 'PROOF_ATTACHED' && log.tfiberProofStatus !== 'ORDER_CREATED') {
+      if ((drop.has(log.id) || restore.has(log.id)) && log.tfiberProofStatus !== 'PROOF_ATTACHED' && log.tfiberProofStatus !== 'ORDER_CREATED') {
         log.tfiberProofStatus = 'WAIVED';
         log.tfiberProofExpiresAt = null;
       }
     }
-    state.events.push({ at: now.toISOString(), logId: null, userId, status: 'WAIVED', waivedBy, ...result });
+    state.events.push({ at: now.toISOString(), logId: null, userId: null, status: 'WAIVED', reason, actorId, ...result });
     return data;
   });
   return result;
+}
+
+/** Admin "pulse waive @rep": every open request for the rep dropped, every expiry-removed deal restored. */
+async function waiveTfiberProofsForUser(userId, { waivedBy = null, now = new Date() } = {}) {
+  if (!userId) return { pendingCleared: 0, logsRestored: 0 };
+  const data = await readLeaderboard();
+  const state = ensureTfiberProofState(data);
+  const dropLogIds = Object.values(state.pending || {}).filter((p) => p?.userId === userId).map((p) => p.logId);
+  const restoreLogIds = (data.logs || []).filter((l) => l?.userId === userId && removedByProofExpiry(l)).map((l) => l.id);
+  return releaseTfiberProofs({ dropLogIds, restoreLogIds, reason: 'admin waive', actorId: waivedBy, now });
 }
 
 module.exports = {
@@ -291,5 +314,7 @@ module.exports = {
   latestPendingForUser,
   listOpenPending,
   collectDueTfiberProofActions,
+  listProofRemovedLogs,
+  releaseTfiberProofs,
   waiveTfiberProofsForUser,
 };

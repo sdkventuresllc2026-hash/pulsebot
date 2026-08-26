@@ -159,6 +159,8 @@ const {
   selectRecentTfiberProofLog,
   collectDueTfiberProofActions,
   listOpenPending,
+  listProofRemovedLogs,
+  releaseTfiberProofs,
   waiveTfiberProofsForUser,
 } = require('./tfiber-proof-store');
 const {
@@ -220,6 +222,7 @@ function channelNeedsTfiberProofContext(channel, marketIdentity = null, blitzNam
   const identity = marketIdentity || marketIdentityForChannel(channel);
   return requiresTfiberProof({
     speeds: ['1gig'],
+    channelId: channel?.id,
     channelName: channel?.name,
     blitzName,
     marketName: identity?.marketName,
@@ -1519,7 +1522,36 @@ async function sendTfiberProofMessage(userId, channelId, content) {
   }
 }
 
+/**
+ * Proof rules can change after a deal is logged (a market flips to Kinetic, a channel gets pinned).
+ * Re-check every open request and every expiry-removed deal against the CURRENT rule; anything
+ * that no longer needs proof is dropped / put back in totals silently — no DMs, no channel posts.
+ * Runs before expiries so a deal that stopped needing proof can never be removed for lacking it.
+ */
+async function reconcileTfiberProofRules() {
+  const [open, removed] = await Promise.all([listOpenPending().catch(() => []), listProofRemovedLogs().catch(() => [])]);
+  if (!open.length && !removed.length) return null;
+  const verdict = new Map(); // channelId → still needs proof?
+  const stillNeeds = async (channelId) => {
+    if (!channelId) return true; // no channel on record → leave it alone
+    if (!verdict.has(channelId)) {
+      const channel = await client.channels.fetch(channelId).catch(() => null);
+      verdict.set(channelId, channel ? channelNeedsTfiberProofContext(channel) : true);
+    }
+    return verdict.get(channelId);
+  };
+  const dropLogIds = [];
+  for (const p of open) if (p.logId && !(await stillNeeds(p.channelId))) dropLogIds.push(p.logId);
+  const restoreLogIds = [];
+  for (const log of removed) if (!(await stillNeeds(log.channelId))) restoreLogIds.push(log.id);
+  if (!dropLogIds.length && !restoreLogIds.length) return null;
+  const result = await releaseTfiberProofs({ dropLogIds, restoreLogIds, reason: 'channel no longer requires T-Fiber proof' });
+  console.log(`[Pulse][T-Fiber] rule reconcile: dropped ${result.pendingCleared} open request(s), restored ${result.logsRestored} deal(s) to totals`);
+  return result;
+}
+
 async function runTfiberProofMaintenance() {
+  await reconcileTfiberProofRules().catch((err) => console.error('[Pulse][T-Fiber] proof reconcile failed:', err.message || err));
   const actions = await collectDueTfiberProofActions().catch((err) => {
     console.error('[Pulse][T-Fiber] proof maintenance failed:', err.message || err);
     return [];
@@ -1803,7 +1835,7 @@ async function handleLog(interaction) {
   });
 
   let tfiberProofLine = null;
-  if (requiresTfiberProof({ speeds: [speed], channelName: channel?.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp })) {
+  if (requiresTfiberProof({ speeds: [speed], channelName: channel?.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp, channelId: channel?.id })) {
     const result = await syncTfiberProofForLog({
       message: {
         id: interaction.id,
@@ -3418,7 +3450,7 @@ client.on('messageCreate', async (message) => {
       if (appendResult.duplicateMessage) return;
 
       let tfiberProofLine = null;
-      if (requiresTfiberProof({ speeds: [speed], channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp })) {
+      if (requiresTfiberProof({ speeds: [speed], channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp, channelId: channel?.id })) {
         const proofMessage = proofMessageForTfiberLog(message, channel);
         const result = await syncTfiberProofForLog({
           message: proofMessage,
@@ -3481,7 +3513,7 @@ client.on('messageCreate', async (message) => {
     });
 
     const tfiberLines = [];
-    if (requiresTfiberProof({ speeds: parsed.speeds, channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp })) {
+    if (requiresTfiberProof({ speeds: parsed.speeds, channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp, channelId: channel?.id })) {
       for (const [idx, logEntry] of (result.logEntries || []).entries()) {
         const syncResult = await syncTfiberProofForLog({
           message,

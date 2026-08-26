@@ -18,7 +18,13 @@ function extractTmoOrderId(value) {
   return normalizeTmoOrderId(match && match[0]);
 }
 
-function looksLikeTfiberContext({ channelName, blitzName, marketName, marketId, marketIsp }) {
+// ponytail: pinned Kinetic channels — belt-and-braces for channels that may not be mapped to a
+// market yet. Ohio crew channel (DLO / anthony mooch / ashton / Kolbee) sells Kinetic since 2026-08-24.
+// Remove an id once its market carries isp=Kinetic.
+const KINETIC_CHANNEL_IDS = new Set(['1535388250967904327']);
+
+function looksLikeTfiberContext({ channelId, channelName, blitzName, marketName, marketId, marketIsp }) {
+  if (channelId && KINETIC_CHANNEL_IDS.has(String(channelId))) return false;
   // An explicit ISP on the market wins over name-sniffing, both ways: a market set to "Kinetic"
   // never needs a TMO screenshot even if its channel is called "dayton"; a market set to
   // "T-Fiber" always does. (Ohio crews moved from T-Fiber to Kinetic in the same channel, 2026-08.)
@@ -28,8 +34,8 @@ function looksLikeTfiberContext({ channelName, blitzName, marketName, marketId, 
   return /\bt[-\s]?fiber\b|\bt[-\s]?mobile\b|\btmo\b|\bwilmington(?:-nc)?\b|\bjacksonville\b|\bgoldsboro\b|\bdayton\b/.test(haystack); // ohio removed: that channel sells Kinetic, no TMO proof
 }
 
-function requiresTfiberProof({ speeds, channelName, blitzName, marketName, marketId, marketIsp }) {
-  return Array.isArray(speeds) && speeds.length > 0 && looksLikeTfiberContext({ channelName, blitzName, marketName, marketId, marketIsp });
+function requiresTfiberProof({ speeds, channelId, channelName, blitzName, marketName, marketId, marketIsp }) {
+  return Array.isArray(speeds) && speeds.length > 0 && looksLikeTfiberContext({ channelId, channelName, blitzName, marketName, marketId, marketIsp });
 }
 
 function attachmentIsScreenshot(att) {
