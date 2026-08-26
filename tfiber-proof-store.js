@@ -246,6 +246,41 @@ async function collectDueTfiberProofActions(now = new Date()) {
   return due;
 }
 
+/**
+ * Admin "pulse waive @rep": the rep's deals do not need T-Fiber proof (their market sells Kinetic).
+ * Drops every open proof request for the rep and restores ONLY deals the proof expiry removed —
+ * a deal an admin removed for any other reason stays removed.
+ */
+async function waiveTfiberProofsForUser(userId, { waivedBy = null, now = new Date() } = {}) {
+  const result = { pendingCleared: 0, logsRestored: 0 };
+  if (!userId) return result;
+  await mutate((data) => {
+    const state = ensureTfiberProofState(data);
+    for (const [logId, pending] of Object.entries(state.pending || {})) {
+      if (pending?.userId !== userId) continue;
+      delete state.pending[logId];
+      result.pendingCleared += 1;
+    }
+    for (const log of data.logs || []) {
+      if (!log || log.userId !== userId) continue;
+      const expiredByProof = log.tfiberProofStatus === 'EXPIRED' && log.removed;
+      if (expiredByProof) {
+        log.removed = false;
+        log.removedAt = null;
+        log.removedReason = null;
+        result.logsRestored += 1;
+      }
+      if (log.tfiberProofStatus && log.tfiberProofStatus !== 'PROOF_ATTACHED' && log.tfiberProofStatus !== 'ORDER_CREATED') {
+        log.tfiberProofStatus = 'WAIVED';
+        log.tfiberProofExpiresAt = null;
+      }
+    }
+    state.events.push({ at: now.toISOString(), logId: null, userId, status: 'WAIVED', waivedBy, ...result });
+    return data;
+  });
+  return result;
+}
+
 module.exports = {
   ensureTfiberProofState,
   recordTfiberProofAttempt,
@@ -256,4 +291,5 @@ module.exports = {
   latestPendingForUser,
   listOpenPending,
   collectDueTfiberProofActions,
+  waiveTfiberProofsForUser,
 };

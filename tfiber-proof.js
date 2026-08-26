@@ -18,13 +18,18 @@ function extractTmoOrderId(value) {
   return normalizeTmoOrderId(match && match[0]);
 }
 
-function looksLikeTfiberContext({ channelName, blitzName, marketName, marketId }) {
+function looksLikeTfiberContext({ channelName, blitzName, marketName, marketId, marketIsp }) {
+  // An explicit ISP on the market wins over name-sniffing, both ways: a market set to "Kinetic"
+  // never needs a TMO screenshot even if its channel is called "dayton"; a market set to
+  // "T-Fiber" always does. (Ohio crews moved from T-Fiber to Kinetic in the same channel, 2026-08.)
+  const isp = String(marketIsp || '').trim().toLowerCase();
+  if (isp) return /\bt[-\s]?fiber\b|\bt[-\s]?mobile\b|\btmo\b/.test(isp);
   const haystack = [channelName, blitzName, marketName, marketId].filter(Boolean).join(' ').toLowerCase();
   return /\bt[-\s]?fiber\b|\bt[-\s]?mobile\b|\btmo\b|\bwilmington(?:-nc)?\b|\bjacksonville\b|\bgoldsboro\b|\bdayton\b/.test(haystack); // ohio removed: that channel sells Kinetic, no TMO proof
 }
 
-function requiresTfiberProof({ speeds, channelName, blitzName, marketName, marketId }) {
-  return Array.isArray(speeds) && speeds.length > 0 && looksLikeTfiberContext({ channelName, blitzName, marketName, marketId });
+function requiresTfiberProof({ speeds, channelName, blitzName, marketName, marketId, marketIsp }) {
+  return Array.isArray(speeds) && speeds.length > 0 && looksLikeTfiberContext({ channelName, blitzName, marketName, marketId, marketIsp });
 }
 
 function attachmentIsScreenshot(att) {

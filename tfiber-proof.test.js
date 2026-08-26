@@ -40,6 +40,13 @@ test('requires proof for all T-Fiber speed logs in T-Fiber contexts', () => {
   assert.equal(requiresTfiberProof({ speeds: ['2gig'], marketName: 'Charlotte T-Fiber Blitz' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['2gig'], channelName: 'jacksonville' }), true);
   assert.equal(requiresTfiberProof({ speeds: ['1gig'], marketName: 'Greenville Kinetic' }), false);
+  // An explicit market ISP beats the channel/market name: Ohio crews sell Kinetic in a channel the
+  // name-sniffer would still call T-Fiber, and a T-Fiber market with a plain name still needs proof.
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'dayton', marketIsp: 'Kinetic' }), false);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'tmo-blitz', marketIsp: 'Kinetic' }), false);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'ohio', marketIsp: 'T-Fiber' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'ohio', marketIsp: 'T-Mobile Fiber' }), true);
+  assert.equal(requiresTfiberProof({ speeds: ['1gig'], channelName: 'dayton', marketIsp: '' }), true); // blank ISP = no opinion
 });
 
 test('detects image attachments as screenshots', () => {

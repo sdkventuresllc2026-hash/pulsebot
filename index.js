@@ -159,6 +159,7 @@ const {
   selectRecentTfiberProofLog,
   collectDueTfiberProofActions,
   listOpenPending,
+  waiveTfiberProofsForUser,
 } = require('./tfiber-proof-store');
 const {
   createTimestampedBackup,
@@ -223,6 +224,7 @@ function channelNeedsTfiberProofContext(channel, marketIdentity = null, blitzNam
     blitzName,
     marketName: identity?.marketName,
     marketId: identity?.marketId,
+    marketIsp: identity?.isp,
   });
 }
 
@@ -392,6 +394,7 @@ function marketIdentityForChannel(channel) {
     return {
       marketId: market.marketId,
       marketName: market.marketName,
+      isp: market.isp || null,
       assigned: true,
     };
   }
@@ -1568,6 +1571,12 @@ function parseTextAdminCommand(content) {
   const proofs = text.match(/^(?:pulse\s+)?(?:proofs|open proofs|proof requests)$/i);
   if (proofs) return { action: 'proofs' };
 
+  // "pulse waive @rep" — drop every open T-Fiber proof request for that rep and put back any
+  // deal the 48h expiry removed. For reps whose market is not T-Fiber (Kinetic Ohio crews logged
+  // "1g" in a channel the bot still treated as T-Fiber).
+  const waive = text.match(/^(?:pulse\s+)?(?:proofs?\s+)?waive\s+(?:<@!?(\d+)>|(\d{15,25}))\s*$/i);
+  if (waive) return { action: 'waive', userId: waive[1] || waive[2] };
+
   return null;
 }
 
@@ -1645,6 +1654,15 @@ async function handleTextAdminCommand(message) {
       content: content.length > 1900 ? `${content.slice(0, 1900)}\n…(truncated — clear some and run again)` : content,
       allowedMentions: { parse: [] },
     }).catch(() => {});
+    return true;
+  }
+
+  if (parsed.action === 'waive') {
+    const result = await waiveTfiberProofsForUser(parsed.userId, { waivedBy: message.author.id }).catch((err) => ({ error: err.message || String(err) }));
+    const content = result.error
+      ? `Could not waive: ${result.error}`
+      : `Waived T-Fiber proofs for <@${parsed.userId}>: cleared ${result.pendingCleared} open request(s) · restored ${result.logsRestored} removed deal(s) to Pulse totals.`;
+    await message.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
     return true;
   }
 
@@ -1785,7 +1803,7 @@ async function handleLog(interaction) {
   });
 
   let tfiberProofLine = null;
-  if (requiresTfiberProof({ speeds: [speed], channelName: channel?.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId })) {
+  if (requiresTfiberProof({ speeds: [speed], channelName: channel?.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp })) {
     const result = await syncTfiberProofForLog({
       message: {
         id: interaction.id,
@@ -3397,7 +3415,7 @@ client.on('messageCreate', async (message) => {
       if (appendResult.duplicateMessage) return;
 
       let tfiberProofLine = null;
-      if (requiresTfiberProof({ speeds: [speed], channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId })) {
+      if (requiresTfiberProof({ speeds: [speed], channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp })) {
         const proofMessage = proofMessageForTfiberLog(message, channel);
         const result = await syncTfiberProofForLog({
           message: proofMessage,
@@ -3460,7 +3478,7 @@ client.on('messageCreate', async (message) => {
     });
 
     const tfiberLines = [];
-    if (requiresTfiberProof({ speeds: parsed.speeds, channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId })) {
+    if (requiresTfiberProof({ speeds: parsed.speeds, channelName: channel.name, blitzName, marketName: marketIdentity.marketName, marketId: marketIdentity.marketId, marketIsp: marketIdentity.isp })) {
       for (const [idx, logEntry] of (result.logEntries || []).entries()) {
         const syncResult = await syncTfiberProofForLog({
           message,
