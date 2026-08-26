@@ -2467,13 +2467,16 @@ async function handleMarketRename(interaction) {
   if (!canUseAdminCommands(interaction)) return denyAdmin(interaction);
   await interaction.deferReply({ ephemeral: true });
   const query = interaction.options.getString('market', true);
-  const newName = interaction.options.getString('name', true).trim();
+  const newName = (interaction.options.getString('name') || '').trim();
+  const isp = interaction.options.getString('isp'); // null = leave as is
+  if (!newName && !isp) return interaction.editReply({ content: 'Give a new name, an isp, or both.' });
   try {
-    const result = renameMarket(query, { marketName: newName });
+    const result = renameMarket(query, { marketName: newName || null, ...(isp ? { isp } : {}) });
     const m = result?.market ?? result;
-    await interaction.editReply({
-      content: `✅ Renamed to **${m.marketName}** (id \`${m.marketId}\` unchanged, so past deals stay attached).\nUpdate the Discord role name to match if it hasn't already.`,
-    });
+    const lines = [];
+    if (newName) lines.push(`✅ Renamed to **${m.marketName}** (id \`${m.marketId}\` unchanged, so past deals stay attached).\nUpdate the Discord role name to match if it hasn't already.`);
+    if (isp) lines.push(`✅ **${m.marketName}** now sells **${m.isp}**${/t[-\s]?fiber|t[-\s]?mobile|tmo/i.test(m.isp || '') ? ' — every deal logged there needs a TMO screenshot.' : ' — no T-Fiber screenshot requests in its channels from now on.'}`);
+    await interaction.editReply({ content: lines.join('\n') });
   } catch (err) {
     await interaction.editReply({ content: `Could not rename: ${err.message || err}` });
   }

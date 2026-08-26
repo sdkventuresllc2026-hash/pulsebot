@@ -79,9 +79,16 @@ const commands = [
     .addSubcommand((s) =>
       s
         .setName('rename')
-        .setDescription('Fix a market name (e.g. "New York" -> "Ashtabula")')
+        .setDescription('Fix a market name and/or set which ISP it sells (Kinetic markets never need T-Fiber proof)')
         .addStringOption((o) => o.setName('market').setDescription('Which market').setRequired(true).setAutocomplete(true))
-        .addStringOption((o) => o.setName('name').setDescription('Correct name, e.g. Ashtabula').setRequired(true).setMaxLength(80)),
+        .addStringOption((o) => o.setName('name').setDescription('Correct name, e.g. Ashtabula').setRequired(false).setMaxLength(80))
+        .addStringOption((o) =>
+          o
+            .setName('isp')
+            .setDescription('What this market sells. Kinetic = no TMO screenshot requests; T-Fiber = always')
+            .setRequired(false)
+            .addChoices({ name: 'Kinetic', value: 'Kinetic' }, { name: 'T-Fiber', value: 'T-Fiber' }, { name: 'Brightspeed', value: 'Brightspeed' }),
+        ),
     )
     .addSubcommand((s) =>
       s
