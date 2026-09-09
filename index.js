@@ -131,7 +131,7 @@ const {
   deriveLeaderboardMovement,
   buildLeaderboardContext,
 } = require('./gamification-engine');
-const { postTfiberDiscordProof } = require('./fiberSalesOsClient');
+const { postTfiberDiscordProof, postBlitzMove } = require('./fiberSalesOsClient');
 const {
   requiresTfiberProof,
   extractDiscordAttachments,
@@ -2495,19 +2495,55 @@ async function handleMarketAdd(interaction) {
  *  The id is what historical deal logs are stamped with, so changing it would orphan them; the
  *  name is only ever a label. Renaming "New York" to "Ashtabula" therefore also corrects every
  *  past leaderboard line for that market, because those deals were only ever mislabelled. */
+/** /market rename — a crew moved but keeps its chat. One command: market name, city/state, ISP,
+ *  the channel name, the role name, a note in the chat, and the blitz on fibersales.co/blitzes.
+ *  Past deals stay attached (market id never changes). Owner decision 2026-09-09. */
 async function handleMarketRename(interaction) {
   if (!canUseAdminCommands(interaction)) return denyAdmin(interaction);
   await interaction.deferReply({ ephemeral: true });
   const query = interaction.options.getString('market', true);
   const newName = (interaction.options.getString('name') || '').trim();
   const isp = interaction.options.getString('isp'); // null = leave as is
-  if (!newName && !isp) return interaction.editReply({ content: 'Give a new name, an isp, or both.' });
+  const city = (interaction.options.getString('city') || '').trim();
+  const state = (interaction.options.getString('state') || '').trim();
+  if (!newName && !isp && !city && !state) return interaction.editReply({ content: 'Give a new name, a city and state, an isp, or any of those.' });
   try {
-    const result = renameMarket(query, { marketName: newName || null, ...(isp ? { isp } : {}) });
-    const m = result?.market ?? result;
+    const { market: m, previousName } = renameMarket(query, {
+      marketName: newName || null,
+      ...(isp ? { isp } : {}),
+      ...(city ? { city } : {}),
+      ...(state ? { state } : {}),
+    });
+    const location = [m.city, m.state].filter(Boolean).join(', ');
     const lines = [];
-    if (newName) lines.push(`✅ Renamed to **${m.marketName}** (id \`${m.marketId}\` unchanged, so past deals stay attached).\nUpdate the Discord role name to match if it hasn't already.`);
-    if (isp) lines.push(`✅ **${m.marketName}** now sells **${m.isp}**${/t[-\s]?fiber|t[-\s]?mobile|tmo/i.test(m.isp || '') ? ' — every deal logged there needs a TMO screenshot.' : ' — no T-Fiber screenshot requests in its channels from now on.'}`);
+    if (newName) lines.push(`✅ **${previousName}** is now **${m.marketName}**. Past deals stay attached.`);
+    if (city || state) lines.push(`📍 ${location}`);
+    if (isp) lines.push(`✅ Sells **${m.isp}**${/t[-\s]?fiber|t[-\s]?mobile|tmo/i.test(m.isp || '') ? '. Every deal needs a TMO screenshot.' : '. No T-Fiber screenshot requests.'}`);
+
+    if (newName) {
+      const slug = m.marketName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      for (const channelId of m.channelIds || []) {
+        const channel = interaction.guild.channels.cache.get(channelId) || (await interaction.guild.channels.fetch(channelId).catch(() => null));
+        if (!channel) continue;
+        const prefix = (channel.name.match(/^[^a-z0-9]*/i) || [''])[0]; // keep the emoji the channel already has
+        const nextName = `${prefix}${slug}`;
+        if (channel.name !== nextName) {
+          const renamed = await channel.setName(nextName, `/market rename by ${interaction.user.tag}`).then(() => true).catch((err) => { lines.push(`⚠️ Could not rename #${channel.name}: ${err.message || err}`); return false; });
+          if (renamed) lines.push(`✅ Chat is now #${nextName}. Same history, same people.`);
+        }
+        await channel.send({ content: `📍 Now knocking **${m.marketName}**${location ? ` (${location})` : ''}.` }).catch(() => null);
+      }
+      if (m.roleId) {
+        const role = interaction.guild.roles.cache.get(m.roleId) || (await interaction.guild.roles.fetch(m.roleId).catch(() => null));
+        if (role && role.name !== m.marketName) await role.setName(m.marketName, `/market rename by ${interaction.user.tag}`).catch((err) => lines.push(`⚠️ Could not rename the role: ${err.message || err}`));
+      }
+    }
+
+    const os = await postBlitzMove({ market: previousName, name: newName || null, location: location || null });
+    if (os.ok && os.moved) lines.push(`✅ fibersales.co/blitzes updated: **${os.blitz?.name}**${os.blitz?.location ? ` · ${os.blitz.location}` : ''}.`);
+    else if (os.ok) lines.push(`ℹ️ No blitz named **${previousName}** on fibersales.co/blitzes. Edit it there if one exists.`);
+    else if (!os.disabled) lines.push(`⚠️ fibersales.co not updated (${os.message}). Edit the blitz on /blitzes.`);
+
     await interaction.editReply({ content: lines.join('\n') });
   } catch (err) {
     await interaction.editReply({ content: `Could not rename: ${err.message || err}` });

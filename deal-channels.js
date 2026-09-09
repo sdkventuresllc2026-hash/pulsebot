@@ -454,17 +454,21 @@ function inferMarketForLog(log) {
   return { marketId: null, marketName: 'Unassigned' };
 }
 
-function renameMarket(query, { marketName, isp }) {
+function renameMarket(query, { marketName, isp, city, state }) {
   const resolved = resolveMarket(query);
   if (!resolved) {
     const err = new Error(formatMarketNotFoundMessage(query));
     err.code = 'MARKET_NOT_FOUND';
     throw err;
   }
+  const previousName = resolved.market.marketName;
   const patch = { updatedAt: new Date().toISOString() };
   if (marketName != null && String(marketName).trim()) patch.marketName = String(marketName).trim();
   if (isp !== undefined) patch.isp = isp ? String(isp).trim() : null;
-  return updateMarket(resolved.market.marketId, patch);
+  if (city !== undefined) patch.city = city ? String(city).trim() : null;
+  if (state !== undefined) patch.state = state ? String(state).trim() : null;
+  const market = updateMarket(resolved.market.marketId, patch);
+  return { market, previousName };
 }
 
 function addMarket({ marketId, marketName, isp = null, createdBy = null }) {

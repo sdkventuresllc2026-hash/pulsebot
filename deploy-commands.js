@@ -79,9 +79,11 @@ const commands = [
     .addSubcommand((s) =>
       s
         .setName('rename')
-        .setDescription('Fix a market name and/or set which ISP it sells (Kinetic markets never need T-Fiber proof)')
+        .setDescription('Crew moved? Same chat, new name and city. Also sets the ISP.')
         .addStringOption((o) => o.setName('market').setDescription('Which market').setRequired(true).setAutocomplete(true))
-        .addStringOption((o) => o.setName('name').setDescription('Correct name, e.g. Ashtabula').setRequired(false).setMaxLength(80))
+        .addStringOption((o) => o.setName('name').setDescription('New name, e.g. Asheboro').setRequired(false).setMaxLength(80))
+        .addStringOption((o) => o.setName('city').setDescription('City, e.g. Asheboro').setRequired(false).setMaxLength(60))
+        .addStringOption((o) => o.setName('state').setDescription('State, e.g. NC').setRequired(false).setMaxLength(30))
         .addStringOption((o) =>
           o
             .setName('isp')

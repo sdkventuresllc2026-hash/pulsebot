@@ -43,7 +43,25 @@ async function postTfiberDiscordProof(payload, fetchImpl = fetch) {
   };
 }
 
+/** A crew renamed its market: keep the OS blitz in step (name + location). Never throws. */
+async function postBlitzMove({ market, name, location }, fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true };
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/blitz-move`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-pulse-os-secret': osSecret() },
+      body: JSON.stringify({ market, name, location }),
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    return { ok: true, ...(json?.data || {}) };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+}
+
 module.exports = {
   isFiberSalesOsConfigured,
   postTfiberDiscordProof,
+  postBlitzMove,
 };
