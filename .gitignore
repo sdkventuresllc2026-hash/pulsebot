@@ -26,3 +26,8 @@ manager-assignments-backup-*.json
 
 # Local T-Fiber screenshot calibration data (customer/order PII)
 local-calibration/
+
+# access-cleanup working files (names + Discord ids), never committed
+fibersales-roster-*.json
+discord-access-review-*.json
+discord-access-review-*.md
