@@ -159,6 +159,59 @@ async function seatFromBlitzBoard(guild) {
   if (out.lines.length) await notifyManagement(guild, ['💬 Market channels (from the fibersales.co blitz board)', ...out.lines].join('\n'));
   return out;
 }
+
+const joinMatch = require('./join-match');
+const { postDiscordLink } = require('./fiberSalesOsClient');
+
+/** Link a member to an exact OS person, then name, access and market channel follow. */
+async function linkMemberToPerson(guild, member, person, matchedBy) {
+  const linked = await postDiscordLink({ discordUserId: member.id, person, matchedBy });
+  if (!linked.ok || !linked.linked) return { ok: false, reason: linked.reason || linked.message || 'not linked' };
+  await member.setNickname(buildNickname(linked.name, null), 'Matched to fibersales.co').catch(() => null);
+  await accessSync.reconcileOne(guild, member.id).catch(() => null);
+  await seatFromBlitzBoard(guild).catch(() => null);
+  return { ok: true, name: linked.name };
+}
+
+/** Personal invites for everyone not on Discord yet (every 3 min; cheap when nothing changed). */
+async function runInviteMint(guild) {
+  const roster = await fetchAccessRoster();
+  if (!roster.ok) return;
+  const out = await joinMatch.mintPass(guild, roster, { welcomeChannelName: WELCOME_CHANNEL });
+  if (out.minted || out.retired) console.log(`[join] ${guild.name}: +${out.minted} invites, -${out.retired} retired`);
+}
+
+/** "Who is @x?" in #management with a pick-list, for members still unknown after 10 minutes. */
+async function askWhoIs(guild, memberId, roster) {
+  const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+  const ch = guild.channels.cache.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
+  const options = joinMatch.pickerOptions(roster);
+  if (!ch || !options.length) return false;
+  const menu = new StringSelectMenuBuilder().setCustomId(`${joinMatch.WHOIS_ID}${memberId}`).setPlaceholder('Pick who this is').addOptions(options);
+  await ch.send({
+    content: `❓ **Who is <@${memberId}>?** They joined but aren't matched to anyone on fibersales.co. Pick them and they're set up (name, access, market channel).\nNot in the list? Approve them on fibersales.co first.`,
+    components: [new ActionRowBuilder().addComponents(menu)],
+    allowedMentions: { parse: [] },
+  });
+  return true;
+}
+
+async function runWhoIsPass(guild) {
+  const roster = await fetchAccessRoster();
+  if (!roster.ok) return;
+  const store = joinMatch.load();
+  const memberRole = guild.roles.cache.find((r) => r.name === 'Member');
+  const linkedIds = new Set((roster.active || []).concat(roster.inactive || []).map((p) => p.discordUserId).filter(Boolean));
+  const members = [...(await guild.members.fetch()).values()].map((m) => ({
+    id: m.id, isBot: m.user.bot, joinedAt: m.joinedTimestamp || 0,
+    hasMember: Boolean(memberRole && m.roles.cache.has(memberRole.id)),
+    protected: m.roles.cache.some((r) => ['Owner', 'Manager', 'Pulse', 'Bot'].includes(r.name)),
+  }));
+  for (const m of joinMatch.whoToAsk(members, linkedIds, store.asked, Date.now())) {
+    if (await askWhoIs(guild, m.id, roster).catch(() => false)) store.asked[m.id] = new Date().toISOString();
+  }
+  joinMatch.save(store);
+}
 const {
   requiresTfiberProof,
   extractDiscordAttachments,
@@ -3331,6 +3384,7 @@ async function bootstrap() {
         try {
           const out = await accessSync.reconcileAccess(guild);
           await seatFromBlitzBoard(guild).catch((err) => console.error(`[seat] ${guild.name}: ${err?.message || err}`));
+          await runWhoIsPass(guild).catch((err) => console.error(`[whois] ${guild.name}: ${err?.message || err}`));
           if (!out) continue;
           console.log(`[access] ${guild.name}: +${out.granted} −${out.stripped} (linked ${out.linked}), ${out.skipped} unchanged`);
           if (out.lines.length) await notifyManagement(guild, ['🔐 Access sync (org chart → Discord)', ...out.lines].join('\n'));
@@ -3341,6 +3395,10 @@ async function bootstrap() {
     };
     runAccessSync();
     setInterval(runAccessSync, 15 * 60 * 1000).unref?.();
+    // Personal invites (2026-10-15): a few minutes after approval, fibersales.co/discord has one.
+    const runMint = () => { for (const g of client.guilds.cache.values()) runInviteMint(g).catch((err) => console.error(`[join] ${err?.message || err}`)); };
+    runMint();
+    setInterval(runMint, 3 * 60 * 1000).unref?.();
 
     // Weekly roster check (owner 2026-10-15): Monday 9:00 ET, the OS compares the T-Mobile export to
     // the blitz board, auto-adds sellers who are on no blitz, and we post the rest for the leads.
@@ -3395,6 +3453,18 @@ client.on('guildMemberAdd', async (member) => {
     if (greeted.has(member.id)) return;
     greeted.add(member.id);
     setTimeout(() => greeted.delete(member.id), 10 * 60 * 1000).unref?.();
+
+    // Personal invite (2026-10-15): we already know who this is. No button, no manager.
+    const known = await joinMatch.resolveJoin(member.guild).catch(() => null);
+    if (known) {
+      const done = await linkMemberToPerson(member.guild, member, known.people[0], 'INVITE').catch(() => ({ ok: false }));
+      if (done.ok) {
+        const hi = member.guild.channels.cache.find((c) => c.name === WELCOME_CHANNEL && c.isTextBased?.());
+        await hi?.send({ content: `👋 Welcome to **FiberSales**, <@${member.id}>. You're all set, **${done.name}**.`, allowedMentions: { users: [member.id] } }).catch(() => null);
+        await notifyManagement(member.guild, `✅ **${done.name}** joined Discord through their personal link and is set up.`);
+        return;
+      }
+    }
 
     const welcome = member.guild.channels.cache.find((c) => c.name === WELCOME_CHANNEL && c.isTextBased?.());
     if (!welcome) {
@@ -3655,6 +3725,24 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
+  if (interaction.isStringSelectMenu?.() && interaction.customId.startsWith(joinMatch.WHOIS_ID)) {
+    const memberId = interaction.customId.slice(joinMatch.WHOIS_ID.length);
+    const isMgr = interaction.member?.roles?.cache?.some?.((r) => r.name === 'Manager' || r.name === 'Owner');
+    if (!isMgr && !canUseAdminMember(interaction.user.id, interaction.member)) {
+      await interaction.reply({ content: 'Only managers can match people.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate().catch(() => {});
+    const [kind, id] = String(interaction.values?.[0] || '').split(':');
+    const member = await interaction.guild.members.fetch(memberId).catch(() => null);
+    const done = member ? await linkMemberToPerson(interaction.guild, member, { kind, id }, 'MANAGER_PICK').catch(() => ({ ok: false })) : { ok: false, reason: 'they left the server' };
+    await interaction.editReply({
+      content: done.ok ? `✅ <@${memberId}> is **${done.name}**. Matched by <@${interaction.user.id}>; name, access and market channel are set.` : `⚠ Couldn't match <@${memberId}>: ${done.reason || 'try again'}.`,
+      components: done.ok ? [] : undefined,
+      allowedMentions: { parse: [] },
+    }).catch(() => {});
+    return;
+  }
   if (interaction.isAutocomplete()) {
     try {
       const focused = interaction.options.getFocused(true);
@@ -3744,16 +3832,17 @@ client.on('interactionCreate', async (interaction) => {
           ? [`✅ Thanks — you will show up as **${nickname}**.`,
              clash ? `\n⚠ Heads up: **${clash.displayName}** already goes by that name. A manager will sort it out.` : '',
              unlocked ? '\nYou\'re in. The team channels are open to you now; your market channel opens as soon as your manager puts you on a blitz.'
-                      : '\nA manager adds you to your market next — your market channel appears once they do.'].join('')
+                      : '\nA manager will confirm who you are, then your market channel opens.'].join('')
           : `✅ Got it — **${nickname}**.\nPulse could not set it automatically (your role sits above the bot), so a manager will apply it. Nothing else needed from you.`,
       }).catch(() => {});
 
-      const posted = await notifyManagement(interaction.guild, [
-        `🆕 **${nickname}** — \`@${interaction.user.username}\` (<@${interaction.user.id}>)`,
-        nicknameSet ? '' : '⚠ nickname NOT applied — role hierarchy. Set it by hand.',
-        clash ? `⚠ duplicate name: **${clash.displayName}** already uses it.` : '',
-        `\`/market add rep:@${interaction.user.username} name:"${realName}" market:…\``,
-      ].filter(Boolean).join('\n'));
+      // Matched = nothing for a manager to do. Not matched = the one-tap picker (no commands).
+      let posted = false;
+      if (!unlocked) {
+        const roster = await fetchAccessRoster();
+        posted = roster.ok ? await askWhoIs(interaction.guild, interaction.user.id, roster).catch(() => false) : false;
+        if (posted) { const st = joinMatch.load(); st.asked[interaction.user.id] = new Date().toISOString(); joinMatch.save(st); }
+      }
       // Privacy-safe log: ids and outcome, never the entered name.
       console.log(`[Pulse] name capture user=${interaction.user.id} applied=${nicknameSet} clash=${Boolean(clash)} queued=${posted}`);
     } catch (err) {

@@ -73,14 +73,30 @@ async function fetchAccessRoster(fetchImpl = fetch) {
   }
 }
 
-/** Link a Discord account to the one active person with exactly that name. Never throws. */
-async function postDiscordLink({ discordUserId, name }, fetchImpl = fetch) {
+/** Link a Discord account: exact unique name, or an exact person ({ kind, id }) from a personal
+ *  invite join (matchedBy 'INVITE') or a manager's one-tap pick. Never throws. */
+async function postDiscordLink({ discordUserId, name, person, matchedBy }, fetchImpl = fetch) {
   if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true };
   try {
     const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/access`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-pulse-os-secret': osSecret() },
-      body: JSON.stringify({ discordUserId, name }),
+      body: JSON.stringify({ discordUserId, name, person, matchedBy }),
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    return { ok: true, ...(json?.data || {}) };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+}
+
+/** Store/remove personal invite codes in the OS (fibersales.co/discord reads them). Never throws. */
+async function postInviteCodes({ set = [], remove = [] }, fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true };
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/invites`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-pulse-os-secret': osSecret() }, body: JSON.stringify({ set, remove }),
     });
     const json = await response.json().catch(() => null);
     if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
@@ -111,5 +127,6 @@ module.exports = {
   postBlitzMove,
   fetchAccessRoster,
   postDiscordLink,
+  postInviteCodes,
   postRosterCheck,
 };
