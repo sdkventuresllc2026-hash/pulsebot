@@ -246,9 +246,12 @@ async function runWhoIsPass(guild) {
   // Asked before prompts were saved (old pick-list, 2026-10-16) = ask again with the fixed one.
   const asked = Object.fromEntries(Object.entries(store.asked).filter(([id]) => (store.messages || {})[id]));
   for (const m of joinMatch.whoToAsk(members, linkedIds, asked, Date.now())) {
-    if (await askWhoIs(guild, m.id, roster).catch((err) => { console.error(`[whois] ask ${m.id}: ${err?.message || err}`); return false; })) store.asked[m.id] = new Date().toISOString();
+    // Re-read before saving: askWhoIs just stored the prompt id, and saving the copy loaded above
+    // erased it, so every pass re-asked the same person (J_sales13 every 15 min, 2026-10-16).
+    if (await askWhoIs(guild, m.id, roster).catch((err) => { console.error(`[whois] ask ${m.id}: ${err?.message || err}`); return false; })) {
+      const st = joinMatch.load(); st.asked[m.id] = new Date().toISOString(); joinMatch.save(st);
+    }
   }
-  joinMatch.save(store);
 }
 const {
   requiresTfiberProof,
