@@ -1033,7 +1033,7 @@ async function handleTextLeaderboard(message, intent) {
     await message.delete().catch(() => {});
     const rows = content
       .split('\n')
-      .filter((line) => /^\d+\\. /.test(line))
+      .filter((line) => /^\d+\. /.test(line))
       .length;
     const totalMatch = content.match(/^Total: (\d+) deal/m);
     const market = intent.cmd === 'master' ? '__master__' : marketForChannel(dealChannel || message.channel)?.marketName || '__unmapped__';
@@ -1592,10 +1592,13 @@ async function handleTfiberProofChannelUpload(message, channel) {
         }
       : null,
   });
-  await message.reply({
-    content: formatTfiberProofLine(result) || 'Proof received.',
-    allowedMentions: { parse: [] },
-  }).catch(() => {});
+  const proofLine = formatTfiberProofLine(result) || 'Proof received.';
+  // Fixed the deal post in place: a ✅ on the screenshot is all the channel needs.
+  if (await updateDealPostProofLine(pending, proofLine)) {
+    await message.react('✅').catch(() => {});
+    return true;
+  }
+  await message.reply({ content: proofLine, allowedMentions: { parse: [] } }).catch(() => {});
   return true;
 }
 
@@ -1640,11 +1643,34 @@ async function handleTfiberProofDm(message) {
   }
 
   const result = await submitTfiberProofForPending({ message, pending, hasScreenshot });
-  await message.reply({
-    content: formatTfiberProofLine(result) || 'Proof received.',
-    allowedMentions: { parse: [] },
-  }).catch(() => {});
+  const proofLine = formatTfiberProofLine(result) || 'Proof received.';
+  // DM: the rep still gets the answer here; the deal post in the channel is fixed too.
+  await updateDealPostProofLine(pending, proofLine);
+  await message.reply({ content: proofLine, allowedMentions: { parse: [] } }).catch(() => {});
   return true;
+}
+
+/**
+ * Owner 2026-10-16: when proof comes in after the deal was logged, fix the deal post itself (swap
+ * "Proof needed: ..." for the new proof line) instead of stacking a second message under it.
+ * Finds Pulse's reply to the rep's original deal message. Returns false if it can't, so the
+ * caller falls back to a normal reply.
+ */
+async function updateDealPostProofLine(pending, proofLine) {
+  try {
+    if (!pending?.channelId || !pending?.messageId || !proofLine) return false;
+    const channel = await client.channels.fetch(pending.channelId).catch(() => null);
+    if (!channel?.isTextBased?.()) return false;
+    const after = await channel.messages.fetch({ after: pending.messageId, limit: 15 }).catch(() => null);
+    const post = after?.find((m) => m.author?.id === client.user?.id && m.reference?.messageId === pending.messageId);
+    if (!post) return false;
+    const lines = String(post.content || '').split('\n').filter((l) => !/^(-# )?Proof (needed|received|held|needs review)/.test(l));
+    await post.edit({ content: [...lines, proofLine].join('\n'), allowedMentions: { parse: [] } });
+    return true;
+  } catch (err) {
+    console.error('[proof] could not update the deal post:', err?.message || err);
+    return false;
+  }
 }
 
 async function sendTfiberProofMessage(userId, channelId, content) {

@@ -28,11 +28,10 @@ function dealCount(row) {
   return Number(row.dealCount ?? row.total ?? 0);
 }
 
-const MEDALS = ['🥇', '🥈', '🥉'];
 
 function rankLabel(index) {
-  // Escaped so Discord shows "1." as typed instead of turning the board into an indented list.
-  return `${index + 1}\\.`;
+  // Unescaped on purpose: Discord renders "4. Name" lines as an aligned numbered list.
+  return `${index + 1}.`;
 }
 
 function formatPhase3SpeedBreakdown(speeds) {
@@ -193,21 +192,23 @@ function leaderLine(rows) {
 function formatLeaderboard({ scope, period, rows, total, market, dateContext, quarterLine }) {
   const isMaster = scope === 'master';
   const name = isMaster ? 'All Markets' : market || 'Unknown Market';
-  // "Today · Friday, October 16" -> title "Today", grey "Friday, October 16" underneath.
-  // "This Month · October 2026" -> title "October 2026"; the month name says it.
-  const context = String(dateContext || resolveDateContext(period)).replace(/^This Month · /, '');
-  const [when, ...rest] = context.split(' · ');
+  // Owner 2026-10-16 (checked on iPhone): one bold title line, plus the quarter on daily boards.
+  // No grey date or quote bar: Discord mobile adds space and indents around those blocks.
+  // "Today · Friday, October 16" -> "Today"; "This Month · October 2026" -> "October 2026".
+  const [when, ...rest] = String(dateContext || resolveDateContext(period)).split(' · ');
+  const title = (/Month$/.test(when) && rest.length ? rest.join(' · ') : when).replace('All-Time', 'All Time');
   const SOFT_CAP = 50;
   const allRows = Array.isArray(rows) ? rows : [];
   const safeRows = allRows.slice(0, SOFT_CAP);
-  // Owner 2026-10-16: bold title, grey date (Discord "-#" subtext), quarter in a quote bar on daily boards.
-  const header = [`🏆 **${name} · ${when}**`];
-  if (rest.length) header.push(`-# ${rest.join(' · ').replace(/\s*–\s*/g, ' to ')}`);
+  const header = [`🏆 **${name} · ${title}**`];
   if (quarterLine) header.push(quarterLine);
 
   // Medals + bold name and count for the top three, plain numbered list below.
   const rowLine = (row, index) => {
-    const who = index < 3 ? `${MEDALS[index]} **${displayRepName(row)}**` : `${rankLabel(index)} ${displayRepName(row)}`;
+    // Owner 2026-10-16, checked in real Discord: every row is a native numbered list (it right-aligns
+    // the numbers and lines up every name at any length); the top three stand out by bold. Medals in
+    // front could not line up with the list on boards under 10 reps.
+    const who = index < 3 ? `${rankLabel(index)} **${displayRepName(row)}**` : `${rankLabel(index)} ${displayRepName(row)}`;
     const fields = [who, index < 3 ? `**${dealCount(row)}**` : String(dealCount(row))];
     if (isMaster) fields.push(row.market || 'Unassigned');
     return fields.join(' · ');
@@ -223,8 +224,9 @@ function formatLeaderboard({ scope, period, rows, total, market, dateContext, qu
   do {
     const body = shown ? safeRows.slice(0, shown).map(rowLine) : ['No deals logged yet.'];
     const overflow = allRows.length - shown;
-    if (overflow > 0) body.push(`And ${overflow} more`);
-    out = [...header, '', ...body, '', ...footer].join('\n').replace(/[ \t]+$/gm, '');
+    // After the blank line: a plain line right under the list would be folded into its last item.
+    const more = overflow > 0 ? [`-# And ${overflow} more`] : [];
+    out = [...header, '', ...body, '', ...more, ...footer].join('\n').replace(/[ \t]+$/gm, '');
     shown -= 1;
   } while (out.length > MAX_CONTENT && shown > 0);
   return out;

@@ -21,12 +21,12 @@ test('formatQuarterStatus is the quarter plus one plain tip, no dashes', () => {
   }
 });
 
-test('formatQuarterHeader is one quote bar line', () => {
-  assert.equal(formatQuarterHeader(18), '> **Q3** · Extend the lead');
+test('formatQuarterHeader is one plain line', () => {
+  assert.equal(formatQuarterHeader(18), '**Q3** · Extend the lead');
   assert.equal(formatQuarterHeader(10).split('\n').length, 1);
 });
 
-test('formatLeaderboard daily: bold title, grey date, quarter bar, bold podium, one summary line', () => {
+test('formatLeaderboard daily: one title line, quarter line, numbered list with bold top 3, one summary line', () => {
   const out = formatLeaderboard({
     scope: 'market',
     period: 'daily',
@@ -34,19 +34,18 @@ test('formatLeaderboard daily: bold title, grey date, quarter bar, bold podium, 
     total: 17,
     market: 'Virginia',
     dateContext: 'Today · Thursday, May 21',
-    quarterLine: '> **Q3** · Extend the lead',
+    quarterLine: '**Q3** · Extend the lead',
   });
   assert.equal(
     out,
     [
       '🏆 **Virginia · Today**',
-      '-# Thursday, May 21',
-      '> **Q3** · Extend the lead',
+      '**Q3** · Extend the lead',
       '',
-      '🥇 **Henny Sells** · **6**',
-      '🥈 **Caleb Head** · **5**',
-      '🥉 **iQRexy** · **4**',
-      '4\\. Parker Call · 2',
+      '1. **Henny Sells** · **6**',
+      '2. **Caleb Head** · **5**',
+      '3. **iQRexy** · **4**',
+      '4. Parker Call · 2',
       '',
       '**17 deals** · 4 reps · Henny Sells leads by 1',
     ].join('\n'),
@@ -67,21 +66,24 @@ test('formatLeaderboard monthly drops "This Month" and names a tie', () => {
   assert.match(out, /· Tied at the top: Henny Sells, Caleb Head$/);
 });
 
-test('formatLeaderboard weekly date range reads "to", not a dash', () => {
+test('formatLeaderboard header is one line (no grey date: it indents on mobile)', () => {
   const out = formatLeaderboard({ scope: 'market', period: 'weekly', rows: SAMPLE_ROWS, total: 15, market: 'Virginia', dateContext: 'This Week · May 18–24' });
-  assert.equal(out.split('\n')[1], '-# May 18 to 24');
+  assert.equal(out.split('\n')[0], '🏆 **Virginia · This Week**');
+  assert.equal(out.split('\n')[1], '');
+  const last = formatLeaderboard({ scope: 'master', period: 'lastmonth', rows: SAMPLE_ROWS, total: 15, dateContext: 'Last Month · September 2026' });
+  assert.equal(last.split('\n')[0], '🏆 **All Markets · September 2026**');
 });
 
 test('formatLeaderboard all markets shows each market', () => {
   const out = formatLeaderboard({ scope: 'master', period: 'alltime', rows: SAMPLE_ROWS, total: 15, dateContext: 'All-Time' });
-  assert.equal(out.split('\n')[0], '🏆 **All Markets · All-Time**');
-  assert.match(out, /^🥈 \*\*Caleb Head\*\* · \*\*5\*\* · Greenville$/m);
+  assert.equal(out.split('\n')[0], '🏆 **All Markets · All Time**');
+  assert.match(out, /^2\. \*\*Caleb Head\*\* · \*\*5\*\* · Greenville$/m);
   assert.match(out, /^\*\*15 deals\*\* · 3 reps · Henny Sells leads by 1$/m);
 });
 
 test('formatLeaderboard renders empty state', () => {
   const out = formatLeaderboard({ scope: 'market', period: 'weekly', rows: [], total: 0, market: 'Greenville', dateContext: 'This Week · May 18–24' });
-  assert.equal(out, ['🏆 **Greenville · This Week**', '-# May 18 to 24', '', 'No deals logged yet.', '', '**0 deals**'].join('\n'));
+  assert.equal(out, ['🏆 **Greenville · This Week**', '', 'No deals logged yet.', '', '**0 deals**'].join('\n'));
 });
 
 test('formatLeaderboard escapes and trims long names, numbers after the podium', () => {
@@ -90,17 +92,17 @@ test('formatLeaderboard escapes and trims long names, numbers after the podium',
     total: 12 - i,
   }));
   const out = formatLeaderboard({ scope: 'market', period: 'daily', rows, total: 78, market: 'Evansville', dateContext: 'Today' });
-  assert.match(out, /^🥇 \*\*Very\\_Long\\_\\\*Rep\\\*\\_Name\\_Wit…\*\* · \*\*12\*\*$/m);
-  assert.match(out, /^10\\\. Rep 10 · 3$/m);
+  assert.match(out, /^1\. \*\*Very\\_Long\\_\\\*Rep\\\*\\_Name\\_Wit…\*\* · \*\*12\*\*$/m);
+  assert.match(out, /^10\. Rep 10 · 3$/m);
   assert.doesNotMatch(out, /And \d+ more/);
 });
 
 test('formatLeaderboard applies soft cap with overflow note past 50 rows', () => {
   const rows = Array.from({ length: 55 }, (_, i) => ({ displayName: `Rep ${i + 1}`, total: 55 - i }));
   const out = formatLeaderboard({ scope: 'market', period: 'alltime', rows, total: 100, market: 'Virginia' });
-  assert.match(out, /^50\\\. /m);
+  assert.match(out, /^50\. Rep 50 /m);
   assert.doesNotMatch(out, /Rep 51/);
-  assert.match(out, /And 5 more/);
+  assert.match(out, /^-# And 5 more$/m);
   assert.ok(out.length <= 1900, `too long: ${out.length}`);
 });
 
@@ -119,7 +121,7 @@ test('formatLeaderboard stays under the Discord 2000-char limit with long names'
 test('formatLeaderboard shows the fibersales.co name for a linked Discord user', () => {
   require('./real-names').setFromRoster([{ discordUserId: '3', name: 'rex ranck' }]);
   const out = formatLeaderboard({ scope: 'market', period: 'daily', rows: SAMPLE_ROWS, total: 15, market: 'Virginia', dateContext: 'Today' });
-  assert.match(out, /^🥉 \*\*Rex Ranck\*\* · \*\*4\*\*$/m);
+  assert.match(out, /^3\. \*\*Rex Ranck\*\* · \*\*4\*\*$/m);
   require('./real-names').setFromRoster([{ discordUserId: 'none', name: 'x' }]);
 });
 

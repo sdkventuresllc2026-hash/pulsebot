@@ -101,11 +101,11 @@ function selectCultureLine(recentLineIds = []) {
   return { id: picked.id, event: 'culture', text: picked.text };
 }
 
-/** Leaderboard line under the title, in a quote bar: "> **Q3** · Extend the lead" */
+/** Leaderboard line under the title: "**Q3** · Extend the lead" (plain line: no quote bar, it indents on mobile). */
 function formatQuarterHeader(hour) {
   const quarter = getSalesQuarter(hour);
   const meta = getQuarterMeta(quarter);
-  return `> **${meta.label}** · ${meta.tagline}`;
+  return `**${meta.label}** · ${meta.tagline}`;
 }
 
 /** Full /quarter command — title + one tip (no stacked culture lines) */
