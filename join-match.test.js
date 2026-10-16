@@ -39,3 +39,16 @@ test('ask only about unknown humans who have been here 10+ minutes, once', () =>
   ];
   assert.deepEqual(whoToAsk(ms, new Set(['f']), { e: '2026-10-15' }, now).map((m) => m.id), ['a']);
 });
+
+test('invites: working people only, one per human, none for people already in the server', () => {
+  const { inviteHumans, squash } = require('./join-match');
+  const r = { active: [
+    { id: 'a', kind: 'rep', name: 'Kam yost', discordUserId: null, invite: true },
+    { id: 'b', kind: 'manager', name: 'Kam yost — Selling Profile', discordUserId: null, invite: true },
+    { id: 'c', kind: 'rep', name: 'Tyler Green', discordUserId: null, invite: false },
+    { id: 'd', kind: 'rep', name: 'Don Salcedo', discordUserId: null, invite: true },
+  ] };
+  const h = inviteHumans(r, new Set([squash('Don Salcedo (Don)')]));
+  assert.deepEqual(h.map((x) => x.name), ['Kam yost']);
+  assert.deepEqual(h[0].keys.sort(), ['MANAGER:b', 'REP:a']);
+});

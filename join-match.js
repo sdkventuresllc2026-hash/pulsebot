@@ -26,20 +26,33 @@ function save(s) {
   try { fs.writeFileSync(STORE(), JSON.stringify(s, null, 1)); } catch (err) { console.error('[join] save failed:', err.message || err); }
 }
 
+const SELLING_PROFILE = /\s*[—–-]\s*selling profile\s*$|\s*\(selling profile\)\s*$/i;
+/** One key per human: "Kam yost" and "Kam yost — Selling Profile" are the same person. */
+const humanKey = (p) => p.human || String(p.name || '').replace(SELLING_PROFILE, '').trim().toLowerCase();
+/** Same squash as access-sync: case, spaces, punctuation and "(Handle)" ignored. */
+const squash = (x) => String(x ?? '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(SELLING_PROFILE, '').replace(/[^a-z0-9]/g, '');
+
 /** Active, unlinked people grouped into humans (a selling manager's rep + manager records = one). */
 function unlinkedHumans(roster) {
-  const linkedNames = new Set((roster.active || []).filter((p) => p.discordUserId).map((p) => p.name.toLowerCase()));
-  const byName = new Map();
+  const linked = new Set((roster.active || []).filter((p) => p.discordUserId).map(humanKey));
+  const byKey = new Map();
   for (const p of roster.active || []) {
-    if (p.discordUserId || !p.id || linkedNames.has(p.name.toLowerCase())) continue;
-    const k = p.name.toLowerCase();
-    const h = byName.get(k) || { name: p.name, since: p.since || '', keys: [], people: [] };
+    const k = humanKey(p);
+    if (p.discordUserId || !p.id || linked.has(k)) continue;
+    const clean = String(p.name).replace(SELLING_PROFILE, '').trim();
+    const h = byKey.get(k) || { name: clean, since: p.since || '', keys: [], people: [], invite: false };
     h.keys.push(`${p.kind.toUpperCase()}:${p.id}`);
     h.people.push({ kind: p.kind.toUpperCase(), id: p.id });
     if ((p.since || '') > h.since) h.since = p.since;
-    byName.set(k, h);
+    if (p.invite !== false) h.invite = true; // OS marks working people (blitz / new / sold in 30 days)
+    byKey.set(k, h);
   }
-  return [...byName.values()];
+  return [...byKey.values()];
+}
+
+/** Who gets a personal invite: working, not linked, and not already sitting in the server under their name. */
+function inviteHumans(roster, memberNames = new Set()) {
+  return unlinkedHumans(roster).filter((h) => h.invite && !memberNames.has(squash(h.name)));
 }
 
 /** Which stored codes were just used: gone from the server (one-use invites vanish) or uses went up. */
@@ -79,7 +92,10 @@ async function mintPass(guild, roster, { welcomeChannelName, log = console.log }
   let minted = 0;
   let retired = 0;
   try {
-    const humans = unlinkedHumans(roster);
+    // Already in Discord (name matches a member) = no invite; the who-is picker or access sync links them.
+    const memberNames = new Set();
+    for (const m of guild.members.cache.values()) { memberNames.add(squash(m.displayName)); memberNames.add(squash(m.user.username)); }
+    const humans = inviteHumans(roster, memberNames);
     const wanted = new Set(humans.flatMap((h) => h.keys));
     const welcome = guild.channels.cache.find((c) => c.name === welcomeChannelName && c.isTextBased?.());
     if (welcome) {
@@ -131,4 +147,4 @@ async function resolveJoin(guild) {
   return { name: rec.name, people: rec.keys.map((k) => { const [kind, id] = k.split(':'); return { kind, id }; }) };
 }
 
-module.exports = { WHOIS_ID, ASK_AFTER_MS, load, save, unlinkedHumans, usedCodes, pickerOptions, whoToAsk, mintPass, resolveJoin };
+module.exports = { WHOIS_ID, ASK_AFTER_MS, load, save, unlinkedHumans, inviteHumans, squash, usedCodes, pickerOptions, whoToAsk, mintPass, resolveJoin };
