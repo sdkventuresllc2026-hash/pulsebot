@@ -57,7 +57,7 @@ async function seatAll(guild, roster, { managerRoleId, log = console.log } = {})
       }
       await marketAssignments.reconcileMemberMarketRoles(guild, userId);
       out.seated++;
-      out.lines.push(`💬 ${member.displayName} → ${blitz} chat (on the ${blitz} blitz)`);
+      out.lines.push(`💬 ${member.displayName} → #${blitz} channel (on the ${blitz} blitz)`);
     } catch (err) {
       log(`[seat] ${member.displayName} → ${blitz}: ${err?.message || err}`);
     }

@@ -156,7 +156,7 @@ async function seatFromBlitzBoard(guild) {
   if (!roster.ok) return null;
   const out = await blitzSeat.seatAll(guild, roster, marketAccessOpts());
   console.log(`[seat] ${guild.name}: ${out.seated} seated${out.missingChats.size ? `, no chat for: ${[...out.missingChats].join(', ')}` : ''}`);
-  if (out.lines.length) await notifyManagement(guild, ['💬 Blitz chats (fibersales.co blitz board → Discord)', ...out.lines].join('\n'));
+  if (out.lines.length) await notifyManagement(guild, ['💬 Market channels (from the fibersales.co blitz board)', ...out.lines].join('\n'));
   return out;
 }
 const {
@@ -3416,9 +3416,7 @@ client.on('guildMemberAdd', async (member) => {
     await welcome.send({
       content: [
         `👋 Welcome to **FiberSales**, <@${member.id}>.`,
-        '',
-        '**Tap the button below and enter your real name.** That is how your manager finds you and gets you into your market channel.',
-        'Until then you can read around, but market channels stay hidden.',
+        '**Tap the button and type your real name.** Your market channel opens right after.',
       ].join('\n'),
       components: [setNameRow()],
       allowedMentions: { users: [member.id] },
@@ -3745,7 +3743,7 @@ client.on('interactionCreate', async (interaction) => {
         content: nicknameSet
           ? [`✅ Thanks — you will show up as **${nickname}**.`,
              clash ? `\n⚠ Heads up: **${clash.displayName}** already goes by that name. A manager will sort it out.` : '',
-             unlocked ? '\nYou\'re in. The team channels are open to you now; your crew chat opens on its own once you are on a blitz in fibersales.co.'
+             unlocked ? '\nYou\'re in. The team channels are open to you now; your market channel opens as soon as your manager puts you on a blitz.'
                       : '\nA manager adds you to your market next — your market channel appears once they do.'].join('')
           : `✅ Got it — **${nickname}**.\nPulse could not set it automatically (your role sits above the bot), so a manager will apply it. Nothing else needed from you.`,
       }).catch(() => {});
