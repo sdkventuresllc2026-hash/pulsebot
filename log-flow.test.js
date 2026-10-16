@@ -25,9 +25,9 @@ test('buildPremiumDealConfirmation is a plain header plus the hype line', () => 
   assert.equal(out, '✅ **Jacob Arnold** · 1 Gig · 6 today\n**Five-deep.**');
 });
 
-test('a count hype line takes the count out of the header so the number shows once', () => {
-  const out = buildPremiumDealConfirmation({ displayName: 'Jadin Kent', speeds: ['1gig'], dealsTodayAfter: 7, hypeLine: '**Seven today.**', hypeEvent: 'day_7' });
-  assert.equal(out, '✅ **Jadin Kent** · 1 Gig\n**Seven today.**');
+test('the header always carries the count; the hype line is a word or two', () => {
+  const out = buildPremiumDealConfirmation({ displayName: 'Jadin Kent', speeds: ['1gig'], dealsTodayAfter: 7, hypeLine: '**Heater.**' });
+  assert.equal(out, '✅ **Jadin Kent** · 1 Gig · 7 today\n**Heater.**');
 });
 
 test('routine events get no hype line on the deal log (owner 2026-10-16)', () => {

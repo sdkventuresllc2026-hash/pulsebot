@@ -42,6 +42,6 @@ test('deal log lines never use {rep}', () => {
 
 test('one simple line per moment (owner 2026-10-16)', () => {
   assert.equal(selectHypeLine({ event: 'hat_trick', recentLineIds: [] }).text, '**3 ball.**');
-  assert.equal(selectHypeLine({ event: 'day_7', recentLineIds: [] }).text, '**Seven today.**');
+  assert.equal(selectHypeLine({ event: 'day_7', recentLineIds: [] }).text, '**Heater.**');
   assert.equal(selectHypeLine({ event: 'first_ever', recentLineIds: [] }).text, '**First deal.**');
 });

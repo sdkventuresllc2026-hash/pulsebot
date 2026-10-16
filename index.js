@@ -1397,7 +1397,7 @@ function buildDealLogConfirmationPayload({ ctx, dataBefore, dataAfter, now, tz }
     movement,
   });
   return {
-    content: buildPremiumDealConfirmation({ ...ctx, hypeLine, hypeEvent: hypeLine ? primary?.event : null, pulseBuild: PULSE_BUILD }),
+    content: buildPremiumDealConfirmation({ ...ctx, hypeLine, pulseBuild: PULSE_BUILD }),
     primary,
     hypeLine,
   };

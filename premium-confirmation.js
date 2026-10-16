@@ -157,8 +157,6 @@ function selectClosingLine(ctx) {
 }
 
 /** Deal confirmation: one bank line, no rep/speed repeat (header has both). */
-/** Hype events whose line states today's count. */
-const COUNT_EVENTS = new Set(['first_ever', 'first_today', 'second_today', 'hat_trick', 'day_4', 'five_day', 'day_6', 'day_7', 'day_8', 'day_9', 'ten_day', 'day_15', 'day_20']);
 
 /** Events that are not a real moment: no line on the deal log (owner 2026-10-16). */
 const ROUTINE_EVENTS = new Set(['fallback', 'momentum', 'q1', 'q2', 'q3', 'q4', 'pregame', 'overtime', 'late_night', 'early_morning', 'culture']);
@@ -183,10 +181,7 @@ function buildPremiumDealConfirmation(ctx) {
   // Owner 2026-10-16: "✅ **Jadin Kent** · 1 Gig · 3 today" with the fibersales.co name; the rep is
   // the boldest thing. A hype line follows only on a real moment (buildDealHypeLine).
   const name = realName(ctx.userId, displayName);
-  // When the hype line is the count ("Seven today.", "3 ball."), the header leaves it out so the
-  // number shows once, in bold.
-  const countSaid = COUNT_EVENTS.has(ctx.hypeEvent);
-  const today = Number(ctx.dealsTodayAfter) > 0 && !countSaid ? ` · ${ctx.dealsTodayAfter} today` : '';
+  const today = Number(ctx.dealsTodayAfter) > 0 ? ` · ${ctx.dealsTodayAfter} today` : '';
   const header = speeds.length === 1
     ? `✅ **${name}** · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}${today}`
     : `✅ **${name}** · ${speeds.length} deals${today}\n${formatMultiSpeedLine(speeds)}`;

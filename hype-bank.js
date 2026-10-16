@@ -2,7 +2,7 @@
  * Pulse hype line bank.
  *
  * Owner 2026-10-16: simple. Not corny, not cheesy, nothing that sounds written by a bot. One line
- * per moment, and mostly it just says the number ("Seven today."). "3 ball." stays: the team uses it.
+ * per moment, a word or two; the count itself lives in the header ("· 7 today"). "3 ball." stays.
  * Deal logs only show a line on a real moment; routine events (fallback, momentum, quarters,
  * late/early) never print on a deal log (ROUTINE_EVENTS in premium-confirmation.js).
  * Review every quarter: change the text here, keep the tags.
@@ -16,19 +16,19 @@ const HYPE_LINES = Object.freeze([
   L('fb_1', 'Fallback', 'low', ['fallback'], 0, '**On the board.**'),
   L('mo_1', 'Momentum', 'medium', ['momentum'], 0, '**Stacked.**'),
 
-  // Deal count today: say the number, that is the hype.
-  L('ft_1', 'First Today', 'medium', ['first_today'], 0, '**First one today.**'),
-  L('s2_1', 'Second', 'low', ['second_today'], 0, '**Two today.**'),
+  // Deal count today. The header already shows the number ("· 7 today").
+  L('ft_1', 'First Today', 'medium', ['first_today'], 0, '**First one in.**'),
+  L('s2_1', 'Second', 'low', ['second_today'], 0, '**Back to back.**'),
   L('ht_1', 'Hat Trick', 'medium', ['hat_trick'], 0, '**3 ball.**'),
-  L('d4_1', 'Four Day', 'medium', ['day_4'], 0, '**Four today.**'),
-  L('f5_1', 'Five Day', 'high', ['five_day'], 0, '**Five today.**'),
-  L('d6_1', 'Six Day', 'high', ['day_6'], 0, '**Six today.**'),
-  L('d7_1', 'Seven Day', 'high', ['day_7'], 0, '**Seven today.**'),
-  L('d8_1', 'Eight Day', 'high', ['day_8'], 0, '**Eight today.**'),
-  L('d9_1', 'Nine Day', 'high', ['day_9'], 0, '**Nine today.**'),
+  L('d4_1', 'Four Day', 'medium', ['day_4'], 0, '**Rolling.**'),
+  L('f5_1', 'Five Day', 'high', ['five_day'], 0, '**Five piece.**'),
+  L('d6_1', 'Six Day', 'high', ['day_6'], 0, '**Still going.**'),
+  L('d7_1', 'Seven Day', 'high', ['day_7'], 0, '**Heater.**'),
+  L('d8_1', 'Eight Day', 'high', ['day_8'], 0, '**Big day.**'),
+  L('d9_1', 'Nine Day', 'high', ['day_9'], 0, '**One from double digits.**'),
   L('t10_1', 'Ten Day', 'high', ['ten_day'], 0, '**Double digits.**'),
-  L('d15_1', 'Fifteen Day', 'high', ['day_15'], 0, '**15 today.**'),
-  L('d20_1', 'Twenty Day', 'high', ['day_20'], 0, '**20 today.**'),
+  L('d15_1', 'Fifteen Day', 'high', ['day_15'], 0, '**Monster day.**'),
+  L('d20_1', 'Twenty Day', 'high', ['day_20'], 0, '**Monster day.**'),
 
   // First ever
   L('fe_1', 'First Ever', 'medium', ['first_ever', 'rookie_first'], 0, '**First deal.**'),
