@@ -24,10 +24,10 @@ test('unlinked humans: one per person, linked people skipped', () => {
   assert.deepEqual(h.find((x) => x.name === 'Don Salcedo').keys.sort(), ['MANAGER:m1', 'REP:r1']);
 });
 
-test('picker lists newest first, capped at 25', () => {
+test('picker lists newest first, capped at 24', () => {
   assert.deepEqual(pickerOptions(roster).map((o) => o.label), ['Kaeden Glass', 'Don Salcedo']);
   const many = { active: Array.from({ length: 40 }, (_, i) => ({ id: `x${i}`, kind: 'rep', name: `P${i}`, discordUserId: null, since: '2026-10-01' })) };
-  assert.equal(pickerOptions(many).length, 25);
+  assert.equal(pickerOptions(many).length, 24);
 });
 
 test('ask only about unknown humans who have been here 10+ minutes, once', () => {
@@ -51,4 +51,21 @@ test('invites: working people only, one per human, none for people already in th
   const h = inviteHumans(r, new Set([squash('Don Salcedo (Don)')]));
   assert.deepEqual(h.map((x) => x.name), ['Kam yost']);
   assert.deepEqual(h[0].keys.sort(), ['MANAGER:b', 'REP:a']);
+});
+
+test('pick-list puts look-alike names first: "Don" -> Don Salcedo, even past 25 newer people', () => {
+  const { pickerOptions } = require('./join-match');
+  const active = Array.from({ length: 40 }, (_, i) => ({ id: `n${i}`, kind: 'rep', name: `Newer Person${i}`, discordUserId: null, since: '2026-10-14', invite: true }));
+  active.push({ id: 'don', kind: 'manager', name: 'Don Salcedo', discordUserId: null, since: '2026-09-01', invite: true });
+  const opts = pickerOptions({ active }, ['Don', 'don0417']);
+  assert.equal(opts[0].label, 'Don Salcedo');
+  assert.equal(opts.length, 24);
+});
+
+test('type-a-name search finds by first or last name', () => {
+  const { searchHumans } = require('./join-match');
+  const r = { active: [{ id: 'a', kind: 'rep', name: 'Don Salcedo', discordUserId: null }, { id: 'b', kind: 'rep', name: 'Donna Lee', discordUserId: null }, { id: 'c', kind: 'rep', name: 'Mark Mudik', discordUserId: '1' }] };
+  assert.deepEqual(searchHumans(r, 'salcedo').map((h) => h.name), ['Don Salcedo']);
+  assert.deepEqual(searchHumans(r, 'don').map((h) => h.name).sort(), ['Don Salcedo', 'Donna Lee']);
+  assert.deepEqual(searchHumans(r, 'mudik'), []); // already linked
 });

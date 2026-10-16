@@ -65,12 +65,37 @@ function usedCodes(stored, live) {
   return out;
 }
 
-/** Up to 25 not-yet-linked people, newest first (the person who just joined is usually new). */
-function pickerOptions(roster) {
+/** How much a roster name looks like the Discord name: "Don" -> Don Salcedo, "J_sales13" -> J-names. */
+function nameScore(name, hints) {
+  const tokens = String(name).toLowerCase().split(/\s+/).map((t) => t.replace(/[^a-z0-9]/g, '')).filter(Boolean);
+  let best = 0;
+  for (const h of hints) {
+    const q = squash(h);
+    if (!q) continue;
+    if (q === squash(name)) best = Math.max(best, 100);
+    if (tokens.some((t) => t.length > 1 && (q.startsWith(t) || t.startsWith(q)))) best = Math.max(best, 50);
+    if (tokens.some((t) => t.length > 2 && q.includes(t))) best = Math.max(best, 40);
+    if (tokens[0] && q[0] === tokens[0][0]) best = Math.max(best, 5);
+  }
+  return best;
+}
+
+/** Up to 24 not-yet-linked people for the pick-list: names that look like the Discord name first,
+ *  then people on a live blitz / working, then newest. Discord caps a menu at 25; the 25th slot is
+ *  never needed because "Type their name" covers everyone else. */
+function pickerOptions(roster, hints = []) {
   return unlinkedHumans(roster)
-    .sort((a, b) => b.since.localeCompare(a.since) || a.name.localeCompare(b.name))
-    .slice(0, 25)
-    .map((h) => ({ label: h.name.slice(0, 100), value: `${h.people[0].kind}:${h.people[0].id}`, ...(h.since ? { description: `Added ${h.since}` } : {}) }));
+    .map((h) => ({ h, score: nameScore(h.name, hints) + (h.invite ? 10 : 0) }))
+    .sort((a, b) => b.score - a.score || b.h.since.localeCompare(a.h.since) || a.h.name.localeCompare(b.h.name))
+    .slice(0, 24)
+    .map(({ h }) => ({ label: h.name.slice(0, 100), value: `${h.people[0].kind}:${h.people[0].id}`, ...(h.since ? { description: `Added ${h.since}` } : {}) }));
+}
+
+/** "Type their name": every unlinked person whose name contains what the manager typed. */
+function searchHumans(roster, query) {
+  const q = squash(query);
+  if (q.length < 2) return [];
+  return unlinkedHumans(roster).filter((h) => squash(h.name).includes(q) || h.name.toLowerCase().split(/\s+/).some((t) => squash(t).startsWith(q)));
 }
 
 /** Members to ask about: human, no Member role, joined 10+ min ago, not asked yet, not linked. */
@@ -147,4 +172,6 @@ async function resolveJoin(guild) {
   return { name: rec.name, people: rec.keys.map((k) => { const [kind, id] = k.split(':'); return { kind, id }; }) };
 }
 
-module.exports = { WHOIS_ID, ASK_AFTER_MS, load, save, unlinkedHumans, inviteHumans, squash, usedCodes, pickerOptions, whoToAsk, mintPass, resolveJoin };
+const WHOIS_TYPE_ID = 'pulse:whoistype:';
+
+module.exports = { WHOIS_ID, WHOIS_TYPE_ID, ASK_AFTER_MS, load, save, unlinkedHumans, inviteHumans, squash, searchHumans, nameScore, usedCodes, pickerOptions, whoToAsk, mintPass, resolveJoin };

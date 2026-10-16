@@ -183,17 +183,30 @@ async function runInviteMint(guild) {
 
 /** "Who is @x?" in #management with a pick-list, for members still unknown after 10 minutes. */
 async function askWhoIs(guild, memberId, roster) {
-  const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+  const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
   const ch = guild.channels.cache.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
-  const options = joinMatch.pickerOptions(roster);
-  if (!ch || !options.length) return false;
-  const menu = new StringSelectMenuBuilder().setCustomId(`${joinMatch.WHOIS_ID}${memberId}`).setPlaceholder('Pick who this is').addOptions(options);
-  await ch.send({
-    content: `❓ **Who is <@${memberId}>?** They joined but aren't matched to anyone on fibersales.co. Pick them and they're set up (name, access, market channel).\nNot in the list? Approve them on fibersales.co first.`,
-    components: [new ActionRowBuilder().addComponents(menu)],
+  const m = guild.members.cache.get(memberId) || (await guild.members.fetch(memberId).catch(() => null));
+  const hints = m ? [m.displayName, m.user.username, m.user.globalName].filter(Boolean) : [];
+  const options = joinMatch.pickerOptions(roster, hints);
+  if (!ch) return false;
+  const rows = [];
+  if (options.length) rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${joinMatch.WHOIS_ID}${memberId}`).setPlaceholder('Pick who this is (best guesses first)').addOptions(options)));
+  rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`${joinMatch.WHOIS_TYPE_ID}${memberId}`).setLabel('Not listed? Type their name').setStyle(ButtonStyle.Secondary)));
+  const msg = await ch.send({
+    content: `❓ **Who is <@${memberId}>?** They joined Discord but aren't matched to anyone on fibersales.co yet. Pick them (or type their name) and they're set up: name, access, market channel.`,
+    components: rows,
     allowedMentions: { parse: [] },
   });
+  const st = joinMatch.load(); st.messages = st.messages || {}; st.messages[memberId] = msg.id; joinMatch.save(st);
   return true;
+}
+
+/** After a match: turn the #management prompt into the answer, wherever the match came from. */
+async function closeWhoIs(guild, memberId, text) {
+  const id = (joinMatch.load().messages || {})[memberId];
+  const ch = guild.channels.cache.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
+  const msg = id && ch ? await ch.messages.fetch(id).catch(() => null) : null;
+  if (msg) await msg.edit({ content: text, components: [], allowedMentions: { parse: [] } }).catch(() => null);
 }
 
 async function runWhoIsPass(guild) {
@@ -209,7 +222,9 @@ async function runWhoIsPass(guild) {
     hasMember: Boolean(memberRole && m.roles.cache.has(memberRole.id)),
     protected: m.roles.cache.some((r) => ['Owner', 'Manager', 'Pulse', 'Bot'].includes(r.name)),
   }));
-  for (const m of joinMatch.whoToAsk(members, linkedIds, store.asked, Date.now())) {
+  // Asked before prompts were saved (old pick-list, 2026-10-16) = ask again with the fixed one.
+  const asked = Object.fromEntries(Object.entries(store.asked).filter(([id]) => (store.messages || {})[id]));
+  for (const m of joinMatch.whoToAsk(members, linkedIds, asked, Date.now())) {
     if (await askWhoIs(guild, m.id, roster).catch((err) => { console.error(`[whois] ask ${m.id}: ${err?.message || err}`); return false; })) store.asked[m.id] = new Date().toISOString();
   }
   joinMatch.save(store);
@@ -3727,22 +3742,44 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
+  const whoIsManager = (i) => i.member?.roles?.cache?.some?.((r) => r.name === 'Manager' || r.name === 'Owner') || canUseAdminMember(i.user.id, i.member);
   if (interaction.isStringSelectMenu?.() && interaction.customId.startsWith(joinMatch.WHOIS_ID)) {
     const memberId = interaction.customId.slice(joinMatch.WHOIS_ID.length);
-    const isMgr = interaction.member?.roles?.cache?.some?.((r) => r.name === 'Manager' || r.name === 'Owner');
-    if (!isMgr && !canUseAdminMember(interaction.user.id, interaction.member)) {
-      await interaction.reply({ content: 'Only managers can match people.', ephemeral: true }).catch(() => {});
-      return;
-    }
+    if (!whoIsManager(interaction)) { await interaction.reply({ content: 'Only managers can match people.', ephemeral: true }).catch(() => {}); return; }
     await interaction.deferUpdate().catch(() => {});
     const [kind, id] = String(interaction.values?.[0] || '').split(':');
     const member = await interaction.guild.members.fetch(memberId).catch(() => null);
     const done = member ? await linkMemberToPerson(interaction.guild, member, { kind, id }, 'MANAGER_PICK').catch(() => ({ ok: false })) : { ok: false, reason: 'they left the server' };
-    await interaction.editReply({
-      content: done.ok ? `✅ <@${memberId}> is **${done.name}**. Matched by <@${interaction.user.id}>; name, access and market channel are set.` : `⚠ Couldn't match <@${memberId}>: ${done.reason || 'try again'}.`,
-      components: done.ok ? [] : undefined,
-      allowedMentions: { parse: [] },
-    }).catch(() => {});
+    const text = done.ok ? `✅ <@${memberId}> is **${done.name}**. Matched by <@${interaction.user.id}>; name, access and market channel are set.` : `⚠ Couldn't match <@${memberId}>: ${done.reason || 'try again'}.`;
+    await interaction.editReply({ content: text, components: done.ok ? [] : undefined, allowedMentions: { parse: [] } }).catch(() => {});
+    if (done.ok) await closeWhoIs(interaction.guild, memberId, text);
+    return;
+  }
+  if (interaction.isButton?.() && interaction.customId.startsWith(joinMatch.WHOIS_TYPE_ID)) {
+    if (!whoIsManager(interaction)) { await interaction.reply({ content: 'Only managers can match people.', ephemeral: true }).catch(() => {}); return; }
+    const memberId = interaction.customId.slice(joinMatch.WHOIS_TYPE_ID.length);
+    const modal = new ModalBuilder().setCustomId(`${joinMatch.WHOIS_TYPE_ID}${memberId}`).setTitle('Who is this?');
+    modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('q').setLabel('Their name on fibersales.co').setStyle(TextInputStyle.Short).setMinLength(2).setMaxLength(60).setRequired(true)));
+    await interaction.showModal(modal).catch(() => {});
+    return;
+  }
+  if (interaction.isModalSubmit?.() && interaction.customId.startsWith(joinMatch.WHOIS_TYPE_ID)) {
+    const memberId = interaction.customId.slice(joinMatch.WHOIS_TYPE_ID.length);
+    await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    const roster = await fetchAccessRoster();
+    const hits = roster.ok ? joinMatch.searchHumans(roster, interaction.fields.getTextInputValue('q')) : [];
+    if (!hits.length) { await interaction.editReply({ content: 'Nobody on fibersales.co by that name who still needs Discord. Check the spelling, or approve them on fibersales.co first.' }).catch(() => {}); return; }
+    if (hits.length === 1) {
+      const member = await interaction.guild.members.fetch(memberId).catch(() => null);
+      const done = member ? await linkMemberToPerson(interaction.guild, member, hits[0].people[0], 'MANAGER_PICK').catch(() => ({ ok: false })) : { ok: false, reason: 'they left the server' };
+      const text = done.ok ? `✅ <@${memberId}> is **${done.name}**. Matched by <@${interaction.user.id}>; name, access and market channel are set.` : `⚠ Couldn't match <@${memberId}>: ${done.reason || 'try again'}.`;
+      await interaction.editReply({ content: text, allowedMentions: { parse: [] } }).catch(() => {});
+      if (done.ok) await closeWhoIs(interaction.guild, memberId, text);
+      return;
+    }
+    const { StringSelectMenuBuilder } = require('discord.js');
+    const menu = new StringSelectMenuBuilder().setCustomId(`${joinMatch.WHOIS_ID}${memberId}`).setPlaceholder('Which one?').addOptions(hits.slice(0, 25).map((h) => ({ label: h.name.slice(0, 100), value: `${h.people[0].kind}:${h.people[0].id}`, ...(h.since ? { description: `Added ${h.since}` } : {}) })));
+    await interaction.editReply({ content: `${hits.length} matches. Pick the right one:`, components: [new ActionRowBuilder().addComponents(menu)] }).catch(() => {});
     return;
   }
   if (interaction.isAutocomplete()) {
