@@ -36,7 +36,7 @@ const MANAGEMENT_CHANNEL = (process.env.MANAGEMENT_CHANNEL || 'management').trim
 function setNameRow() {
   const { ActionRowBuilder: Row, ButtonBuilder: Btn, ButtonStyle: Style } = require('discord.js');
   return new Row().addComponents(
-    new Btn().setCustomId(SET_NAME_ID).setLabel('Set My Name').setEmoji('✍️').setStyle(Style.Primary),
+    new Btn().setCustomId(SET_NAME_ID).setLabel('Set My Name').setStyle(Style.Primary),
   );
 }
 
@@ -180,6 +180,7 @@ async function seatFromBlitzBoard(guild) {
 }
 
 const joinMatch = require('./join-match');
+const { realName } = require('./real-names');
 const { postDiscordLink } = require('./fiberSalesOsClient');
 
 /** Link a member to an exact OS person, then name, access and market channel follow. */
@@ -253,7 +254,7 @@ async function runWhoIsPass(guild) {
     if (!st0.dmed[m.id]) {
       const user = list.get(m.id)?.user;
       const ok = user ? await user.send({
-        content: "Welcome to the FiberSales Discord! Tap the button and type your full name so we can put you in your market channel.",
+        content: "Welcome to FiberSales. Tap Set My Name and enter your full name so we can open your market channel.",
         components: [setNameRow()],
       }).then(() => true).catch(() => false) : false;
       st0.dmed[m.id] = ok ? new Date().toISOString() : 'failed';
@@ -849,14 +850,13 @@ function buildMarketsBoardContent(data, scope = null) {
     })
     .sort((a, b) => b.week - a.week || b.today - a.today || a.marketName.localeCompare(b.marketName));
 
-  const lines = ['🗺️ **Market Board**'];
+  const lines = ['**Markets · This Week**', ''];
   for (let i = 0; i < rows.length; i += 1) {
     const r = rows[i];
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `**#${i + 1}**`;
-    lines.push(`${medal} **${r.marketName}** · **${r.week}** week · **${r.today}** today`);
+    lines.push(`${i + 1}\\. ${r.marketName} · ${r.week} this week · ${r.today} today`);
   }
-  if (!rows.length) lines.push('_No deals logged this week yet._');
-  lines.push(`**${scope ? "Your board" : "Company-wide"}** · **${week.length}** week · **${today.length}** today`);
+  if (!rows.length) lines.push('No deals logged this week yet.');
+  lines.push('', `${scope ? 'Your board' : 'Company'}: ${week.length} this week · ${today.length} today`);
   return compactJoin(lines);
 }
 
@@ -874,12 +874,12 @@ function buildMyDealsContent(channel, userId, data, displayName) {
   const speedMix = formatPhase3SpeedBreakdown(speedCountsForLogs(userMarketLogs));
 
   return compactJoin([
-    `📊 **Your Deals**${displayName ? ` — ${displayName}` : ''}`,
-    `Today **${todayUserLogs.length}** · Week **${weekUserLogs.length}** · ${marketName} **${userMarketLogs.length}** · All-time **${userLogs.length}**`,
-    speedMix === '-' ? null : `Mix · ${speedMix}`,
+    `**Your deals${displayName ? ` · ${realName(userId, displayName)}` : ''}**`,
+    `Today ${todayUserLogs.length} · Week ${weekUserLogs.length} · ${marketName} ${userMarketLogs.length} · All time ${userLogs.length}`,
+    speedMix === '-' ? null : `Mix: ${speedMix}`,
     marketRank
-      ? `🏅 **#${marketRank}** in ${marketName}${overallRank ? ` · **#${overallRank}** overall` : ''}`
-      : `_No rank in ${marketName} yet — log a deal to get on the board._`,
+      ? `Rank: #${marketRank} in ${marketName}${overallRank ? ` · #${overallRank} overall` : ''}`
+      : `No rank in ${marketName} yet. Log a deal to get on the board.`,
   ]);
 }
 
@@ -1033,9 +1033,9 @@ async function handleTextLeaderboard(message, intent) {
     await message.delete().catch(() => {});
     const rows = content
       .split('\n')
-      .filter((line) => line.startsWith('🥇') || line.startsWith('🥈') || line.startsWith('🥉') || /^#\d+ /.test(line))
+      .filter((line) => /^\d+\\. /.test(line))
       .length;
-    const totalMatch = content.match(/· (\d+) deals$/m);
+    const totalMatch = content.match(/^Total: (\d+) deal/m);
     const market = intent.cmd === 'master' ? '__master__' : marketForChannel(dealChannel || message.channel)?.marketName || '__unmapped__';
     console.info(
       `[leaderboard] cmd=${resolvedCmd} market=${market} user=${message.author.username} channel=${message.channel?.id} ms=${Date.now() - started} rows=${rows} total=${totalMatch ? totalMatch[1] : 0}`,
@@ -1571,7 +1571,7 @@ async function handleTfiberProofChannelUpload(message, channel) {
     const result = await submitStandaloneTfiberProofUpload({ message, channel, hasScreenshot, enrichedPayload });
     if (!result) return false;
     await message.reply({
-      content: formatTfiberProofLine(result) || 'T-Fiber proof received.',
+      content: formatTfiberProofLine(result) || 'Proof received.',
       allowedMentions: { parse: [] },
     }).catch(() => {});
     return true;
@@ -1594,7 +1594,7 @@ async function handleTfiberProofChannelUpload(message, channel) {
       : null,
   });
   await message.reply({
-    content: formatTfiberProofLine(result) || 'T-Fiber proof received.',
+    content: formatTfiberProofLine(result) || 'Proof received.',
     allowedMentions: { parse: [] },
   }).catch(() => {});
   return true;
@@ -1642,7 +1642,7 @@ async function handleTfiberProofDm(message) {
 
   const result = await submitTfiberProofForPending({ message, pending, hasScreenshot });
   await message.reply({
-    content: formatTfiberProofLine(result) || 'T-Fiber proof received.',
+    content: formatTfiberProofLine(result) || 'Proof received.',
     allowedMentions: { parse: [] },
   }).catch(() => {});
   return true;
@@ -2024,19 +2024,17 @@ async function handleShare(interaction) {
 
   const embed = new EmbedBuilder()
     .setColor(0x111111)
-    .setTitle('🔥 WEEKLY PRODUCTION')
+    .setTitle('This week')
     .setDescription(
       [
-        `**${displayName}**`,
-        `**${total} Fiber Deals Closed**`,
+        `**${realName(uid, displayName)}**`,
+        `${total} deal${total === 1 ? '' : 's'}`,
         '',
         '**Speed Breakdown**',
         formatSpeedBreakdown(speeds),
         '',
         `**Rank:** ${r ? `#${r} This Week` : '—'}`,
         `**Team:** ${team}`,
-        '',
-        '*Built different.*',
       ].join('\n'),
     );
 
@@ -2672,7 +2670,7 @@ async function handleMarketRename(interaction) {
           const renamed = await channel.setName(nextName, `/market rename by ${interaction.user.tag}`).then(() => true).catch((err) => { lines.push(`⚠️ Could not rename #${channel.name}: ${err.message || err}`); return false; });
           if (renamed) lines.push(`✅ Chat is now #${nextName}. Same history, same people.`);
         }
-        await channel.send({ content: `📍 Now knocking **${m.marketName}**${location ? ` (${location})` : ''}.` }).catch(() => null);
+        await channel.send({ content: `Now knocking ${m.marketName}${location ? ` (${location})` : ''}.` }).catch(() => null);
       }
       if (m.roleId) {
         const role = interaction.guild.roles.cache.get(m.roleId) || (await interaction.guild.roles.fetch(m.roleId).catch(() => null));
@@ -3540,8 +3538,8 @@ client.on('guildMemberAdd', async (member) => {
     // for the second joiner onward the instruction was simply wrong.
     await welcome.send({
       content: [
-        `👋 Welcome to **FiberSales**, <@${member.id}>.`,
-        '**Tap the button and type your real name.** Your market channel opens right after.',
+        `Welcome to FiberSales, <@${member.id}>.`,
+        'Tap Set My Name and enter your full name. Your market channel opens right after.',
       ].join('\n'),
       components: [setNameRow()],
       allowedMentions: { users: [member.id] },
@@ -3851,7 +3849,7 @@ client.on('interactionCreate', async (interaction) => {
   // dboy1011?", which is the question that made the whole server hard to run. A manager still adds
   // them to a market afterwards with /market add.
   if (interaction.isButton() && interaction.customId === SET_NAME_ID) {
-    const modal = new ModalBuilder().setCustomId(SET_NAME_ID).setTitle('What is your real name?');
+    const modal = new ModalBuilder().setCustomId(SET_NAME_ID).setTitle('Your name');
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder().setCustomId('realname').setLabel('Full name').setPlaceholder('Riley Graves')
@@ -3874,7 +3872,7 @@ client.on('interactionCreate', async (interaction) => {
     const handle = (interaction.fields.getTextInputValue('handle') || '').trim() || null;
     const nickname = buildNickname(realName, handle);
     if (!realName || realName.length < 2) {
-      await interaction.editReply({ content: '❌ That does not look like a name. Tap the button again and enter your full name.' }).catch(() => {});
+      await interaction.editReply({ content: 'That doesn\'t look like a full name. Tap Set My Name again and enter your first and last name.' }).catch(() => {});
       return;
     }
 
@@ -3908,11 +3906,11 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.editReply({
         content: nicknameSet
-          ? [`✅ Thanks — you will show up as **${nickname}**.`,
-             clash ? `\n⚠ Heads up: **${clash.displayName}** already goes by that name. A manager will sort it out.` : '',
-             unlocked ? '\nYou\'re in. The team channels are open to you now; your market channel opens as soon as your manager puts you on a blitz.'
+          ? [`Thanks. You'll show up as ${nickname}.`,
+             clash ? `\n${clash.displayName} already uses that name. A manager will sort it out.` : '',
+             unlocked ? '\nYou\'re set up. Your market channel opens as soon as you\'re on a blitz.'
                       : '\nA manager will confirm who you are, then your market channel opens.'].join('')
-          : `✅ Got it — **${nickname}**.\nPulse could not set it automatically (your role sits above the bot), so a manager will apply it. Nothing else needed from you.`,
+          : `Thanks, ${nickname}. A manager will update your name. Nothing else needed from you.`,
       }).catch(() => {});
 
       // Matched = nothing for a manager to do. Not matched = the one-tap picker (no commands).
@@ -3926,7 +3924,7 @@ client.on('interactionCreate', async (interaction) => {
       console.log(`[Pulse] name capture user=${interaction.user.id} applied=${nicknameSet} clash=${Boolean(clash)} queued=${posted}`);
     } catch (err) {
       console.error(`[Pulse] name capture failed user=${interaction.user.id}: ${err?.message || err}`);
-      await interaction.editReply({ content: 'Something went wrong saving that. A manager has been notified — you are not stuck.' }).catch(() => {});
+      await interaction.editReply({ content: 'Something went wrong saving that. A manager has been told, so you\'re not stuck.' }).catch(() => {});
       await notifyLog(guild, `⚠ Name capture failed for <@${interaction.user.id}> (\`@${interaction.user.username}\`). Set their nickname by hand.`);
     }
     return;

@@ -5,6 +5,7 @@
 const { SPEEDS } = require('./constants');
 const { compactJoin } = require('./message-format');
 const { HYPE_LINES, isDealLogSafeLine } = require('./hype-bank');
+const { realName } = require('./real-names');
 
 const SPEED_DISPLAY = Object.freeze({
   '200mb': '200 Mbps',
@@ -168,18 +169,15 @@ function buildDealHypeLine({ picked, displayName, movement }) {
 function buildPremiumDealConfirmation(ctx) {
   const { displayName, speeds } = ctx;
 
-  // "· 3 today" only once there's a count to show; the first deal of the day is already the hype line's job.
-  const today = Number(ctx.dealsTodayAfter) > 1 ? ` · **${ctx.dealsTodayAfter} today**` : '';
-  let header;
-  if (speeds.length === 1) {
-    header = `✅ **Logged** — **${displayName}** · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}${today}`;
-  } else {
-    header = `✅ **Logged** — **${displayName}** · **${speeds.length}** deals${today}\n${formatMultiSpeedLine(speeds)}`;
-  }
+  // Owner 2026-10-16: plain, no hype line. "Logged: Jadin Kent · 1 Gig · 6 today".
+  const name = realName(ctx.userId, displayName);
+  const today = Number(ctx.dealsTodayAfter) > 0 ? ` · ${ctx.dealsTodayAfter} today` : '';
+  const header = speeds.length === 1
+    ? `Logged: ${name} · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}${today}`
+    : `Logged: ${name} · ${speeds.length} deals${today}\n${formatMultiSpeedLine(speeds)}`;
 
   const parts = [header];
-  if (ctx.hypeLine) parts.push(ctx.hypeLine);
-  if (ctx.hasCustomerOnFile) parts.push('_Customer on file._');
+  if (ctx.hasCustomerOnFile) parts.push('Customer on file.');
   return compactJoin(parts);
 }
 

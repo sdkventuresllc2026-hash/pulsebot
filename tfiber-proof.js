@@ -140,19 +140,19 @@ function formatTfiberProofLine(result) {
   };
   if (result.status === 'ORDER_CREATED') {
     return missingDetails
-      ? `T-Fiber proof received. Synced to FiberSales OS. ${detailText()}`
-      : 'T-Fiber proof received. Synced to FiberSales OS with customer details.';
+      ? `Proof received. Saved to fibersales.co. ${detailText()}`
+      : 'Proof received. Saved to fibersales.co.';
   }
   if (result.status === 'PROOF_ATTACHED' || result.status === 'IDEMPOTENT_REPLAY') {
     return missingDetails
-      ? `T-Fiber proof received. Matched in FiberSales OS. ${detailText()}`
-      : 'T-Fiber proof received. Matched in FiberSales OS with customer details.';
+      ? `Proof received. Saved to fibersales.co. ${detailText()}`
+      : 'Proof received. Saved to fibersales.co.';
   }
-  if (result.status === 'NEEDS_SCREENSHOT') return 'T-Fiber proof needed: upload the order confirmation screenshot here or DM PulseBot within 48 hours.';
-  if (result.status === 'UNLINKED_USER') return 'T-Fiber proof held: Discord user is not linked in FiberSales OS yet.';
-  if (result.status === 'NEEDS_REVIEW') return 'T-Fiber proof needs review: reply with the TMO order ID or upload a clearer screenshot.';
-  if (result.status === 'SYNC_DISABLED') return 'T-Fiber proof saved in Pulse. FiberSales OS sync is not configured yet.';
-  return `T-Fiber proof status: ${result.message || result.status}.`;
+  if (result.status === 'NEEDS_SCREENSHOT') return 'Proof needed: post the order confirmation screenshot here or DM Pulse within 48 hours.';
+  if (result.status === 'UNLINKED_USER') return 'Proof held: your Discord is not linked to fibersales.co yet. A manager will fix it.';
+  if (result.status === 'NEEDS_REVIEW') return 'Proof needs review: reply with the TMO order number or post a clearer screenshot.';
+  if (result.status === 'SYNC_DISABLED') return 'Proof saved in Pulse.';
+  return `Proof status: ${result.message || result.status}.`;
 }
 
 // ---- Reminder / admin text. Reps only ever post "1g", so the identifiers a reminder CAN name are
@@ -192,14 +192,14 @@ function describePendingProof(pending, { tz } = {}) {
 function formatTfiberReminderDm(type, pendings, { tz } = {}) {
   const list = (pendings || []).filter(Boolean);
   if (type === 'expired') {
-    return `T-Fiber proof expired — ${describePendingProof(list[0], { tz })}. It was removed from official Pulse totals until the screenshot is received.`;
+    return `T-Fiber proof expired: ${describePendingProof(list[0], { tz })}. This deal is off the leaderboard until the screenshot comes in.`;
   }
   const many = list.length > 1;
   const header = type === 'final'
-    ? `⏰ Final reminder — ${many ? `these ${list.length} T-Fiber deals expire` : 'this T-Fiber deal expires'} in about 4 hours:`
-    : `T-Fiber proof needed for ${many ? `these ${list.length} deals` : 'this deal'}:`;
-  const lines = list.map((p, i) => `${many ? `${i + 1}) ` : ''}${describePendingProof(p, { tz })} — needs ${pendingNeeds(p)} · expires ${formatWhen(p.expiresAt, tz)}`);
-  return [header, ...lines, '', 'Reply here with the screenshot AND the T-Mobile order number (TMO…) in the same message so I attach it to the right deal.'].join('\n');
+    ? `Final reminder: ${many ? `these ${list.length} T-Fiber deals expire` : 'this T-Fiber deal expires'} in about 4 hours.`
+    : `T-Fiber proof needed for ${many ? `these ${list.length} deals` : 'this deal'}.`;
+  const lines = list.map((p, i) => `${many ? `${i + 1}) ` : ''}${describePendingProof(p, { tz })} · needs ${pendingNeeds(p)} · expires ${formatWhen(p.expiresAt, tz)}`);
+  return [header, ...lines, '', 'Reply here with the screenshot and the T-Mobile order number (TMO…) in the same message.'].join('\n');
 }
 
 /** Admin view (`pulse proofs`): everything open, grouped by rep, oldest first. */

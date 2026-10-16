@@ -1,9 +1,9 @@
 /**
  * Leaderboard plain-text output (testable, no Discord deps).
  */
+const { realName } = require('./real-names');
 
 const MARKDOWN_ESCAPE_RE = /([*_~`|\\])/g;
-const MEDALS = ['🥇', '🥈', '🥉'];
 const DEFAULT_TZ = 'America/New_York';
 const PHASE3_SPEED_ORDER = ['1gig', '2gig', '500mb', '300mb', '200mb'];
 const PHASE3_SPEED_LABELS = {
@@ -19,7 +19,7 @@ function escapeMarkdown(text) {
 }
 
 function displayRepName(row) {
-  const raw = String(row.displayName || row.username || 'Unknown Rep').trim() || 'Unknown Rep';
+  const raw = String(realName(row.userId, row.displayName || row.username || 'Unknown Rep')).trim() || 'Unknown Rep';
   const trimmed = raw.length > 24 ? `${raw.slice(0, 24)}…` : raw;
   return escapeMarkdown(trimmed);
 }
@@ -29,7 +29,8 @@ function dealCount(row) {
 }
 
 function rankLabel(index) {
-  return MEDALS[index] || `**#${index + 1}**`;
+  // Escaped so Discord shows "1." as typed instead of turning the board into an indented list.
+  return `${index + 1}\\.`;
 }
 
 function formatPhase3SpeedBreakdown(speeds) {
@@ -159,17 +160,9 @@ function resolveDateContext(period, now = new Date(), tz = process.env.TZ || DEF
   return 'All-Time';
 }
 
-const BAR_LEN = 6;
 const MAX_CONTENT = 1900; // Discord hard cap is 2000 chars per message
 
-/** Six-block bar scaled against the leader: ▰▰▰▰▱▱ */
-function progressBar(count, top) {
-  if (!top || !count) return '▱'.repeat(BAR_LEN);
-  const filled = Math.max(1, Math.round((count / top) * BAR_LEN));
-  return '▰'.repeat(filled) + '▱'.repeat(BAR_LEN - filled);
-}
-
-/** "🔥 Henny Sells leads by 2" / "🔥 Tied at the top — A, B" / null when nothing to say. */
+/** "Jadin Kent leads by 28" / "Tied at the top: A, B" / null when nothing to say. */
 function leaderLine(rows) {
   if (rows.length < 2) return null;
   const top = dealCount(rows[0]);
@@ -178,33 +171,40 @@ function leaderLine(rows) {
   if (leaders.length > 1) {
     const names = leaders.slice(0, 3).map(displayRepName).join(', ');
     const extra = leaders.length > 3 ? ` +${leaders.length - 3}` : '';
-    return `🔥 Tied at the top — ${names}${extra}`;
+    return `Tied at the top: ${names}${extra}`;
   }
-  return `🔥 ${displayRepName(rows[0])} leads by ${top - dealCount(rows[1])}`;
+  return `${displayRepName(rows[0])} leads by ${top - dealCount(rows[1])}`;
 }
 
-function formatLeaderboard({ scope, period, rows, total, market, dateContext, quarterLine }) {
+/**
+ * Owner 2026-10-16: plain numbered list, real names, one total line. No medals, bars or taglines
+ * (quarterLine is accepted for old callers and ignored).
+ *
+ *   **Michigan · This Month · October 2026**
+ *
+ *   1. Jadin Kent · 94
+ *   2. Jacob Arnold · 66
+ *
+ *   Total: 240 deals · 13 reps
+ *   Jadin Kent leads by 28
+ */
+function formatLeaderboard({ scope, period, rows, total, market, dateContext }) {
   const isMaster = scope === 'master';
-  const name = isMaster ? 'Master' : market || 'Unknown Market';
-  const baseContext = dateContext || resolveDateContext(period);
-  const context = isMaster ? `${baseContext} · All Markets` : baseContext;
+  const name = isMaster ? 'All Markets' : market || 'Unknown Market';
+  const context = dateContext || resolveDateContext(period);
   const SOFT_CAP = 50;
   const allRows = Array.isArray(rows) ? rows : [];
   const safeRows = allRows.slice(0, SOFT_CAP);
-  const top = dealCount(safeRows[0] || {});
-
-  const header = [`🏆 **${name} Leaderboard**`, context];
-  if (quarterLine) header.push(quarterLine);
+  const header = [`**${name} · ${context}**`];
 
   const rowLine = (row, index) => {
-    const fields = [`${rankLabel(index)} **${displayRepName(row)}** · **${dealCount(row)}**`];
+    const fields = [`${rankLabel(index)} ${displayRepName(row)}`, String(dealCount(row))];
     if (isMaster) fields.push(row.market || 'Unassigned');
-    return `${fields.join(' · ')} ${progressBar(dealCount(row), top)}`;
+    return fields.join(' · ');
   };
 
-  const totalLabel = isMaster ? 'All Markets Total' : `${name} Total`;
   const reps = allRows.length ? ` · ${allRows.length} rep${allRows.length === 1 ? '' : 's'}` : '';
-  const footer = [`**${totalLabel}** · **${total}** deals${reps}`];
+  const footer = [`Total: ${total} deal${total === 1 ? '' : 's'}${reps}`];
   const leader = leaderLine(safeRows);
   if (leader) footer.push(leader);
 
@@ -212,9 +212,9 @@ function formatLeaderboard({ scope, period, rows, total, market, dateContext, qu
   let shown = safeRows.length;
   let out;
   do {
-    const body = shown ? safeRows.slice(0, shown).map(rowLine) : ['_No deals logged yet — first door wins the board._'];
+    const body = shown ? safeRows.slice(0, shown).map(rowLine) : ['No deals logged yet.'];
     const overflow = allRows.length - shown;
-    if (overflow > 0) body.push(`…and ${overflow} more`);
+    if (overflow > 0) body.push(`And ${overflow} more`);
     out = [...header, '', ...body, '', ...footer].join('\n').replace(/[ \t]+$/gm, '');
     shown -= 1;
   } while (out.length > MAX_CONTENT && shown > 0);

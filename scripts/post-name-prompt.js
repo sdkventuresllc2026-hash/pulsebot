@@ -18,25 +18,22 @@ const POST = process.argv.includes('--post');
 const SET_NAME_ID = 'pulse:setname';
 const CHANNEL = process.env.NAME_PROMPT_CHANNEL || 'welcome';
 
+// Owner 2026-10-16: plain voice, no emoji. The live pin was edited in place to this text.
 const embed = new EmbedBuilder()
-  .setColor(0xE20074) // T-Mobile magenta
-  .setTitle('👋 First things first — tell us your name')
+  .setTitle('Set your name')
   .setDescription(
     [
-      "Discord shows your username, and most of them don't look much like a name.",
-      'That makes it genuinely hard for your manager to find you and get you into your market channel.',
+      'Tap **Set My Name** and enter your first and last name. It takes ten seconds.',
       '',
-      '**Hit the button below and enter your real name.** Takes about ten seconds.',
+      'This is how your manager finds you and opens your market channel.',
       '',
-      'You can also add what people actually call you — so `Anthony Mucciolo` can still show up as `Anthony Mucciolo (Mooch)` on the leaderboard.',
-      '',
-      "Once that's done, a manager adds you to your market and your blitz channel appears.",
+      'You can add a nickname too, for example: Anthony Mucciolo (Mooch).',
     ].join('\n'),
   )
-  .setFooter({ text: 'You can change it any time — just hit the button again.' });
+  .setFooter({ text: 'You can change it any time with the same button.' });
 
 const row = new ActionRowBuilder().addComponents(
-  new ButtonBuilder().setCustomId(SET_NAME_ID).setLabel('Set My Name').setEmoji('✍️').setStyle(ButtonStyle.Primary),
+  new ButtonBuilder().setCustomId(SET_NAME_ID).setLabel('Set My Name').setStyle(ButtonStyle.Primary),
 );
 
 (async () => {

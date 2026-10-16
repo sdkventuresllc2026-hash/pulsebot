@@ -67,7 +67,9 @@ async function fetchAccessRoster(fetchImpl = fetch) {
     const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/access`, { headers: { 'x-pulse-os-secret': osSecret() } });
     const json = await response.json().catch(() => null);
     if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
-    return { ok: true, active: json?.data?.active || [], inactive: json?.data?.inactive || [] };
+    const active = json?.data?.active || [];
+    require('./real-names').setFromRoster(active);
+    return { ok: true, active, inactive: json?.data?.inactive || [] };
   } catch (err) {
     return { ok: false, message: err?.message || String(err) };
   }

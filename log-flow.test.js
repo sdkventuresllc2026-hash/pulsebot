@@ -15,15 +15,14 @@ test('hypeTextsSimilar catches duplicate lines', () => {
   assert.equal(hypeTextsSimilar('Board changed.', '**Logged.** Keep stacking.'), false);
 });
 
-test('buildPremiumDealConfirmation is compact header plus one hype line', () => {
+test('buildPremiumDealConfirmation is one plain line, no hype line (owner 2026-10-16)', () => {
   const out = buildPremiumDealConfirmation({
     displayName: 'Jacob Arnold',
     speeds: ['1gig'],
+    dealsTodayAfter: 6,
     hypeLine: '**First of the day** — Jacob Arnold · 1 Gig.',
   });
-  assert.match(out, /^✅ \*\*Logged\*\* — \*\*Jacob Arnold\*\* · 1 Gig/m);
-  assert.equal((out.match(/\n/g) || []).length, 1);
-  assert.ok(!out.includes('selectClosingLine'));
+  assert.equal(out, 'Logged: Jacob Arnold · 1 Gig · 6 today');
 });
 
 test('buildDealHypeLine first ever does not repeat rep or speed', () => {

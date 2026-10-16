@@ -32,7 +32,7 @@ test('formatQuarterHeader is one italic line', () => {
   assert.equal(h.split('\n').length, 1);
 });
 
-test('formatLeaderboard renders exact market daily style', () => {
+test('formatLeaderboard renders the plain market list', () => {
   const out = formatLeaderboard({
     scope: 'market',
     period: 'daily',
@@ -44,20 +44,19 @@ test('formatLeaderboard renders exact market daily style', () => {
   assert.equal(
     out,
     [
-      '🏆 **Virginia Leaderboard**',
-      'Today · Thursday, May 21',
+      '**Virginia · Today · Thursday, May 21**',
       '',
-      '🥇 **Henny Sells** · **6** ▰▰▰▰▰▰',
-      '🥈 **Caleb Head** · **5** ▰▰▰▰▰▱',
-      '🥉 **iQRexy** · **4** ▰▰▰▰▱▱',
+      '1\\. Henny Sells · 6',
+      '2\\. Caleb Head · 5',
+      '3\\. iQRexy · 4',
       '',
-      '**Virginia Total** · **15** deals · 3 reps',
-      '🔥 Henny Sells leads by 1',
+      'Total: 15 deals · 3 reps',
+      'Henny Sells leads by 1',
     ].join('\n'),
   );
 });
 
-test('formatLeaderboard shows quarter line and tie at the top', () => {
+test('formatLeaderboard ignores the quarter line and names a tie at the top', () => {
   const out = formatLeaderboard({
     scope: 'market',
     period: 'daily',
@@ -67,12 +66,12 @@ test('formatLeaderboard shows quarter line and tie at the top', () => {
     dateContext: 'Today · Thursday, May 21',
     quarterLine: '_Q3 — **EXTEND THE LEAD**_',
   });
-  assert.equal(out.split('\n')[2], '_Q3 — **EXTEND THE LEAD**_');
-  assert.match(out, /\n🔥 Tied at the top — Henny Sells, Caleb Head$/);
+  assert.doesNotMatch(out, /EXTEND/);
+  assert.match(out, /\nTied at the top: Henny Sells, Caleb Head$/);
   assert.doesNotMatch(out, /leads by/);
 });
 
-test('formatLeaderboard renders exact master all-time style', () => {
+test('formatLeaderboard renders the plain all-markets list', () => {
   const out = formatLeaderboard({
     scope: 'master',
     period: 'alltime',
@@ -83,15 +82,14 @@ test('formatLeaderboard renders exact master all-time style', () => {
   assert.equal(
     out,
     [
-      '🏆 **Master Leaderboard**',
-      'All-Time · All Markets',
+      '**All Markets · All-Time**',
       '',
-      '🥇 **Henny Sells** · **6** · Virginia ▰▰▰▰▰▰',
-      '🥈 **Caleb Head** · **5** · Greenville ▰▰▰▰▰▱',
-      '🥉 **iQRexy** · **4** · Virginia ▰▰▰▰▱▱',
+      '1\\. Henny Sells · 6 · Virginia',
+      '2\\. Caleb Head · 5 · Greenville',
+      '3\\. iQRexy · 4 · Virginia',
       '',
-      '**All Markets Total** · **15** deals · 3 reps',
-      '🔥 Henny Sells leads by 1',
+      'Total: 15 deals · 3 reps',
+      'Henny Sells leads by 1',
     ].join('\n'),
   );
 });
@@ -105,20 +103,10 @@ test('formatLeaderboard renders empty state', () => {
     market: 'Greenville',
     dateContext: 'This Week · May 18–24',
   });
-  assert.equal(
-    out,
-    [
-      '🏆 **Greenville Leaderboard**',
-      'This Week · May 18–24',
-      '',
-      '_No deals logged yet — first door wins the board._',
-      '',
-      '**Greenville Total** · **0** deals',
-    ].join('\n'),
-  );
+  assert.equal(out, ['**Greenville · This Week · May 18–24**', '', 'No deals logged yet.', '', 'Total: 0 deals'].join('\n'));
 });
 
-test('formatLeaderboard shows all rows up to soft cap and notes overflow', () => {
+test('formatLeaderboard shows all rows up to soft cap, escapes and trims long names', () => {
   const rows = Array.from({ length: 12 }, (_, i) => ({
     displayName: i === 0 ? 'Very_Long_*Rep*_Name_With_Extra' : `Rep ${i + 1}`,
     total: 12 - i,
@@ -131,19 +119,18 @@ test('formatLeaderboard shows all rows up to soft cap and notes overflow', () =>
     market: 'Evansville',
     dateContext: 'Today · Thursday, May 21',
   });
-  assert.match(out, /🥇 \*\*Very\\_Long\\_\\\*Rep\\\*\\_Name\\_Wit…\*\* · \*\*12\*\* ▰▰▰▰▰▰/);
-  assert.match(out, /^\*\*#10\*\* \*\*Rep 10\*\* · \*\*3\*\* ▰▰▱▱▱▱$/m);
-  assert.match(out, /^\*\*#11\*\* \*\*Rep 11\*\* · \*\*2\*\* ▰▱▱▱▱▱$/m);
-  assert.match(out, /^\*\*#12\*\* \*\*Rep 12\*\* · \*\*1\*\* ▰▱▱▱▱▱$/m);
-  assert.doesNotMatch(out, /and \d+ more/);
+  assert.match(out, /^1\\\. Very\\_Long\\_\\\*Rep\\\*\\_Name\\_Wit… · 12$/m);
+  assert.match(out, /^10\\\. Rep 10 · 3$/m);
+  assert.match(out, /^12\\\. Rep 12 · 1$/m);
+  assert.doesNotMatch(out, /And \d+ more/);
 });
 
 test('formatLeaderboard applies soft cap with overflow note past 50 rows', () => {
   const rows = Array.from({ length: 55 }, (_, i) => ({ displayName: `Rep ${i + 1}`, total: 55 - i }));
   const out = formatLeaderboard({ scope: 'market', period: 'alltime', rows, total: 100, market: 'Virginia' });
-  assert.match(out, /^\*\*#50\*\* /m);
+  assert.match(out, /^50\\\. /m);
   assert.doesNotMatch(out, /Rep 51/);
-  assert.match(out, /…and 5 more/);
+  assert.match(out, /And 5 more/);
   assert.ok(out.length <= 1900, `too long: ${out.length}`);
 });
 
@@ -155,8 +142,15 @@ test('formatLeaderboard stays under the Discord 2000-char limit with long names'
   }));
   const out = formatLeaderboard({ scope: 'master', period: 'alltime', rows, total: 1275 });
   assert.ok(out.length <= 1900, `too long: ${out.length}`);
-  assert.match(out, /…and \d+ more/);
-  assert.match(out, /\*\*All Markets Total\*\* · \*\*1275\*\* deals · 50 reps/);
+  assert.match(out, /And \d+ more/);
+  assert.match(out, /^Total: 1275 deals · 50 reps$/m);
+});
+
+test('formatLeaderboard shows the fibersales.co name for a linked Discord user', () => {
+  require('./real-names').setFromRoster([{ discordUserId: '3', name: 'rex ranck' }]);
+  const out = formatLeaderboard({ scope: 'market', period: 'daily', rows: SAMPLE_ROWS, total: 15, market: 'Virginia', dateContext: 'Today' });
+  assert.match(out, /^3\\\. Rex Ranck · 4$/m);
+  require('./real-names').setFromRoster([{ discordUserId: 'none', name: 'x' }]);
 });
 
 test('resolveDateContext formats daily and weekly labels', () => {
@@ -190,7 +184,7 @@ test('buildPremiumDealConfirmation no extra blank lines', () => {
     hypeLine: '**First of the day** for Test Rep.',
   });
   assertCleanOutput(out, { maxLines: 4 });
-  assert.match(out, /^✅ \*\*Logged\*\*/m);
+  assert.equal(out, 'Logged: Test Rep · 1 Gig', 'plain, no hype line');
   assert.equal((out.match(/\n\n/g) || []).length, 0, 'no double newlines');
 });
 

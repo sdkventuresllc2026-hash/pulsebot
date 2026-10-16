@@ -131,15 +131,15 @@ test('proof clock is 48 hours', () => {
 test('proof line is simple but calls out missing contact or install details', () => {
   assert.equal(
     formatTfiberProofLine({ status: 'ORDER_CREATED', missingFields: [] }),
-    'T-Fiber proof received. Synced to FiberSales OS with customer details.',
+    'Proof received. Saved to fibersales.co.',
   );
   assert.equal(
     formatTfiberProofLine({ status: 'PROOF_ATTACHED', missingFields: ['customerPhone'] }),
-    'T-Fiber proof received. Matched in FiberSales OS. Customer contact details still needed.',
+    'Proof received. Saved to fibersales.co. Customer contact details still needed.',
   );
   assert.equal(
     formatTfiberProofLine({ status: 'ORDER_CREATED', missingFields: ['installationDate', 'installationTimeWindow'] }),
-    'T-Fiber proof received. Synced to FiberSales OS. Install details still needed.',
+    'Proof received. Saved to fibersales.co. Install details still needed.',
   );
 });
 
@@ -156,7 +156,7 @@ test('reminder names the deal: plan, channel, ET time, jump link, what is needed
   assert.match(text, /T-Fiber 2 Gig · <#c1> · posted Mon, 8\/24, 5:57 PM → https:\/\/discord\.com\/channels\/g\/c1\/m1/);
   assert.match(text, /needs the order confirmation screenshot/);
   assert.match(text, /expires Wed, 8\/26, 5:57 PM/);
-  assert.match(text, /Reply here with the screenshot AND the T-Mobile order number/);
+  assert.match(text, /Reply here with the screenshot and the T-Mobile order number/);
   assert.doesNotMatch(text, /^1\)/m); // single deal: no numbering
 });
 
@@ -166,12 +166,12 @@ test('one DM lists every open deal, numbered, and NEEDS_REVIEW asks for the TMO 
   const text = formatTfiberReminderDm('final', [a, b], { tz: 'America/New_York' });
   assert.match(text, /these 2 T-Fiber deals expire/);
   assert.match(text, /^1\) T-Fiber 2 Gig/m);
-  assert.match(text, /^2\) T-Fiber 1 Gig .* — needs the T-Mobile order number \(TMO…\)/m);
+  assert.match(text, /^2\) T-Fiber 1 Gig .* · needs the T-Mobile order number \(TMO…\)/m);
 });
 
 test('expired message identifies the deal instead of a generic 1G blurb', () => {
   const text = formatTfiberReminderDm('expired', [pendingFixture({ tmoOrderId: 'TMO20260824FPOLS' })], { tz: 'America/New_York' });
-  assert.match(text, /expired — T-Fiber 2 Gig · <#c1> · posted Mon, 8\/24, 5:57 PM · order TMO20260824FPOLS/);
+  assert.match(text, /expired: T-Fiber 2 Gig · <#c1> · posted Mon, 8\/24, 5:57 PM · order TMO20260824FPOLS/);
 });
 
 test('describePendingProof degrades without a message id (no link) or channel (market name)', () => {
