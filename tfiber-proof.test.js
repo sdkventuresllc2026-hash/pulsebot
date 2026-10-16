@@ -131,7 +131,7 @@ test('proof clock is 48 hours', () => {
 test('proof line is simple but calls out missing contact or install details', () => {
   assert.equal(
     formatTfiberProofLine({ status: 'ORDER_CREATED', missingFields: [] }),
-    'Proof received. Saved to fibersales.co.',
+    '-# Proof received. Saved to fibersales.co.',
   );
   assert.equal(
     formatTfiberProofLine({ status: 'PROOF_ATTACHED', missingFields: ['customerPhone'] }),

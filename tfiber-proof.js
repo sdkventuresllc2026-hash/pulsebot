@@ -141,12 +141,12 @@ function formatTfiberProofLine(result) {
   if (result.status === 'ORDER_CREATED') {
     return missingDetails
       ? `Proof received. Saved to fibersales.co. ${detailText()}`
-      : 'Proof received. Saved to fibersales.co.';
+      : '-# Proof received. Saved to fibersales.co.';
   }
   if (result.status === 'PROOF_ATTACHED' || result.status === 'IDEMPOTENT_REPLAY') {
     return missingDetails
       ? `Proof received. Saved to fibersales.co. ${detailText()}`
-      : 'Proof received. Saved to fibersales.co.';
+      : '-# Proof received. Saved to fibersales.co.';
   }
   if (result.status === 'NEEDS_SCREENSHOT') return 'Proof needed: post the order confirmation screenshot here or DM Pulse within 48 hours.';
   if (result.status === 'UNLINKED_USER') return 'Proof held: your Discord is not linked to fibersales.co yet. A manager will fix it.';

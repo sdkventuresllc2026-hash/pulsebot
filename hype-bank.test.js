@@ -4,7 +4,7 @@ const { HYPE_LINES, isDealLogSafeLine } = require('./hype-bank');
 const { selectHypeLine } = require('./premium-confirmation');
 
 test('hype bank has breadth across milestone tags', () => {
-  assert.ok(HYPE_LINES.length >= 40, `expected 40+ lines, got ${HYPE_LINES.length}`);
+  assert.ok(HYPE_LINES.length >= 30, `expected 30+ lines, got ${HYPE_LINES.length}`);
   // Owner 2026-10-16: no dashes in any line ("3 ball", not "3-ball").
   for (const line of HYPE_LINES) assert.doesNotMatch(line.text, /[-—–]/, `${line.id} has a dash: ${line.text}`);
   const tags = new Set(HYPE_LINES.flatMap((l) => l.tags));
@@ -40,12 +40,8 @@ test('deal log lines never use {rep}', () => {
   }
 });
 
-test('selectHypeLine rotates first_ever copy', () => {
-  const seen = new Set();
-  for (let i = 0; i < 30; i += 1) {
-    const picked = selectHypeLine({ event: 'first_ever', recentLineIds: [] });
-    assert.ok(picked?.text);
-    seen.add(picked.text);
-  }
-  assert.ok(seen.size >= 2, 'first_ever should have multiple variants');
+test('one simple line per moment (owner 2026-10-16)', () => {
+  assert.equal(selectHypeLine({ event: 'hat_trick', recentLineIds: [] }).text, '**3 ball.**');
+  assert.equal(selectHypeLine({ event: 'day_7', recentLineIds: [] }).text, '**Seven today.**');
+  assert.equal(selectHypeLine({ event: 'first_ever', recentLineIds: [] }).text, '**First deal.**');
 });

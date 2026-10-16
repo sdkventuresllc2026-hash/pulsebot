@@ -190,20 +190,25 @@ function leaderLine(rows) {
  *   Total: 240 deals · 13 reps
  *   Jadin Kent leads by 28
  */
-function formatLeaderboard({ scope, period, rows, total, market, dateContext }) {
+function formatLeaderboard({ scope, period, rows, total, market, dateContext, quarterLine }) {
   const isMaster = scope === 'master';
   const name = isMaster ? 'All Markets' : market || 'Unknown Market';
-  // "This Month · October 2026" -> "October 2026"; the month name says it.
+  // "Today · Friday, October 16" -> title "Today", grey "Friday, October 16" underneath.
+  // "This Month · October 2026" -> title "October 2026"; the month name says it.
   const context = String(dateContext || resolveDateContext(period)).replace(/^This Month · /, '');
+  const [when, ...rest] = context.split(' · ');
   const SOFT_CAP = 50;
   const allRows = Array.isArray(rows) ? rows : [];
   const safeRows = allRows.slice(0, SOFT_CAP);
-  const header = [`🏆 **${name} · ${context}**`];
+  // Owner 2026-10-16: bold title, grey date (Discord "-#" subtext), quarter in a quote bar on daily boards.
+  const header = [`🏆 **${name} · ${when}**`];
+  if (rest.length) header.push(`-# ${rest.join(' · ').replace(/\s*–\s*/g, ' to ')}`);
+  if (quarterLine) header.push(quarterLine);
 
-  // Owner 2026-10-16: medals + bold for the top three, plain numbered list below.
+  // Medals + bold name and count for the top three, plain numbered list below.
   const rowLine = (row, index) => {
     const who = index < 3 ? `${MEDALS[index]} **${displayRepName(row)}**` : `${rankLabel(index)} ${displayRepName(row)}`;
-    const fields = [who, String(dealCount(row))];
+    const fields = [who, index < 3 ? `**${dealCount(row)}**` : String(dealCount(row))];
     if (isMaster) fields.push(row.market || 'Unassigned');
     return fields.join(' · ');
   };
