@@ -3497,8 +3497,8 @@ client.on('guildMemberAdd', async (member) => {
     if (known) {
       const done = await linkMemberToPerson(member.guild, member, known.people[0], 'INVITE').catch(() => ({ ok: false }));
       if (done.ok) {
-        const hi = member.guild.channels.cache.find((c) => c.name === WELCOME_CHANNEL && c.isTextBased?.());
-        await hi?.send({ content: `👋 Welcome to **FiberSales**, <@${member.id}>. You're all set, **${done.name}**.`, allowedMentions: { users: [member.id] } }).catch(() => null);
+        // Owner 2026-10-16: nothing in #welcome for a personal-link join. They are already in their
+        // market channel; the log is the only place this needs to be said.
         await notifyLog(member.guild, `✅ **${done.name}** joined Discord through their personal link and is set up.`);
         return;
       }
