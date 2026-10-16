@@ -131,7 +131,7 @@ const {
   deriveLeaderboardMovement,
   buildLeaderboardContext,
 } = require('./gamification-engine');
-const { postTfiberDiscordProof, postBlitzMove } = require('./fiberSalesOsClient');
+const { postTfiberDiscordProof, postBlitzMove, postRosterCheck } = require('./fiberSalesOsClient');
 const accessSync = require('./access-sync');
 const blitzSeat = require('./blitz-seat');
 const boardScope = require('./board-scope');
@@ -3341,6 +3341,23 @@ async function bootstrap() {
     };
     runAccessSync();
     setInterval(runAccessSync, 15 * 60 * 1000).unref?.();
+
+    // Weekly roster check (owner 2026-10-15): Monday 9:00 ET, the OS compares the T-Mobile export to
+    // the blitz board, auto-adds sellers who are on no blitz, and we post the rest for the leads.
+    let lastRosterCheckDay = '';
+    const runRosterCheck = async () => {
+      const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const day = et.toISOString().slice(0, 10);
+      if (et.getDay() !== 1 || et.getHours() !== 9 || lastRosterCheckDay === day) return;
+      lastRosterCheckDay = day;
+      const out = await postRosterCheck();
+      if (!out.ok) { console.error(`[roster-check] ${out.message || out.status || 'failed'}`); return; }
+      console.log(`[roster-check] added ${out.added}, text ${out.text ? out.text.length + ' chars' : 'empty'}`);
+      for (const guild of client.guilds.cache.values()) {
+        if (out.text) await notifyManagement(guild, out.text);
+      }
+    };
+    setInterval(runRosterCheck, 5 * 60 * 1000).unref?.();
   }
 
   // Reconciliation writes desired state with permissionOverwrites.set(). Running it from an

@@ -90,10 +90,26 @@ async function postDiscordLink({ discordUserId, name }, fetchImpl = fetch) {
   }
 }
 
+/** Weekly roster check (2026-10-15): applies auto-adds in the OS and returns the #management text. Never throws. */
+async function postRosterCheck(fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true };
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/roster-check`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-pulse-os-secret': osSecret() }, body: '{}',
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    return { ok: true, text: json?.data?.text || '', added: json?.data?.added || 0 };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+}
+
 module.exports = {
   isFiberSalesOsConfigured,
   postTfiberDiscordProof,
   postBlitzMove,
   fetchAccessRoster,
   postDiscordLink,
+  postRosterCheck,
 };
