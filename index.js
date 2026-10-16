@@ -230,6 +230,9 @@ async function closeWhoIs(guild, memberId, text) {
   if (msg) await msg.edit({ content: text, components: [], allowedMentions: { parse: [] } }).catch(() => null);
 }
 
+/** How long a welcome DM gets to be answered before the #pulse-log prompt (2026-10-16). */
+const DM_ANSWER_MS = 24 * 60 * 60 * 1000;
+
 async function runWhoIsPass(guild) {
   const roster = await fetchAccessRoster();
   if (!roster.ok) return;
@@ -246,6 +249,17 @@ async function runWhoIsPass(guild) {
   // Asked before prompts were saved (old pick-list, 2026-10-16) = ask again with the fixed one.
   const asked = Object.fromEntries(Object.entries(store.asked).filter(([id]) => (store.messages || {})[id]));
   for (const m of joinMatch.whoToAsk(members, linkedIds, asked, Date.now())) {
+    const st0 = joinMatch.load(); st0.dmed = st0.dmed || {};
+    if (!st0.dmed[m.id]) {
+      const user = list.get(m.id)?.user;
+      const ok = user ? await user.send({
+        content: "Welcome to the FiberSales Discord! Tap the button and type your full name so we can put you in your market channel.",
+        components: [setNameRow()],
+      }).then(() => true).catch(() => false) : false;
+      st0.dmed[m.id] = ok ? new Date().toISOString() : 'failed';
+      joinMatch.save(st0);
+      if (ok) continue;
+    } else if (st0.dmed[m.id] !== 'failed' && Date.now() - Date.parse(st0.dmed[m.id]) < DM_ANSWER_MS) continue;
     // Re-read before saving: askWhoIs just stored the prompt id, and saving the copy loaded above
     // erased it, so every pass re-asked the same person (J_sales13 every 15 min, 2026-10-16).
     if (await askWhoIs(guild, m.id, roster).catch((err) => { console.error(`[whois] ask ${m.id}: ${err?.message || err}`); return false; })) {
@@ -3854,6 +3868,8 @@ client.on('interactionCreate', async (interaction) => {
 
   if (interaction.isModalSubmit() && interaction.customId === SET_NAME_ID) {
     await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    // From the welcome DM there is no guild on the interaction; there is only one server.
+    const guild = interaction.guild || client.guilds.cache.get(process.env.GUILD_ID) || client.guilds.cache.first();
     const realName = interaction.fields.getTextInputValue('realname').trim();
     const handle = (interaction.fields.getTextInputValue('handle') || '').trim() || null;
     const nickname = buildNickname(realName, handle);
@@ -3865,12 +3881,12 @@ client.on('interactionCreate', async (interaction) => {
     let nicknameSet = false;
     let failureReason = null;
     try {
-      const member = await interaction.guild.members.fetch(interaction.user.id);
+      const member = await guild.members.fetch(interaction.user.id);
 
       // Duplicate-name check. Two people showing the same nickname is exactly the confusion this
       // whole flow exists to remove, so warn rather than silently create a second "Noah Mills".
-      await interaction.guild.members.fetch().catch(() => null);
-      const clash = interaction.guild.members.cache.find(
+      await guild.members.fetch().catch(() => null);
+      const clash = guild.members.cache.find(
         (m) => m.id !== member.id && m.displayName.replace(/\s*\(.*\)$/, '').toLowerCase() === realName.toLowerCase(),
       );
 
@@ -3885,10 +3901,10 @@ client.on('interactionCreate', async (interaction) => {
 
       // Access sync (2026-10-15): if this exact name is an active person in the OS, they get Member
       // right now and the link is saved, so no manager has to grant anything.
-      const access = await accessSync.reconcileOne(interaction.guild, interaction.user.id).catch(() => null);
+      const access = await accessSync.reconcileOne(guild, interaction.user.id).catch(() => null);
       const unlocked = access && (access.action === 'grant' || access.action === 'link_and_grant');
       // Now linked: drop them into their blitz chat right away (Discord follows the blitz board).
-      if (unlocked) seatFromBlitzBoard(interaction.guild).catch(() => null);
+      if (unlocked) seatFromBlitzBoard(guild).catch(() => null);
 
       await interaction.editReply({
         content: nicknameSet
@@ -3901,9 +3917,9 @@ client.on('interactionCreate', async (interaction) => {
 
       // Matched = nothing for a manager to do. Not matched = the one-tap picker (no commands).
       let posted = false;
-      if (!unlocked) {
+      if (!unlocked && !(joinMatch.load().messages || {})[interaction.user.id]) {
         const roster = await fetchAccessRoster();
-        posted = roster.ok ? await askWhoIs(interaction.guild, interaction.user.id, roster).catch(() => false) : false;
+        posted = roster.ok ? await askWhoIs(guild, interaction.user.id, roster).catch(() => false) : false;
         if (posted) { const st = joinMatch.load(); st.asked[interaction.user.id] = new Date().toISOString(); joinMatch.save(st); }
       }
       // Privacy-safe log: ids and outcome, never the entered name.
@@ -3911,7 +3927,7 @@ client.on('interactionCreate', async (interaction) => {
     } catch (err) {
       console.error(`[Pulse] name capture failed user=${interaction.user.id}: ${err?.message || err}`);
       await interaction.editReply({ content: 'Something went wrong saving that. A manager has been notified — you are not stuck.' }).catch(() => {});
-      await notifyLog(interaction.guild, `⚠ Name capture failed for <@${interaction.user.id}> (\`@${interaction.user.username}\`). Set their nickname by hand.`);
+      await notifyLog(guild, `⚠ Name capture failed for <@${interaction.user.id}> (\`@${interaction.user.username}\`). Set their nickname by hand.`);
     }
     return;
   }
