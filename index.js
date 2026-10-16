@@ -132,6 +132,7 @@ const {
   buildLeaderboardContext,
 } = require('./gamification-engine');
 const { postTfiberDiscordProof, postBlitzMove } = require('./fiberSalesOsClient');
+const accessSync = require('./access-sync');
 const {
   requiresTfiberProof,
   extractDiscordAttachments,
@@ -2484,6 +2485,11 @@ async function handleMarketAdd(interaction) {
     if (recon?.remove?.length) lines.push(`Removed ${recon.remove.length} market role(s) with no assignment on record`);
     console.log(auditLine({ actorId: interaction.user.id, action: 'market.add.applied', marketId, targetUserId: user.id, result: 'OK', detail: `nickname=${nicknameSet}` }));
     lines.push(`Added to **${market.marketName}** (<@&${roleId}>)`);
+    // Access sync (2026-10-15): a market add is a manager vouching for them; make sure the OS agrees
+    // and the Member role follows, instead of a second manual step.
+    const access = await accessSync.reconcileOne(interaction.guild, user.id).catch(() => null);
+    if (access?.action === 'grant' || access?.action === 'link_and_grant') lines.push('Member role granted (matches the org chart)');
+    else if (access?.reason === 'unknown to the OS') lines.push('⚠ Not on the org chart yet: approve them in fibersales.co and the team channels open automatically');
     lines.push('They can see that market\'s channel only.');
     await interaction.editReply({ content: `✅ <@${user.id}>\n• ${lines.join('\n• ')}` });
   } catch (err) {
@@ -3289,6 +3295,23 @@ async function bootstrap() {
     tfiberProofMaintenanceStarted = true;
     runTfiberProofMaintenance();
     setInterval(runTfiberProofMaintenance, 15 * 60 * 1000).unref?.();
+    // Access follows the org chart (owner 2026-10-15): Member role reconciled against the OS every
+    // 15 minutes. Approve in the OS → Member within 15 min (instantly after "Set My Name"); mark
+    // inactive → access gone within 15 min. Unknown people are never touched.
+    const runAccessSync = async () => {
+      for (const guild of client.guilds.cache.values()) {
+        try {
+          const out = await accessSync.reconcileAccess(guild);
+          if (!out) continue;
+          console.log(`[access] ${guild.name}: +${out.granted} −${out.stripped} (linked ${out.linked}), ${out.skipped} unchanged`);
+          if (out.lines.length) await notifyManagement(guild, ['🔐 Access sync (org chart → Discord)', ...out.lines].join('\n'));
+        } catch (err) {
+          console.error(`[access] ${guild.name}: ${err?.message || err}`);
+        }
+      }
+    };
+    runAccessSync();
+    setInterval(runAccessSync, 15 * 60 * 1000).unref?.();
   }
 
   // Reconciliation writes desired state with permissionOverwrites.set(). Running it from an
@@ -3665,11 +3688,17 @@ client.on('interactionCreate', async (interaction) => {
         failureReason = err?.message || String(err);
       }
 
+      // Access sync (2026-10-15): if this exact name is an active person in the OS, they get Member
+      // right now and the link is saved, so no manager has to grant anything.
+      const access = await accessSync.reconcileOne(interaction.guild, interaction.user.id).catch(() => null);
+      const unlocked = access && (access.action === 'grant' || access.action === 'link_and_grant');
+
       await interaction.editReply({
         content: nicknameSet
           ? [`✅ Thanks — you will show up as **${nickname}**.`,
              clash ? `\n⚠ Heads up: **${clash.displayName}** already goes by that name. A manager will sort it out.` : '',
-             '\nA manager adds you to your market next — your market channel appears once they do.'].join('')
+             unlocked ? '\nYou\'re in. The team channels are open to you now; your market channel appears once your manager adds you.'
+                      : '\nA manager adds you to your market next — your market channel appears once they do.'].join('')
           : `✅ Got it — **${nickname}**.\nPulse could not set it automatically (your role sits above the bot), so a manager will apply it. Nothing else needed from you.`,
       }).catch(() => {});
 

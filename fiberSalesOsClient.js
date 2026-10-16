@@ -60,8 +60,40 @@ async function postBlitzMove({ market, name, location }, fetchImpl = fetch) {
   }
 }
 
+/** Who is active / inactive on the org chart, with Discord ids (access sync, 2026-10-15). Never throws. */
+async function fetchAccessRoster(fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true, status: 'SYNC_DISABLED' };
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/access`, { headers: { 'x-pulse-os-secret': osSecret() } });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    return { ok: true, active: json?.data?.active || [], inactive: json?.data?.inactive || [] };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+}
+
+/** Link a Discord account to the one active person with exactly that name. Never throws. */
+async function postDiscordLink({ discordUserId, name }, fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true };
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/access`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-pulse-os-secret': osSecret() },
+      body: JSON.stringify({ discordUserId, name }),
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    return { ok: true, ...(json?.data || {}) };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+}
+
 module.exports = {
   isFiberSalesOsConfigured,
   postTfiberDiscordProof,
   postBlitzMove,
+  fetchAccessRoster,
+  postDiscordLink,
 };
