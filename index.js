@@ -134,6 +134,20 @@ const {
 const { postTfiberDiscordProof, postBlitzMove } = require('./fiberSalesOsClient');
 const accessSync = require('./access-sync');
 const blitzSeat = require('./blitz-seat');
+const boardScope = require('./board-scope');
+
+/** Owner sees every market on /master and /markets; everyone else sees their leaderboard group. */
+function isOwnerViewer(userId, member) {
+  if (isAdmin(userId)) return true;
+  if (member?.permissions?.has?.(PermissionsBitField.Flags.Administrator)) return true;
+  return Boolean(member?.roles?.cache?.some?.((r) => r.name === 'Owner'));
+}
+
+/** Cross-market boards follow the fibersales.co leaderboard rules (owner 2026-10-15). */
+async function scopeLogsForViewer(logs, userId, member) {
+  const scope = await boardScope.viewerScope(userId, isOwnerViewer(userId, member));
+  return scope ? logs.filter(scope) : logs;
+}
 const { fetchAccessRoster } = require('./fiberSalesOsClient');
 
 /** Discord follows the blitz board (owner 2026-10-15): put linked people into their blitz chat. */
@@ -679,7 +693,7 @@ async function handlePhase3Master(interaction, period = 'alltime') {
 
   await interaction.deferReply();
   const data = await readLeaderboard();
-  const allLogs = approvedDealLogs(activeDealLogs(data));
+  const allLogs = await scopeLogsForViewer(approvedDealLogs(activeDealLogs(data)), interaction.user.id, interaction.member);
   const logs = filterPhase3Timeframe(allLogs, timeframe, data);
   const hour = localHour(new Date(), getTimeZone());
   const showQuarter = timeframe === 'daily';
@@ -705,8 +719,9 @@ async function handleQuarter(interaction) {
   });
 }
 
-function buildMarketsBoardContent(data) {
-  const logs = approvedDealLogs(activeDealLogs(data));
+function buildMarketsBoardContent(data, scope = null) {
+  const all = approvedDealLogs(activeDealLogs(data));
+  const logs = scope ? all.filter(scope) : all;
   const today = filterToday(logs, getTimeZone());
   const week = filterByWeekId(logs, data.metadata.weekId);
   const todayRows = aggregateMarkets(today);
@@ -733,7 +748,7 @@ function buildMarketsBoardContent(data) {
     lines.push(`${medal} **${r.marketName}** · **${r.week}** week · **${r.today}** today`);
   }
   if (!rows.length) lines.push('_No deals logged this week yet._');
-  lines.push(`**Company-wide** · **${week.length}** week · **${today.length}** today`);
+  lines.push(`**${scope ? "Your board" : "Company-wide"}** · **${week.length}** week · **${today.length}** today`);
   return compactJoin(lines);
 }
 
@@ -760,11 +775,11 @@ function buildMyDealsContent(channel, userId, data, displayName) {
   ]);
 }
 
-async function buildTextLeaderboardContent(channel, intent, data) {
+async function buildTextLeaderboardContent(channel, intent, data, viewer = {}) {
   if (intent.cmd === 'master') {
     const period = intent.period || 'alltime';
     const timeframe = period === 'week' ? 'weekly' : period;
-    const allLogs = approvedDealLogs(activeDealLogs(data));
+    const allLogs = await scopeLogsForViewer(approvedDealLogs(activeDealLogs(data)), viewer.id, viewer.member);
     const logs = filterPhase3Timeframe(allLogs, timeframe, data);
     return formatLeaderboard({
       scope: 'master',
@@ -838,7 +853,7 @@ async function handleTextCommand(message, intent) {
     }
     if (intent.cmd === 'markets') {
       const data = await readLeaderboard();
-      return reply(buildMarketsBoardContent(data));
+      return reply(buildMarketsBoardContent(data, await boardScope.viewerScope(message.author.id, isOwnerViewer(message.author.id, message.member))));
     }
     if (intent.cmd === 'quarter') {
       return reply(formatQuarterStatus(localHour(new Date(), getTimeZone())));
@@ -900,7 +915,7 @@ async function handleTextLeaderboard(message, intent) {
 
   try {
     const data = await readLeaderboard();
-    const content = await buildTextLeaderboardContent(dealChannel || message.channel, intent, data);
+    const content = await buildTextLeaderboardContent(dealChannel || message.channel, intent, data, { id: message.author.id, member: message.member });
     if (!content) return;
     const sent = await message.channel.send({ content, allowedMentions: { parse: [] } }).catch((err) => {
       console.error('[Pulse] Text leaderboard send failed:', err.stack || err.message || err);
@@ -2917,7 +2932,8 @@ async function handleAdminMarketStatus(interaction) {
 async function handleMarkets(interaction) {
   await interaction.deferReply();
   const data = await readLeaderboard();
-  await interaction.editReply({ content: buildMarketsBoardContent(data), embeds: [] });
+  const scope = await boardScope.viewerScope(interaction.user.id, isOwnerViewer(interaction.user.id, interaction.member));
+  await interaction.editReply({ content: buildMarketsBoardContent(data, scope), embeds: [] });
 }
 
 async function handleAdminStatus(interaction) {
