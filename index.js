@@ -202,13 +202,15 @@ async function runWhoIsPass(guild) {
   const store = joinMatch.load();
   const memberRole = guild.roles.cache.find((r) => r.name === 'Member');
   const linkedIds = new Set((roster.active || []).concat(roster.inactive || []).map((p) => p.discordUserId).filter(Boolean));
-  const members = [...(await guild.members.fetch()).values()].map((m) => ({
+  // Access sync just fetched every member; reuse that list (a second full fetch right after gets rate-limited).
+  const list = guild.members.cache.size > 1 ? guild.members.cache : await guild.members.fetch();
+  const members = [...list.values()].map((m) => ({
     id: m.id, isBot: m.user.bot, joinedAt: m.joinedTimestamp || 0,
     hasMember: Boolean(memberRole && m.roles.cache.has(memberRole.id)),
     protected: m.roles.cache.some((r) => ['Owner', 'Manager', 'Pulse', 'Bot'].includes(r.name)),
   }));
   for (const m of joinMatch.whoToAsk(members, linkedIds, store.asked, Date.now())) {
-    if (await askWhoIs(guild, m.id, roster).catch(() => false)) store.asked[m.id] = new Date().toISOString();
+    if (await askWhoIs(guild, m.id, roster).catch((err) => { console.error(`[whois] ask ${m.id}: ${err?.message || err}`); return false; })) store.asked[m.id] = new Date().toISOString();
   }
   joinMatch.save(store);
 }

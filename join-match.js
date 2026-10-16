@@ -57,7 +57,7 @@ function pickerOptions(roster) {
   return unlinkedHumans(roster)
     .sort((a, b) => b.since.localeCompare(a.since) || a.name.localeCompare(b.name))
     .slice(0, 25)
-    .map((h) => ({ label: h.name.slice(0, 100), value: `${h.people[0].kind}:${h.people[0].id}`, description: h.since ? `Added ${h.since}` : undefined }));
+    .map((h) => ({ label: h.name.slice(0, 100), value: `${h.people[0].kind}:${h.people[0].id}`, ...(h.since ? { description: `Added ${h.since}` } : {}) }));
 }
 
 /** Members to ask about: human, no Member role, joined 10+ min ago, not asked yet, not linked. */
@@ -66,37 +66,54 @@ function whoToAsk(members, linkedIds, asked, now) {
   return members.filter((m) => !m.isBot && !m.hasMember && !m.protected && !linkedIds.has(m.id) && !asked[m.id] && now - m.joinedAt >= ASK_AFTER_MS && now - m.joinedAt <= 7 * 24 * 60 * 60 * 1000);
 }
 
-/** Mint invites for unlinked humans; retire invites of people who got linked or left the chart. */
+/** Read-modify-write so a join that consumes a code mid-run is never overwritten by the mint pass. */
+function update(fn) { const s = load(); fn(s); save(s); return s; }
+
+let minting = false; // one pass at a time: minting 70+ invites outlasts the 3-minute timer
+
+/** Mint invites for unlinked humans; retire invites of people who got linked or left the chart;
+ *  delete stray one-use #welcome invites Pulse made that nothing points to (self-heal). */
 async function mintPass(guild, roster, { welcomeChannelName, log = console.log } = {}) {
-  const store = load();
-  const humans = unlinkedHumans(roster);
-  const wanted = new Set(humans.flatMap((h) => h.keys));
-  const haveKeys = new Set(Object.values(store.invites).flatMap((r) => r.keys));
-  const welcome = guild.channels.cache.find((c) => c.name === welcomeChannelName && c.isTextBased?.());
-  const set = [];
-  const remove = [];
-  if (welcome) {
-    for (const h of humans) {
-      if (h.keys.some((k) => haveKeys.has(k))) continue;
-      try {
-        const inv = await welcome.createInvite({ maxAge: 0, maxUses: 1, unique: true, reason: `Personal invite: ${h.name}` });
-        store.invites[inv.code] = { keys: h.keys, name: h.name, uses: 0 };
-        for (const p of h.people) set.push({ kind: p.kind, id: p.id, code: inv.code });
-      } catch (err) { log(`[join] invite for ${h.name} failed: ${err.message || err}`); }
+  if (minting) return { minted: 0, retired: 0, skipped: true };
+  minting = true;
+  let minted = 0;
+  let retired = 0;
+  try {
+    const humans = unlinkedHumans(roster);
+    const wanted = new Set(humans.flatMap((h) => h.keys));
+    const welcome = guild.channels.cache.find((c) => c.name === welcomeChannelName && c.isTextBased?.());
+    if (welcome) {
+      for (const h of humans) {
+        const haveKeys = new Set(Object.values(load().invites).flatMap((r) => r.keys));
+        if (h.keys.some((k) => haveKeys.has(k))) continue;
+        try {
+          const inv = await welcome.createInvite({ maxAge: 0, maxUses: 1, unique: true, reason: `Personal invite: ${h.name}` });
+          update((st) => { st.invites[inv.code] = { keys: h.keys, name: h.name, uses: 0 }; });
+          const r = await postInviteCodes({ set: h.people.map((p) => ({ kind: p.kind, id: p.id, code: inv.code })) });
+          if (!r.ok) log(`[join] OS invite sync failed for ${h.name}: ${r.message || r.status}`);
+          minted++;
+        } catch (err) { log(`[join] invite for ${h.name} failed: ${err.message || err}`); }
+      }
     }
+    for (const [code, rec] of Object.entries(load().invites)) {
+      if (rec.keys.some((k) => wanted.has(k))) continue;
+      await guild.invites.delete(code, 'Person linked or inactive').catch(() => null);
+      update((st) => { delete st.invites[code]; });
+      await postInviteCodes({ remove: rec.keys });
+      retired++;
+    }
+    const known = new Set(Object.keys(load().invites));
+    const botId = guild.members.me?.id;
+    const live = await guild.invites.fetch().catch(() => null);
+    for (const inv of live ? live.values() : []) {
+      if (inv.inviterId === botId && inv.maxUses === 1 && inv.channel?.name === welcomeChannelName && !known.has(inv.code)) {
+        await inv.delete('Stray personal invite').catch(() => null);
+      }
+    }
+  } finally {
+    minting = false;
   }
-  for (const [code, rec] of Object.entries(store.invites)) {
-    if (rec.keys.some((k) => wanted.has(k))) continue;
-    await guild.invites.delete(code, 'Person linked or inactive').catch(() => null);
-    delete store.invites[code];
-    remove.push(...rec.keys);
-  }
-  save(store);
-  if (set.length || remove.length) {
-    const r = await postInviteCodes({ set, remove });
-    if (!r.ok) log(`[join] OS invite sync failed: ${r.message || r.status}`);
-  }
-  return { minted: set.length, retired: remove.length };
+  return { minted, retired };
 }
 
 /** Called first thing in guildMemberAdd. Returns { people, name } when a personal invite was used. */
