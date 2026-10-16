@@ -61,7 +61,11 @@ function deriveLeaderboardMovement({ beforeRows, afterRows, userId }) {
   const enteredTop3 = afterUser.rank <= 3 && (beforeUser?.rank || 999) > 3;
   const passedRepName =
     beforeUser && afterUser.rank < beforeUser.rank
-      ? beforeRanked.find((r) => r.rank === afterUser.rank && r.userId !== userId)?.displayName || null
+      ? (() => {
+        // fibersales.co name, same as the boards (owner 2026-10-16).
+        const passed = beforeRanked.find((r) => r.rank === afterUser.rank && r.userId !== userId);
+        return passed ? require('./real-names').realName(passed.userId, passed.displayName) || null : null;
+      })()
       : null;
   const topTotal = afterRanked[0]?.total || 0;
   const oneAwayFromFirst = afterUser.rank > 1 && topTotal > 0 && afterUser.total === topTotal - 1;
