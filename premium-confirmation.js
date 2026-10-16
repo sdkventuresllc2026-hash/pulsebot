@@ -43,6 +43,13 @@ const PERSONAL_EVENTS = new Set([
   'hat_trick',
   'five_day',
   'ten_day',
+  'day_4',
+  'day_6',
+  'day_7',
+  'day_8',
+  'day_9',
+  'day_15',
+  'day_20',
   'personal_best',
   'comeback',
   'took_first',
@@ -150,33 +157,34 @@ function selectClosingLine(ctx) {
 }
 
 /** Deal confirmation: one bank line, no rep/speed repeat (header has both). */
+/** Events that are not a real moment: no line on the deal log (owner 2026-10-16). */
+const ROUTINE_EVENTS = new Set(['fallback', 'momentum', 'q1', 'q2', 'q3', 'q4', 'pregame', 'overtime', 'late_night', 'early_morning', 'culture']);
+
 function buildDealHypeLine({ picked, displayName, movement }) {
-  if (!picked) return null;
+  if (!picked || ROUTINE_EVENTS.has(picked.event)) return null;
 
   if (picked.event === 'passed_rep' && movement?.passedRepName) {
     return `**Passed ${movement.passedRepName}.**`;
   }
 
   const text = picked.text || '';
-  if (!isDealLogSafeLine(text)) return '**On the board.**';
-  if (displayName && text.toLowerCase().includes(String(displayName).toLowerCase())) {
-    return '**On the board.**';
-  }
-  if (/\{otherrep\}/i.test(text) && !movement?.passedRepName) return '**On the board.**';
-  return text || '**On the board.**';
+  if (!isDealLogSafeLine(text)) return null;
+  if (displayName && text.toLowerCase().includes(String(displayName).toLowerCase())) return null;
+  if (/\{otherrep\}/i.test(text) && !movement?.passedRepName) return null;
+  return text || null;
 }
 
 function buildPremiumDealConfirmation(ctx) {
   const { displayName, speeds } = ctx;
 
-  // Owner 2026-10-16: plain header with the fibersales.co name. "Logged: Jadin Kent · 1 Gig · 6 today".
+  // Owner 2026-10-16: "✅ **Jadin Kent** · 1 Gig · 3 today" with the fibersales.co name; the rep is
+  // the boldest thing. A hype line follows only on a real moment (buildDealHypeLine).
   const name = realName(ctx.userId, displayName);
   const today = Number(ctx.dealsTodayAfter) > 0 ? ` · ${ctx.dealsTodayAfter} today` : '';
   const header = speeds.length === 1
-    ? `Logged: ${name} · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}${today}`
-    : `Logged: ${name} · ${speeds.length} deals${today}\n${formatMultiSpeedLine(speeds)}`;
+    ? `✅ **${name}** · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}${today}`
+    : `✅ **${name}** · ${speeds.length} deals${today}\n${formatMultiSpeedLine(speeds)}`;
 
-  // Owner 2026-10-16 (later): keep the hype line ("Three on the day.") - the energy stays, only the clutter went.
   const parts = [header];
   if (ctx.hypeLine) parts.push(ctx.hypeLine);
   if (ctx.hasCustomerOnFile) parts.push('Customer on file.');

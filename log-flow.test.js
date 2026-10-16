@@ -22,7 +22,14 @@ test('buildPremiumDealConfirmation is a plain header plus the hype line', () => 
     dealsTodayAfter: 6,
     hypeLine: '**Five-deep.**',
   });
-  assert.equal(out, 'Logged: Jacob Arnold · 1 Gig · 6 today\n**Five-deep.**');
+  assert.equal(out, '✅ **Jacob Arnold** · 1 Gig · 6 today\n**Five-deep.**');
+});
+
+test('routine events get no hype line on the deal log (owner 2026-10-16)', () => {
+  for (const event of ['fallback', 'momentum', 'q3', 'late_night']) {
+    assert.equal(buildDealHypeLine({ picked: { event, text: '**On the board.**' }, displayName: 'X', movement: {} }), null);
+  }
+  assert.equal(buildDealHypeLine({ picked: { event: 'day_7', text: '**Seven today.**' }, displayName: 'X', movement: {} }), '**Seven today.**');
 });
 
 test('buildDealHypeLine first ever does not repeat rep or speed', () => {

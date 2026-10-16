@@ -1135,15 +1135,14 @@ function selectPrimaryDealLine({ ctx, dataBefore, dataAfter, now, tz }) {
     const hour = localHour(now, tz);
 
     const eventOrder = [];
+    // Owner 2026-10-16: taking #1 beats a count line; every count from 2 to 10 (plus 15, 20) has one.
+    const COUNT_EVENTS = { 2: 'second_today', 3: 'hat_trick', 4: 'day_4', 5: 'five_day', 6: 'day_6', 7: 'day_7', 8: 'day_8', 9: 'day_9', 10: 'ten_day', 15: 'day_15', 20: 'day_20' };
     if (dealAllBefore === 0 && dealAllAfter > 0) eventOrder.push('first_ever');
+    if (movement.tookFirst) eventOrder.push('took_first');
     if (ctx.dealsTodayBefore === 0 && ctx.dealsTodayAfter > 0) eventOrder.push('first_today');
-    if (ctx.dealsTodayAfter === 2) eventOrder.push('second_today');
-    if (ctx.dealsTodayAfter === 3) eventOrder.push('hat_trick');
-    if (ctx.dealsTodayAfter === 5) eventOrder.push('five_day');
-    if (ctx.dealsTodayAfter === 10) eventOrder.push('ten_day');
+    if (COUNT_EVENTS[ctx.dealsTodayAfter]) eventOrder.push(COUNT_EVENTS[ctx.dealsTodayAfter]);
     if (ctx.dealsTodayAfter > bestBefore) eventOrder.push('personal_best');
     if (comeback) eventOrder.push('comeback');
-    if (movement.tookFirst) eventOrder.push('took_first');
     if (movement.enteredTop3) eventOrder.push('entered_top3');
     if (movement.passedRepName) eventOrder.push('passed_rep');
     if (movement.oneAwayFromFirst) eventOrder.push('one_away_first');

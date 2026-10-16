@@ -28,6 +28,8 @@ function dealCount(row) {
   return Number(row.dealCount ?? row.total ?? 0);
 }
 
+const MEDALS = ['🥇', '🥈', '🥉'];
+
 function rankLabel(index) {
   // Escaped so Discord shows "1." as typed instead of turning the board into an indented list.
   return `${index + 1}\\.`;
@@ -191,22 +193,24 @@ function leaderLine(rows) {
 function formatLeaderboard({ scope, period, rows, total, market, dateContext }) {
   const isMaster = scope === 'master';
   const name = isMaster ? 'All Markets' : market || 'Unknown Market';
-  const context = dateContext || resolveDateContext(period);
+  // "This Month · October 2026" -> "October 2026"; the month name says it.
+  const context = String(dateContext || resolveDateContext(period)).replace(/^This Month · /, '');
   const SOFT_CAP = 50;
   const allRows = Array.isArray(rows) ? rows : [];
   const safeRows = allRows.slice(0, SOFT_CAP);
-  const header = [`**${name} · ${context}**`];
+  const header = [`🏆 **${name} · ${context}**`];
 
+  // Owner 2026-10-16: medals + bold for the top three, plain numbered list below.
   const rowLine = (row, index) => {
-    const fields = [`${rankLabel(index)} ${displayRepName(row)}`, String(dealCount(row))];
+    const who = index < 3 ? `${MEDALS[index]} **${displayRepName(row)}**` : `${rankLabel(index)} ${displayRepName(row)}`;
+    const fields = [who, String(dealCount(row))];
     if (isMaster) fields.push(row.market || 'Unassigned');
     return fields.join(' · ');
   };
 
   const reps = allRows.length ? ` · ${allRows.length} rep${allRows.length === 1 ? '' : 's'}` : '';
-  const footer = [`Total: ${total} deal${total === 1 ? '' : 's'}${reps}`];
   const leader = leaderLine(safeRows);
-  if (leader) footer.push(leader);
+  const footer = [`**${total} deal${total === 1 ? '' : 's'}**${reps}${leader ? ` · ${leader}` : ''}`];
 
   // ponytail: shrink rows until under Discord's limit; the overflow note absorbs what's cut.
   let shown = safeRows.length;
