@@ -69,3 +69,10 @@ test('type-a-name search finds by first or last name', () => {
   assert.deepEqual(searchHumans(r, 'don').map((h) => h.name).sort(), ['Don Salcedo', 'Donna Lee']);
   assert.deepEqual(searchHumans(r, 'mudik'), []); // already linked
 });
+
+test('"PrettyBoy_Will" suggests William Casebolt near the top', () => {
+  const { pickerOptions } = require('./join-match');
+  const active = Array.from({ length: 30 }, (_, i) => ({ id: `n${i}`, kind: 'rep', name: `Zed Person${i}`, discordUserId: null, since: '2026-10-14', invite: true }));
+  active.push({ id: 'w', kind: 'manager', name: 'William Casebolt', discordUserId: null, since: '2026-09-20', invite: true });
+  assert.equal(pickerOptions({ active }, ['PrettyBoy_Will', 'pretty_boywill'])[0].label, 'William Casebolt');
+});

@@ -75,6 +75,9 @@ function nameScore(name, hints) {
     if (q === squash(name)) best = Math.max(best, 100);
     if (tokens.some((t) => t.length > 1 && (q.startsWith(t) || t.startsWith(q)))) best = Math.max(best, 50);
     if (tokens.some((t) => t.length > 2 && q.includes(t))) best = Math.max(best, 40);
+    // Pieces of the Discord name ("PrettyBoy_Will" -> pretty, boy, will) that start a real name token.
+    const chunks = String(h).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z]+/).filter((c) => c.length >= 3);
+    if (chunks.some((c) => tokens.some((t) => t.startsWith(c)))) best = Math.max(best, 45);
     if (tokens[0] && q[0] === tokens[0][0]) best = Math.max(best, 5);
   }
   return best;

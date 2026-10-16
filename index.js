@@ -41,6 +41,25 @@ function setNameRow() {
 }
 
 /** Post to the manager review queue. Never throws — a failed notice must not break onboarding. */
+/** Owner-only #pulse-log (2026-10-16): automatic updates (joins, matches, channel moves, access
+ *  sync) and the "Who is?" prompts. Falls back to #management if the channel is missing. */
+const PULSE_LOG_CHANNEL = (process.env.PULSE_LOG_CHANNEL || 'pulse-log').trim();
+function pulseLogChannel(guild) {
+  return guild?.channels?.cache?.find((c) => c.name === PULSE_LOG_CHANNEL && c.isTextBased?.())
+    || guild?.channels?.cache?.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
+}
+async function notifyLog(guild, content) {
+  try {
+    const ch = pulseLogChannel(guild);
+    if (!ch) return false;
+    await ch.send({ content, allowedMentions: { parse: [] } });
+    return true;
+  } catch (err) {
+    console.error('[Pulse] notifyLog failed:', err.message || err);
+    return false;
+  }
+}
+
 async function notifyManagement(guild, content) {
   try {
     const ch = guild?.channels?.cache?.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
@@ -156,7 +175,7 @@ async function seatFromBlitzBoard(guild) {
   if (!roster.ok) return null;
   const out = await blitzSeat.seatAll(guild, roster, marketAccessOpts());
   console.log(`[seat] ${guild.name}: ${out.seated} seated${out.missingChats.size ? `, no chat for: ${[...out.missingChats].join(', ')}` : ''}`);
-  if (out.lines.length) await notifyManagement(guild, ['💬 Market channels (from the fibersales.co blitz board)', ...out.lines].join('\n'));
+  if (out.lines.length) await notifyLog(guild, ['💬 Market channels (from the fibersales.co blitz board)', ...out.lines].join('\n'));
   return out;
 }
 
@@ -184,7 +203,7 @@ async function runInviteMint(guild) {
 /** "Who is @x?" in #management with a pick-list, for members still unknown after 10 minutes. */
 async function askWhoIs(guild, memberId, roster) {
   const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-  const ch = guild.channels.cache.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
+  const ch = pulseLogChannel(guild);
   const m = guild.members.cache.get(memberId) || (await guild.members.fetch(memberId).catch(() => null));
   const hints = m ? [m.displayName, m.user.username, m.user.globalName].filter(Boolean) : [];
   const options = joinMatch.pickerOptions(roster, hints);
@@ -197,14 +216,16 @@ async function askWhoIs(guild, memberId, roster) {
     components: rows,
     allowedMentions: { parse: [] },
   });
-  const st = joinMatch.load(); st.messages = st.messages || {}; st.messages[memberId] = msg.id; joinMatch.save(st);
+  const st = joinMatch.load(); st.messages = st.messages || {}; st.messages[memberId] = `${ch.id}:${msg.id}`; joinMatch.save(st);
   return true;
 }
 
 /** After a match: turn the #management prompt into the answer, wherever the match came from. */
 async function closeWhoIs(guild, memberId, text) {
-  const id = (joinMatch.load().messages || {})[memberId];
-  const ch = guild.channels.cache.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
+  const ref = String((joinMatch.load().messages || {})[memberId] || '');
+  // "channelId:messageId" since #pulse-log; a bare id is an older prompt in #management.
+  const [chId, id] = ref.includes(':') ? ref.split(':') : [null, ref];
+  const ch = chId ? guild.channels.cache.get(chId) : guild.channels.cache.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
   const msg = id && ch ? await ch.messages.fetch(id).catch(() => null) : null;
   if (msg) await msg.edit({ content: text, components: [], allowedMentions: { parse: [] } }).catch(() => null);
 }
@@ -3404,7 +3425,7 @@ async function bootstrap() {
           await runWhoIsPass(guild).catch((err) => console.error(`[whois] ${guild.name}: ${err?.message || err}`));
           if (!out) continue;
           console.log(`[access] ${guild.name}: +${out.granted} −${out.stripped} (linked ${out.linked}), ${out.skipped} unchanged`);
-          if (out.lines.length) await notifyManagement(guild, ['🔐 Access sync (org chart → Discord)', ...out.lines].join('\n'));
+          if (out.lines.length) await notifyLog(guild, ['🔐 Access sync (org chart → Discord)', ...out.lines].join('\n'));
         } catch (err) {
           console.error(`[access] ${guild.name}: ${err?.message || err}`);
         }
@@ -3478,7 +3499,7 @@ client.on('guildMemberAdd', async (member) => {
       if (done.ok) {
         const hi = member.guild.channels.cache.find((c) => c.name === WELCOME_CHANNEL && c.isTextBased?.());
         await hi?.send({ content: `👋 Welcome to **FiberSales**, <@${member.id}>. You're all set, **${done.name}**.`, allowedMentions: { users: [member.id] } }).catch(() => null);
-        await notifyManagement(member.guild, `✅ **${done.name}** joined Discord through their personal link and is set up.`);
+        await notifyLog(member.guild, `✅ **${done.name}** joined Discord through their personal link and is set up.`);
         return;
       }
     }
@@ -3487,13 +3508,13 @@ client.on('guildMemberAdd', async (member) => {
     if (!welcome) {
       // Silence here meant nobody could onboard and nobody knew. Say it where leadership will see.
       console.error(`[Pulse] #${WELCOME_CHANNEL} not found — ${member.user.username} received no welcome.`);
-      await notifyManagement(member.guild, `⚠ <@${member.id}> joined but **#${WELCOME_CHANNEL} was not found**, so they got no onboarding prompt. Create the channel or they cannot be set up.`);
+      await notifyLog(member.guild, `⚠ <@${member.id}> joined but **#${WELCOME_CHANNEL} was not found**, so they got no onboarding prompt. Create the channel or they cannot be set up.`);
       return;
     }
     const perms = welcome.permissionsFor(member.guild.members.me);
     if (!perms?.has(PermissionsBitField.Flags.SendMessages)) {
       console.error(`[Pulse] No SendMessages in #${WELCOME_CHANNEL} — ${member.user.username} received no welcome.`);
-      await notifyManagement(member.guild, `⚠ <@${member.id}> joined but Pulse cannot post in **#${WELCOME_CHANNEL}**. Grant Send Messages there.`);
+      await notifyLog(member.guild, `⚠ <@${member.id}> joined but Pulse cannot post in **#${WELCOME_CHANNEL}**. Grant Send Messages there.`);
       return;
     }
 
@@ -3887,7 +3908,7 @@ client.on('interactionCreate', async (interaction) => {
     } catch (err) {
       console.error(`[Pulse] name capture failed user=${interaction.user.id}: ${err?.message || err}`);
       await interaction.editReply({ content: 'Something went wrong saving that. A manager has been notified — you are not stuck.' }).catch(() => {});
-      await notifyManagement(interaction.guild, `⚠ Name capture failed for <@${interaction.user.id}> (\`@${interaction.user.username}\`). Set their nickname by hand.`);
+      await notifyLog(interaction.guild, `⚠ Name capture failed for <@${interaction.user.id}> (\`@${interaction.user.username}\`). Set their nickname by hand.`);
     }
     return;
   }
