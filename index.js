@@ -133,6 +133,18 @@ const {
 } = require('./gamification-engine');
 const { postTfiberDiscordProof, postBlitzMove } = require('./fiberSalesOsClient');
 const accessSync = require('./access-sync');
+const blitzSeat = require('./blitz-seat');
+const { fetchAccessRoster } = require('./fiberSalesOsClient');
+
+/** Discord follows the blitz board (owner 2026-10-15): put linked people into their blitz chat. */
+async function seatFromBlitzBoard(guild) {
+  const roster = await fetchAccessRoster();
+  if (!roster.ok) return null;
+  const out = await blitzSeat.seatAll(guild, roster, marketAccessOpts());
+  console.log(`[seat] ${guild.name}: ${out.seated} seated${out.missingChats.size ? `, no chat for: ${[...out.missingChats].join(', ')}` : ''}`);
+  if (out.lines.length) await notifyManagement(guild, ['💬 Blitz chats (fibersales.co blitz board → Discord)', ...out.lines].join('\n'));
+  return out;
+}
 const {
   requiresTfiberProof,
   extractDiscordAttachments,
@@ -3302,6 +3314,7 @@ async function bootstrap() {
       for (const guild of client.guilds.cache.values()) {
         try {
           const out = await accessSync.reconcileAccess(guild);
+          await seatFromBlitzBoard(guild).catch((err) => console.error(`[seat] ${guild.name}: ${err?.message || err}`));
           if (!out) continue;
           console.log(`[access] ${guild.name}: +${out.granted} −${out.stripped} (linked ${out.linked}), ${out.skipped} unchanged`);
           if (out.lines.length) await notifyManagement(guild, ['🔐 Access sync (org chart → Discord)', ...out.lines].join('\n'));
@@ -3692,12 +3705,14 @@ client.on('interactionCreate', async (interaction) => {
       // right now and the link is saved, so no manager has to grant anything.
       const access = await accessSync.reconcileOne(interaction.guild, interaction.user.id).catch(() => null);
       const unlocked = access && (access.action === 'grant' || access.action === 'link_and_grant');
+      // Now linked: drop them into their blitz chat right away (Discord follows the blitz board).
+      if (unlocked) seatFromBlitzBoard(interaction.guild).catch(() => null);
 
       await interaction.editReply({
         content: nicknameSet
           ? [`✅ Thanks — you will show up as **${nickname}**.`,
              clash ? `\n⚠ Heads up: **${clash.displayName}** already goes by that name. A manager will sort it out.` : '',
-             unlocked ? '\nYou\'re in. The team channels are open to you now; your market channel appears once your manager adds you.'
+             unlocked ? '\nYou\'re in. The team channels are open to you now; your crew chat opens on its own once you are on a blitz in fibersales.co.'
                       : '\nA manager adds you to your market next — your market channel appears once they do.'].join('')
           : `✅ Got it — **${nickname}**.\nPulse could not set it automatically (your role sits above the bot), so a manager will apply it. Nothing else needed from you.`,
       }).catch(() => {});
