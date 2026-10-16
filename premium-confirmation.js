@@ -169,14 +169,16 @@ function buildDealHypeLine({ picked, displayName, movement }) {
 function buildPremiumDealConfirmation(ctx) {
   const { displayName, speeds } = ctx;
 
-  // Owner 2026-10-16: plain, no hype line. "Logged: Jadin Kent · 1 Gig · 6 today".
+  // Owner 2026-10-16: plain header with the fibersales.co name. "Logged: Jadin Kent · 1 Gig · 6 today".
   const name = realName(ctx.userId, displayName);
   const today = Number(ctx.dealsTodayAfter) > 0 ? ` · ${ctx.dealsTodayAfter} today` : '';
   const header = speeds.length === 1
     ? `Logged: ${name} · ${SPEED_DISPLAY[speeds[0]] || speeds[0]}${today}`
     : `Logged: ${name} · ${speeds.length} deals${today}\n${formatMultiSpeedLine(speeds)}`;
 
+  // Owner 2026-10-16 (later): keep the hype line ("Three on the day.") - the energy stays, only the clutter went.
   const parts = [header];
+  if (ctx.hypeLine) parts.push(ctx.hypeLine);
   if (ctx.hasCustomerOnFile) parts.push('Customer on file.');
   return compactJoin(parts);
 }

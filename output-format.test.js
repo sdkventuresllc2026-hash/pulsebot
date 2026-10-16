@@ -184,7 +184,7 @@ test('buildPremiumDealConfirmation no extra blank lines', () => {
     hypeLine: '**First of the day** for Test Rep.',
   });
   assertCleanOutput(out, { maxLines: 4 });
-  assert.equal(out, 'Logged: Test Rep · 1 Gig', 'plain, no hype line');
+  assert.equal(out, 'Logged: Test Rep · 1 Gig\n**First of the day** for Test Rep.');
   assert.equal((out.match(/\n\n/g) || []).length, 0, 'no double newlines');
 });
 
