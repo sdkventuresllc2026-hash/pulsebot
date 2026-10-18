@@ -232,6 +232,20 @@ function formatLeaderboard({ scope, period, rows, total, market, dateContext, qu
   return out;
 }
 
+/** fibersales.co signature gold (--primary in the app's globals.css). */
+const BRAND_GOLD = 0xe59b2c;
+
+/**
+ * Owner 2026-10-16: every report (boards, markets, your deals, quarter) posts as one card, so two
+ * reports in a row never run together (Discord groups back-to-back messages with no gap).
+ * First line of the text = card title; the rest = card body.
+ */
+function asCard(text) {
+  const [first, ...rest] = String(text || '').split('\n');
+  const description = rest.join('\n').replace(/^\n+/, '').trim();
+  return { title: first.replace(/\*\*/g, '').slice(0, 256), ...(description ? { description } : {}), color: BRAND_GOLD };
+}
+
 function formatPhase3Leaderboard({ title, rows, totalDeals, dateHeader, quarterHeader }) {
   const [market = title] = String(title || '').split(' · ');
   const t = String(title || '');
@@ -283,4 +297,5 @@ module.exports = {
   formatLeaderboard,
   formatPhase3Leaderboard,
   formatPhase3Master,
+  asCard,
 };

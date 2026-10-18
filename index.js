@@ -141,6 +141,7 @@ const {
   formatPhase3Master,
   formatLeaderboard,
   resolveDateContext,
+  asCard,
 } = require('./leaderboard-format');
 const { compactJoin } = require('./message-format');
 const {
@@ -771,14 +772,14 @@ async function handlePhase3Leaderboard(interaction, { timeframe, label }) {
   const showQuarter = timeframe === 'daily';
 
   await interaction.editReply({
-    content: formatPhase3Leaderboard({
+    content: '',
+    embeds: [asCard(formatPhase3Leaderboard({
       title: `${heading} · ${label}`,
       rows: phase3Rows(logs),
       totalDeals: logs.length,
       dateHeader: resolveDateContext(timeframe, new Date(), getTimeZone()),
       quarterHeader: showQuarter ? formatQuarterHeader(hour) : null,
-    }),
-    embeds: [],
+    }))],
   });
 }
 
@@ -808,14 +809,14 @@ async function handlePhase3Master(interaction, period = 'alltime') {
   const showQuarter = timeframe === 'daily';
 
   await interaction.editReply({
-    content: formatPhase3Master(
+    content: '',
+    embeds: [asCard(formatPhase3Master(
       phase3Rows(logs),
       logs.length,
       phase3PeriodLabel(timeframe),
       showQuarter ? formatQuarterHeader(hour) : null,
       resolveDateContext(timeframe, new Date(), getTimeZone()),
-    ),
-    embeds: [],
+    ))],
   });
 }
 
@@ -823,8 +824,8 @@ async function handleQuarter(interaction) {
   await interaction.deferReply();
   const hour = localHour(new Date(), getTimeZone());
   await interaction.editReply({
-    content: formatQuarterStatus(hour),
-    embeds: [],
+    content: '',
+    embeds: [asCard(formatQuarterStatus(hour))],
   });
 }
 
@@ -850,14 +851,14 @@ function buildMarketsBoardContent(data, scope = null) {
     })
     .sort((a, b) => b.week - a.week || b.today - a.today || a.marketName.localeCompare(b.marketName));
 
-  const lines = ['**Markets · This Week**', ''];
+  const lines = ['🏆 **Markets · This Week**', ''];
   for (let i = 0; i < rows.length; i += 1) {
     const r = rows[i];
-    lines.push(`${i + 1}\\. ${r.marketName} · ${r.week} this week · ${r.today} today`);
+    lines.push(`${i + 1}. ${r.marketName} · ${r.week} this week · ${r.today} today`);
   }
   if (!rows.length) lines.push('No deals logged this week yet.');
-  lines.push('', `${scope ? 'Your board' : 'Company'}: ${week.length} this week · ${today.length} today`);
-  return compactJoin(lines);
+  lines.push('', `**${week.length} deals** this week · ${today.length} today${scope ? '' : ' · all markets'}`);
+  return lines.join('\n'); // keep the blank lines: a line right under a list folds into it
 }
 
 function buildMyDealsContent(channel, userId, data, displayName) {
@@ -954,17 +955,18 @@ function messageChannelIsDealApproved(message, dealChannel) {
 /** Plain-text twins of /mydeals, /remove-last, /markets and /quarter. */
 async function handleTextCommand(message, intent) {
   const reply = (content) => message.reply({ content, allowedMentions: { parse: [] } }).catch(() => {});
+  const replyCard = (text) => message.reply({ embeds: [asCard(text)], allowedMentions: { parse: [] } }).catch(() => {});
   try {
     if (intent.cmd === 'mydeals') {
       const data = await readLeaderboard();
-      return reply(buildMyDealsContent(message.channel, message.author.id, data, message.member?.displayName || message.author.username));
+      return replyCard(buildMyDealsContent(message.channel, message.author.id, data, message.member?.displayName || message.author.username));
     }
     if (intent.cmd === 'markets') {
       const data = await readLeaderboard();
-      return reply(buildMarketsBoardContent(data, await boardScope.viewerScope(message.author.id, isOwnerViewer(message.author.id, message.member))));
+      return replyCard(buildMarketsBoardContent(data, await boardScope.viewerScope(message.author.id, isOwnerViewer(message.author.id, message.member))));
     }
     if (intent.cmd === 'quarter') {
-      return reply(formatQuarterStatus(localHour(new Date(), getTimeZone())));
+      return replyCard(formatQuarterStatus(localHour(new Date(), getTimeZone())));
     }
     if (intent.cmd === 'undo') {
       const removed = await removeLastDealForUser(
@@ -1025,7 +1027,7 @@ async function handleTextLeaderboard(message, intent) {
     const data = await readLeaderboard();
     const content = await buildTextLeaderboardContent(dealChannel || message.channel, intent, data, { id: message.author.id, member: message.member });
     if (!content) return;
-    const sent = await message.channel.send({ content, allowedMentions: { parse: [] } }).catch((err) => {
+    const sent = await message.channel.send({ embeds: [asCard(content)], allowedMentions: { parse: [] } }).catch((err) => {
       console.error('[Pulse] Text leaderboard send failed:', err.stack || err.message || err);
       return null;
     });
@@ -1060,8 +1062,8 @@ async function handlePhase3MyDeals(interaction) {
   const data = await readLeaderboard();
   const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
   await interaction.editReply({
-    content: buildMyDealsContent(interaction.channel, interaction.user.id, data, displayName),
-    embeds: [],
+    content: '',
+    embeds: [asCard(buildMyDealsContent(interaction.channel, interaction.user.id, data, displayName))],
   });
 }
 
@@ -3064,7 +3066,7 @@ async function handleMarkets(interaction) {
   await interaction.deferReply();
   const data = await readLeaderboard();
   const scope = await boardScope.viewerScope(interaction.user.id, isOwnerViewer(interaction.user.id, interaction.member));
-  await interaction.editReply({ content: buildMarketsBoardContent(data, scope), embeds: [] });
+  await interaction.editReply({ content: '', embeds: [asCard(buildMarketsBoardContent(data, scope))] });
 }
 
 async function handleAdminStatus(interaction) {
