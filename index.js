@@ -2799,13 +2799,21 @@ async function handleMarketAdd(interaction) {
 async function handleMarketRename(interaction) {
   if (!canUseAdminCommands(interaction)) return denyAdmin(interaction);
   await interaction.deferReply({ ephemeral: true });
-  const query = interaction.options.getString('market', true);
-  const newName = (interaction.options.getString('name') || '').trim();
+  const opt = (k) => (interaction.options.getString(k) || '').trim();
   const isp = interaction.options.getString('isp'); // null = leave as is
-  const city = (interaction.options.getString('city') || '').trim();
-  const state = (interaction.options.getString('state') || '').trim();
-  if (!newName && !isp && !city && !state) return interaction.editReply({ content: 'Give a new name, a city and state, an isp, or any of those.' });
+  if (!opt('name') && !isp && !opt('city') && !opt('state')) return interaction.editReply({ content: 'Give a new name, a city and state, an isp, or any of those.' });
   try {
+    const lines = await renameMarketEverywhere(interaction.guild, { query: interaction.options.getString('market', true), newName: opt('name'), isp, city: opt('city'), state: opt('state'), by: interaction.user.tag });
+    await interaction.editReply({ content: lines.join('\n') });
+  } catch (err) {
+    await interaction.editReply({ content: `Could not rename: ${err.message || err}` });
+  }
+}
+
+/** The whole move in one place (also run by owner-approved one-time moves): market record, chat name,
+ *  the chat topic's location, role name, a note in the chat, and the blitz on fibersales.co. */
+async function renameMarketEverywhere(guild, { query, newName = '', isp = null, city = '', state = '', by = 'Pulse' }) {
+  {
     const { market: m, previousName } = renameMarket(query, {
       marketName: newName || null,
       ...(isp ? { isp } : {}),
@@ -2818,34 +2826,47 @@ async function handleMarketRename(interaction) {
     if (city || state) lines.push(`📍 ${location}`);
     if (isp) lines.push(`✅ Sells **${m.isp}**${/t[-\s]?fiber|t[-\s]?mobile|tmo/i.test(m.isp || '') ? '. Every deal needs a TMO screenshot.' : '. No T-Fiber screenshot requests.'}`);
 
-    if (newName) {
-      const slug = m.marketName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      for (const channelId of m.channelIds || []) {
-        const channel = interaction.guild.channels.cache.get(channelId) || (await interaction.guild.channels.fetch(channelId).catch(() => null));
-        if (!channel) continue;
+    for (const channelId of m.channelIds || []) {
+      const channel = guild.channels.cache.get(channelId) || (await guild.channels.fetch(channelId).catch(() => null));
+      if (!channel) continue;
+      if (newName) {
+        const slug = m.marketName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
         const prefix = (channel.name.match(/^[^a-z0-9]*/i) || [''])[0]; // keep the emoji the channel already has
         const nextName = `${prefix}${slug}`;
         if (channel.name !== nextName) {
-          const renamed = await channel.setName(nextName, `/market rename by ${interaction.user.tag}`).then(() => true).catch((err) => { lines.push(`⚠️ Could not rename #${channel.name}: ${err.message || err}`); return false; });
+          const renamed = await channel.setName(nextName, `/market rename by ${by}`).then(() => true).catch((err) => { lines.push(`⚠️ Could not rename #${channel.name}: ${err.message || err}`); return false; });
           if (renamed) lines.push(`✅ Chat is now #${nextName}. Same history, same people.`);
         }
-        await channel.send({ content: `Now knocking ${m.marketName}${location ? ` (${location})` : ''}.` }).catch(() => null);
       }
-      if (m.roleId) {
-        const role = interaction.guild.roles.cache.get(m.roleId) || (await interaction.guild.roles.fetch(m.roleId).catch(() => null));
-        if (role && role.name !== m.marketName) await role.setName(m.marketName, `/market rename by ${interaction.user.tag}`).catch((err) => lines.push(`⚠️ Could not rename the role: ${err.message || err}`));
+      // Topics read "City, ST · Carrier. Log a deal ..." (2026-10-16): keep the location part current.
+      if (location && channel.topic?.includes(' · ') && !channel.topic.startsWith(`${location} ·`)) {
+        await channel.setTopic(channel.topic.replace(/^[^·]+·/, `${location} ·`)).catch(() => null);
       }
+      if (newName) await channel.send({ content: `Now knocking ${m.marketName}${location ? ` (${location})` : ''}.` }).catch(() => null);
+    }
+    if (newName && m.roleId) {
+      const role = guild.roles.cache.get(m.roleId) || (await guild.roles.fetch(m.roleId).catch(() => null));
+      // Keep a prefix like "Pulse · " on the role name.
+      if (role && !role.name.endsWith(m.marketName)) await role.setName(role.name.includes(previousName) ? role.name.replace(previousName, m.marketName) : m.marketName, `/market rename by ${by}`).catch((err) => lines.push(`⚠️ Could not rename the role: ${err.message || err}`));
     }
 
     const os = await postBlitzMove({ market: previousName, name: newName || null, location: location || null });
     if (os.ok && os.moved) lines.push(`✅ fibersales.co/blitzes updated: **${os.blitz?.name}**${os.blitz?.location ? ` · ${os.blitz.location}` : ''}.`);
     else if (os.ok) lines.push(`ℹ️ No blitz named **${previousName}** on fibersales.co/blitzes. Edit it there if one exists.`);
     else if (!os.disabled) lines.push(`⚠️ fibersales.co not updated (${os.message}). Edit the blitz on /blitzes.`);
-
-    await interaction.editReply({ content: lines.join('\n') });
-  } catch (err) {
-    await interaction.editReply({ content: `Could not rename: ${err.message || err}` });
+    return lines;
   }
+}
+
+/** Owner-approved crew move, run once per data volume (Baton Rouge crew to Slidell, 2026-10-19). Result goes to #pulse-log. */
+async function moveOnce(key, query, opts) {
+  const st = joinMatch.load();
+  if (st.moved?.[key]) return;
+  const guild = client.guilds.cache.get(process.env.GUILD_ID) || client.guilds.cache.first();
+  if (!guild) return;
+  const lines = await renameMarketEverywhere(guild, { query, ...opts, by: 'owner request' });
+  const st2 = joinMatch.load(); st2.moved = { ...(st2.moved || {}), [key]: new Date().toISOString() }; joinMatch.save(st2);
+  await notifyLog(guild, ['🚚 Crew moved', ...lines].join('\n'));
 }
 
 /** /market cleanup — retire markets whose channel is gone.
@@ -3532,6 +3553,7 @@ const onClientReady = async () => {
   bootstrapped = true;
   await bootstrap();
   replayOct19Hammond().catch((err) => console.error('[replay] oct19:', err?.message || err));
+  moveOnce('oct19-slidell', 'Baton Rouge', { newName: 'Slidell', city: 'Slidell', state: 'LA' }).catch((err) => console.error('[move]', err?.message || err));
 };
 
 /** ponytail: one-time replay (owner 2026-10-19) of today's #hammond posts the old code skipped:
