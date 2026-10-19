@@ -33,9 +33,23 @@ function exactMarket(name) {
   return r && r.matchedBy !== 'fuzzy' ? r.market : null;
 }
 
+/** Linked, working (roster `invite`), in the server, and on no blitz card under any of their records. */
+function noCardPeople(guild, roster) {
+  const active = roster.active || [];
+  const humansWithCard = new Set(active.filter((p) => p.blitz).map((p) => p.human || p.name));
+  const out = new Map();
+  for (const p of active) {
+    if (!p.discordUserId || !p.invite || humansWithCard.has(p.human || p.name)) continue;
+    const m = guild.members.cache.get(p.discordUserId);
+    if (!m || m.user.bot || m.roles.cache.some((r) => r.name === 'Owner')) continue;
+    out.set(p.discordUserId, { discordUserId: p.discordUserId, name: p.human || p.name });
+  }
+  return [...out.values()];
+}
+
 async function seatAll(guild, roster, { managerRoleId, log = console.log } = {}) {
   const seats = blitzByDiscordId(roster);
-  const out = { seated: 0, lines: [], missingChats: new Set() };
+  const out = { seated: 0, lines: [], missingChats: new Set(), noCard: noCardPeople(guild, roster) };
   for (const [userId, blitz] of seats) {
     const member = await guild.members.fetch(userId).catch(() => null);
     if (!member) continue; // not in the server yet; picked up on a later pass
@@ -65,4 +79,4 @@ async function seatAll(guild, roster, { managerRoleId, log = console.log } = {})
   return out;
 }
 
-module.exports = { planSeat, blitzByDiscordId, seatAll };
+module.exports = { planSeat, blitzByDiscordId, seatAll, noCardPeople };

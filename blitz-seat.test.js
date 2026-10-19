@@ -31,3 +31,19 @@ test('a selling manager (rep + manager record) keeps the blitz from whichever re
   assert.equal(m.get('1'), 'Pampa');
   assert.equal(m.size, 1);
 });
+
+test('noCardPeople: linked + working + no card on any record; skips owner, idle, absent, and a selling manager whose other record has the card', () => {
+  const { noCardPeople } = require('./blitz-seat');
+  const member = (roles = []) => ({ user: { bot: false }, roles: { cache: { some: (f) => roles.map((name) => ({ name })).some(f) } } });
+  const cache = new Map([['1', member()], ['2', member(['Owner'])], ['3', member()], ['5', member()]]);
+  const guild = { members: { cache } };
+  const roster = { active: [
+    { discordUserId: '1', name: 'Ben Foran', human: 'Ben Foran', invite: true, blitz: null },
+    { discordUserId: '2', name: 'Owner', human: 'Owner', invite: true, blitz: null },
+    { discordUserId: '3', name: 'Idle Guy', human: 'Idle Guy', invite: false, blitz: null },
+    { discordUserId: '4', name: 'Not Here', human: 'Not Here', invite: true, blitz: null },
+    { discordUserId: '5', name: 'Jadin Kent', human: 'Jadin Kent', invite: true, blitz: null },
+    { discordUserId: null, name: 'Jadin Kent', human: 'Jadin Kent', invite: true, blitz: 'Michigan' },
+  ] };
+  assert.deepEqual(noCardPeople(guild, roster), [{ discordUserId: '1', name: 'Ben Foran' }]);
+});

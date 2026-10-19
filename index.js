@@ -177,6 +177,14 @@ async function seatFromBlitzBoard(guild) {
   const out = await blitzSeat.seatAll(guild, roster, marketAccessOpts());
   console.log(`[seat] ${guild.name}: ${out.seated} seated${out.missingChats.size ? `, no chat for: ${[...out.missingChats].join(', ')}` : ''}`);
   if (out.lines.length) await notifyLog(guild, ['💬 Market channels (from the fibersales.co blitz board)', ...out.lines].join('\n'));
+  // Linked and working but on no blitz card = no chat, silently (2026-10-19). Say so once per person;
+  // the flag clears when they get a card, so a later drop is reported again.
+  const st = joinMatch.load(); st.noCard = st.noCard || {};
+  const fresh = out.noCard.filter((p) => !st.noCard[p.discordUserId]);
+  for (const id of Object.keys(st.noCard)) if (!out.noCard.some((p) => p.discordUserId === id)) delete st.noCard[id];
+  for (const p of fresh) st.noCard[p.discordUserId] = new Date().toISOString();
+  joinMatch.save(st);
+  if (fresh.length) await notifyLog(guild, ['📋 On Discord but on no blitz card, so no market channel yet. Add them to a blitz on fibersales.co and the channel opens on its own.', ...fresh.map((p) => `• **${p.name}**`)].join('\n'));
   return out;
 }
 
@@ -223,13 +231,13 @@ async function askWhoIs(guild, memberId, roster) {
 }
 
 /** After a match: turn the #management prompt into the answer, wherever the match came from. */
-async function closeWhoIs(guild, memberId, text) {
+async function closeWhoIs(guild, memberId, text, { onlyIfOpen = false } = {}) {
   const ref = String((joinMatch.load().messages || {})[memberId] || '');
   // "channelId:messageId" since #pulse-log; a bare id is an older prompt in #management.
   const [chId, id] = ref.includes(':') ? ref.split(':') : [null, ref];
   const ch = chId ? guild.channels.cache.get(chId) : guild.channels.cache.find((c) => c.name === MANAGEMENT_CHANNEL && c.isTextBased?.());
   const msg = id && ch ? await ch.messages.fetch(id).catch(() => null) : null;
-  if (msg) await msg.edit({ content: text, components: [], allowedMentions: { parse: [] } }).catch(() => null);
+  if (msg && !(onlyIfOpen && !msg.content.startsWith('❓'))) await msg.edit({ content: text, components: [], allowedMentions: { parse: [] } }).catch(() => null);
 }
 
 /** How long a welcome DM gets to be answered before the #pulse-log prompt (2026-10-16). */
@@ -241,6 +249,14 @@ async function runWhoIsPass(guild) {
   const store = joinMatch.load();
   const memberRole = guild.roles.cache.find((r) => r.name === 'Member');
   const linkedIds = new Set((roster.active || []).concat(roster.inactive || []).map((p) => p.discordUserId).filter(Boolean));
+  // A prompt stays open after the person is matched another way (personal link, name match): close it
+  // so #pulse-log never shows an open "Who is?" for someone already set up (Baylan, Jafet 2026-10-17).
+  for (const id of Object.keys(store.messages || {})) {
+    if (!linkedIds.has(id) || (store.closed || {})[id]) continue;
+    const p = (roster.active || []).concat(roster.inactive || []).find((x) => x.discordUserId === id);
+    await closeWhoIs(guild, id, `✅ <@${id}> is **${p?.human || p?.name}**. Matched.`, { onlyIfOpen: true }).catch(() => null);
+    const st = joinMatch.load(); st.closed = st.closed || {}; st.closed[id] = new Date().toISOString(); joinMatch.save(st);
+  }
   // Access sync just fetched every member; reuse that list (a second full fetch right after gets rate-limited).
   const list = guild.members.cache.size > 1 ? guild.members.cache : await guild.members.fetch();
   const members = [...list.values()].map((m) => ({
@@ -2645,6 +2661,8 @@ async function handleMarketAdd(interaction) {
     if (recon?.remove?.length) lines.push(`Removed ${recon.remove.length} market role(s) with no assignment on record`);
     console.log(auditLine({ actorId: interaction.user.id, action: 'market.add.applied', marketId, targetUserId: user.id, result: 'OK', detail: `nickname=${nicknameSet}` }));
     lines.push(`Added to **${market.marketName}** (<@&${roleId}>)`);
+    // Hand moves show in #pulse-log too (2026-10-19: Ben Foran landed in Virginia with no trace).
+    await notifyLog(interaction.guild, `✋ **${realName}** added to the ${market.marketName} channel by hand (/market add by ${interaction.member?.displayName || interaction.user.username}). The blitz board is not changed.`);
     // Access sync (2026-10-15): a market add is a manager vouching for them; make sure the OS agrees
     // and the Member role follows, instead of a second manual step.
     const access = await accessSync.reconcileOne(interaction.guild, user.id).catch(() => null);
@@ -2981,6 +2999,7 @@ async function handleAdminAssignRep(interaction) {
       marketId,
       marketAccessOpts(),
     );
+    await notifyLog(interaction.guild, `✋ <@${rep.id}> added to the ${market.marketName} channel by hand (by ${interaction.member?.displayName || interaction.user.username}). The blitz board is not changed.`);
     await interaction.editReply({
       content: [
         `Assigned <@${rep.id}> to **${market.marketName}**.`,
