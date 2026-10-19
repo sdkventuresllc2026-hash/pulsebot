@@ -42,7 +42,7 @@ function noCardPeople(guild, roster) {
     if (!p.discordUserId || !p.invite || humansWithCard.has(p.human || p.name)) continue;
     const m = guild.members.cache.get(p.discordUserId);
     if (!m || m.user.bot || m.roles.cache.some((r) => r.name === 'Owner')) continue;
-    out.set(p.discordUserId, { discordUserId: p.discordUserId, name: p.human || p.name });
+    out.set(p.discordUserId, { discordUserId: p.discordUserId, name: String(p.name).replace(/\s*[—–-]\s*selling profile\s*$/i, '').trim() });
   }
   return [...out.values()];
 }

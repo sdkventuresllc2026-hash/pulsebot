@@ -20,7 +20,8 @@ const WHOIS_ID = 'pulse:whois:';
 const ASK_AFTER_MS = 10 * 60 * 1000;
 
 function load() {
-  try { const j = JSON.parse(fs.readFileSync(STORE(), 'utf8')); return { invites: j.invites || {}, asked: j.asked || {} }; } catch { return { invites: {}, asked: {} }; }
+  // Keep every field: dmed/messages/closed/noCard were dropped here, so each pass re-sent DMs and re-flagged (2026-10-19).
+  try { const j = JSON.parse(fs.readFileSync(STORE(), 'utf8')); return { ...j, invites: j.invites || {}, asked: j.asked || {} }; } catch { return { invites: {}, asked: {} }; }
 }
 function save(s) {
   try { fs.writeFileSync(STORE(), JSON.stringify(s, null, 1)); } catch (err) { console.error('[join] save failed:', err.message || err); }
