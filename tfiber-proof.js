@@ -69,9 +69,9 @@ function proofExpiresAt(now = new Date()) {
 function tfiberPlanForSpeed(speed) {
   if (speed === '2gig') return 'T-Fiber 2 Gig';
   if (speed === '1gig') return 'T-Fiber 1 Gig';
-  if (speed === '500') return 'T-Fiber 500 Mbps';
-  if (speed === '300') return 'T-Fiber 300 Mbps';
-  if (speed === '200') return 'T-Fiber 200 Mbps';
+  if (speed === '500' || speed === '500mb') return 'T-Fiber 500 Mbps';
+  if (speed === '300' || speed === '300mb') return 'T-Fiber 300 Mbps';
+  if (speed === '200' || speed === '200mb') return 'T-Fiber 200 Mbps';
   return 'T-Fiber';
 }
 

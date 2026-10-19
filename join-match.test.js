@@ -86,6 +86,7 @@ test('onboardingDm: T-Fiber gets proof + orientation; other carriers only channe
     '**Log a deal:** post your speed there, like 1g, 2g or 2x 1g.',
     '**Proof:** in the same post, add a screenshot from your T-Mobile order dashboard showing the TMO ID.',
     '**Orientation:** [fibersales.co/orientation](https://www.fibersales.co/orientation)',
+    '**Training:** [fibersales.co/training](https://www.fibersales.co/training)',
     '**Deals and pay:** [fibersales.co](https://www.fibersales.co)',
   ].join('\n'));
   const bs = onboardingDm({ name: 'Naji Woods', channelId: '2', tfiber: false });

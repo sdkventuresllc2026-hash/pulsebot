@@ -168,7 +168,7 @@ async function scopeLogsForViewer(logs, userId, member) {
   const scope = await boardScope.viewerScope(userId, isOwnerViewer(userId, member));
   return scope ? logs.filter(scope) : logs;
 }
-const { fetchAccessRoster } = require('./fiberSalesOsClient');
+const { fetchAccessRoster, postOrderDetails } = require('./fiberSalesOsClient');
 
 /** Discord follows the blitz board (owner 2026-10-15): put linked people into their blitz chat. */
 async function seatFromBlitzBoard(guild) {
@@ -306,7 +306,9 @@ const {
   describePendingProof,
   formatTfiberReminderDm,
   formatOpenProofsForAdmin,
+  tfiberPlanForSpeed,
 } = require('./tfiber-proof');
+const { speedFromPlan, speedInText, isUpgrade, parseInstallTime } = require('./deal-details');
 const {
   DEFAULT_WINDOW_MS: TFIBER_CHANNEL_PROOF_WINDOW_MS,
   createTfiberProofBuffer,
@@ -1593,16 +1595,7 @@ async function handleTfiberProofChannelUpload(message, channel) {
     });
     pending = recent.pending;
   }
-  if (!pending) {
-    if (!tmoOrderId) return false;
-    const result = await submitStandaloneTfiberProofUpload({ message, channel, hasScreenshot, enrichedPayload });
-    if (!result) return false;
-    await message.reply({
-      content: formatTfiberProofLine(result) || 'Proof received.',
-      allowedMentions: { parse: [] },
-    }).catch(() => {});
-    return true;
-  }
+  if (!pending) return handleUnclaimedScreenshot({ message, channel, hasScreenshot, tmoOrderId, enrichedPayload });
   if (!channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId)) return false;
 
   const result = await submitTfiberProofForPending({
@@ -1627,6 +1620,117 @@ async function handleTfiberProofChannelUpload(message, channel) {
     return true;
   }
   await message.reply({ content: proofLine, allowedMentions: { parse: [] } }).catch(() => {});
+  return true;
+}
+
+/**
+ * A screenshot with no open deal waiting for it (owner 2026-10-19, "bulletproof" proof):
+ *  - its TMO order already came in from Discord → the rest of that deal (contact, install part):
+ *    fill the order, fix the original deal post, ✅ on the screenshot;
+ *  - a TMO order Discord has never seen → a NEW deal, logged like typing the speed: the speed is read
+ *    off the screenshot, else the rep taps it (1 Gig / 2 Gig / 300 Mbps);
+ *  - no TMO id readable → the rest of their latest deal (last 6 hours), or nothing.
+ */
+async function handleUnclaimedScreenshot({ message, channel, hasScreenshot, tmoOrderId, enrichedPayload }) {
+  if (!enrichedPayload && hasScreenshot) {
+    enrichedPayload = await enrichTfiberProofPayload({ rawText: message.content || null, attachments: extractDiscordAttachments(message), hasScreenshot, tmoOrderId });
+  }
+  const fixPost = async (det) => {
+    if (det.sourceMessageId) await updateDealPostProofLine({ channelId: det.sourceChannelId || channel.id, messageId: det.sourceMessageId }, formatTfiberProofLine({ status: 'PROOF_ATTACHED', missingFields: det.missingFields }));
+    await message.react('✅').catch(() => {});
+    return true;
+  };
+  if (!tmoOrderId) {
+    if (!hasScreenshot || !enrichedPayload?.extracted) return false;
+    const det = await postOrderDetails({ discordUserId: message.author.id, currentMessageId: message.id, extracted: enrichedPayload.extracted, asOf: message.createdAt?.toISOString?.() });
+    return det?.found && det.sourceMessageId ? fixPost(det) : false;
+  }
+  const result = await submitStandaloneTfiberProofUpload({ message, channel, hasScreenshot, enrichedPayload });
+  if (!result) return false;
+  const det = result.orderId ? await postOrderDetails({ discordUserId: message.author.id, currentMessageId: message.id, orderId: result.orderId }) : null;
+  if (det?.found && det.sourceMessageId) return fixPost(det);
+  const proofLine = formatTfiberProofLine(det?.found ? { ...result, missingFields: det.missingFields } : result) || 'Proof received.';
+  const speed = speedFromPlan(enrichedPayload?.extracted?.planName);
+  if (speed) {
+    await logSingleDeal({ message, channel, speed, proofLine });
+    if (result.orderId) await postOrderDetails({ discordUserId: message.author.id, orderId: result.orderId, plan: tfiberPlanForSpeed(speed) });
+    return true;
+  }
+  const answer = { content: `${proofLine}\nWhich speed was it? Tap it to log the deal.`, components: [speedButtons(message.id)], allowedMentions: { parse: [] } };
+  const post = await findPulseAnswer(channel, message.id);
+  await (post ? post.edit(answer) : message.reply(answer)).catch(() => {});
+  return true;
+}
+
+const SPEED_BTN = 'pulse:speed:';
+function speedButtons(messageId) {
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+  return new ActionRowBuilder().addComponents(
+    [['1gig', '1 Gig'], ['2gig', '2 Gig'], ['300mb', '300 Mbps']].map(([key, label]) =>
+      new ButtonBuilder().setCustomId(`${SPEED_BTN}${key}:${messageId}`).setLabel(label).setStyle(ButtonStyle.Secondary)),
+  );
+}
+
+/** Pulse's answer to a rep's message, if it already posted one. */
+async function findPulseAnswer(channel, messageId) {
+  const after = await channel.messages.fetch({ after: messageId, limit: 15 }).catch(() => null);
+  return after?.find((m) => m.author?.id === client.user?.id && m.reference?.messageId === messageId) || null;
+}
+
+/** One deal exactly like typing the speed: log, ✅ post, hype, boards. Edits Pulse's existing answer to
+ *  this message instead of stacking a second one. (Screenshot-only posts, speed buttons, upgrades.) */
+async function logSingleDeal({ message, channel, speed, proofLine = null, existingPost = null }) {
+  const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null));
+  const tz = getTimeZone();
+  const now = new Date();
+  const blitzName = approvedBlitzNameForChannel(channel) || blitzFromChannelName(channel.name);
+  const marketIdentity = marketIdentityForChannel(channel);
+  const userId = message.author.id;
+  const displayName = member?.displayName || message.author.globalName || message.author.username;
+  const appendResult = await appendSingleDealLog({
+    userId, speed, channelId: channel.id, sourceMessageId: message.id,
+    buildLogEntry: (data) => ({
+      id: `${now.getTime()}_${userId}_0_${Math.random().toString(16).slice(2)}`, userId, displayName, username: message.author.username,
+      speed, timestamp: now.toISOString(), date: fmtDateInTz(now, tz), channelId: channel.id, channelName: channel.name, blitzName,
+      marketId: marketIdentity.marketId, marketName: marketIdentity.marketName, weekId: data.metadata.weekId,
+    }),
+  });
+  if (appendResult.duplicateMessage) return false;
+  const post = existingPost || (await findPulseAnswer(channel, message.id));
+  return confirmSingleDealLog({
+    appendResult, channel, userId, displayName, blitzName, speeds: [speed], now, tz, hasCustomerOnFile: false, extraConfirmationLine: proofLine,
+    editConfirmation: (payload) => (post
+      ? post.edit({ content: payload.content, components: [], allowedMentions: { parse: [] } })
+      : message.reply({ content: payload.content, allowedMentions: { parse: [] } })),
+  });
+}
+
+/** "8-10 am on the 21st", or a reply to the deal: the install time goes onto that order (owner 2026-10-19). */
+async function handleTypedInstallTime(message, channel) {
+  if (hasScreenshotAttachment(message) || extractTmoOrderId(message.content)) return false;
+  const it = parseInstallTime(message.content, message.createdAt || new Date(), getTimeZone());
+  if (!it?.date) return false;
+  let replyTo = null;
+  if (message.reference?.messageId) {
+    const ref = await channel.messages.fetch(message.reference.messageId).catch(() => null);
+    replyTo = ref?.author?.id === client.user?.id ? (ref.reference?.messageId || null) : (ref?.id || null);
+  }
+  // Not a reply: only a full date + window counts, so chatter like "see you the 21st" never moves an order.
+  if (!it.window && !replyTo) return false;
+  const det = await postOrderDetails({ discordUserId: message.author.id, currentMessageId: message.id, replyToMessageId: replyTo, installDate: it.date, installWindow: it.window, asOf: message.createdAt?.toISOString?.() });
+  if (!det?.found) return false;
+  if (det.sourceMessageId) await updateDealPostProofLine({ channelId: det.sourceChannelId || channel.id, messageId: det.sourceMessageId }, formatTfiberProofLine({ status: 'PROOF_ATTACHED', missingFields: det.missingFields }));
+  await message.react('✅').catch(() => {});
+  return true;
+}
+
+/** An upgrade of an existing customer: T-Mobile gives no order number. Log it, flag it (owner 2026-10-19). */
+async function handleUpgradeDeal(message, channel) {
+  if (!isUpgrade(message.content)) return false;
+  const speed = speedInText(message.content);
+  if (!speed) return false;
+  const ok = await logSingleDeal({ message, channel, speed, proofLine: '-# Upgrade logged. No TMO ID, so it goes to review.' });
+  if (ok) await notifyLog(message.guild, `⚠ Upgrade with no TMO ID: **${realName(message.author.id, message.member?.displayName)}** · ${SPEED_DISPLAY[speed]} in <#${channel.id}>. Check it: ${message.url}`);
   return true;
 }
 
@@ -3427,7 +3531,26 @@ const onClientReady = async () => {
   if (bootstrapped) return;
   bootstrapped = true;
   await bootstrap();
+  replayOct19Hammond().catch((err) => console.error('[replay] oct19:', err?.message || err));
 };
+
+/** ponytail: one-time replay (owner 2026-10-19) of today's #hammond posts the old code skipped:
+ *  screenshot-only deals (William, Gabriel, Hudson, Don), follow-up screenshots (Mark, Hudson),
+ *  typed install times (Gabriel, William), J_sales13's upgrade. Runs once per data volume; delete after Oct 20. */
+async function replayOct19Hammond() {
+  const st = joinMatch.load();
+  if (st.replayed?.oct19) return;
+  const channel = await client.channels.fetch('1560397497011015721').catch(() => null);
+  if (!channel) return;
+  const ids = ['1561784388834824282', '1561803683354771649', '1561804052315246622', '1561804353596035204', '1561804409967485040',
+    '1561804712670662777', '1561815914960257144', '1561816715124412437', '1561819394575700128'];
+  for (const id of ids) {
+    const m = await channel.messages.fetch(id).catch(() => null);
+    if (m) await onMessage(m);
+  }
+  const st2 = joinMatch.load(); st2.replayed = { ...(st2.replayed || {}), oct19: new Date().toISOString() }; joinMatch.save(st2);
+  console.log('[replay] oct19 hammond done');
+}
 client.once('clientReady', onClientReady);
 client.once('ready', onClientReady);
 
@@ -3593,7 +3716,8 @@ async function replySlashHint(message, hintKey) {
     .catch(() => {});
 }
 
-client.on('messageCreate', async (message) => {
+client.on('messageCreate', (message) => onMessage(message));
+async function onMessage(message) {
   try {
     if (message.author.bot) return;
     if (message.webhookId) return;
@@ -3648,6 +3772,9 @@ client.on('messageCreate', async (message) => {
 
     const parsed = parseDealMessage(message.content);
     if (!parsed.ok || !parsed.speeds.length) {
+      // Owner 2026-10-19: an upgrade sentence logs as a flagged deal; a typed install time lands on the order.
+      if (isTfiberProofChannel && (await handleUpgradeDeal(message, channel))) return;
+      if (isTfiberProofChannel && (await handleTypedInstallTime(message, channel))) return;
       if (isTfiberProofChannel && (messageHasScreenshot || extractTmoOrderId(message.content))) {
         const handled = await handleTfiberProofChannelUpload(message, channel);
         if (!handled) rememberTfiberChannelScreenshot(message, channel);
@@ -3811,10 +3938,22 @@ client.on('messageCreate', async (message) => {
   } catch (e) {
     console.error(e);
   }
-});
+}
 
 client.on('interactionCreate', async (interaction) => {
   const whoIsManager = (i) => i.member?.roles?.cache?.some?.((r) => r.name === 'Manager' || r.name === 'Owner') || canUseAdminMember(i.user.id, i.member);
+  // Speed for a screenshot-only post (owner 2026-10-19): the rep (or a manager) taps it, the deal logs.
+  if (interaction.isButton?.() && interaction.customId.startsWith(SPEED_BTN)) {
+    const [speed, msgId] = interaction.customId.slice(SPEED_BTN.length).split(':');
+    const original = await interaction.channel?.messages.fetch(msgId).catch(() => null);
+    if (!original) { await interaction.reply({ content: 'That post is gone.', ephemeral: true }).catch(() => {}); return; }
+    if (interaction.user.id !== original.author.id && !whoIsManager(interaction)) { await interaction.reply({ content: 'Only the rep who posted it can pick the speed.', ephemeral: true }).catch(() => {}); return; }
+    await interaction.deferUpdate().catch(() => {});
+    const proofLine = String(interaction.message.content || '').split('\n').find((l) => /^(-# )?Proof /.test(l)) || null;
+    await logSingleDeal({ message: original, channel: interaction.channel, speed, proofLine, existingPost: interaction.message });
+    await postOrderDetails({ discordUserId: original.author.id, replyToMessageId: original.id, plan: tfiberPlanForSpeed(speed) });
+    return;
+  }
   if (interaction.isStringSelectMenu?.() && interaction.customId.startsWith(joinMatch.WHOIS_ID)) {
     const memberId = interaction.customId.slice(joinMatch.WHOIS_ID.length);
     if (!whoIsManager(interaction)) { await interaction.reply({ content: 'Only managers can match people.', ephemeral: true }).catch(() => {}); return; }

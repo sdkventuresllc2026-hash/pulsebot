@@ -10,6 +10,24 @@ function isFiberSalesOsConfigured() {
   return !!(osBaseUrl() && osSecret());
 }
 
+/** Details added after the first proof: a follow-up screenshot, a typed install time, the tapped speed
+ *  (owner 2026-10-19). Returns the OS answer ({ found, orderId, missingFields, sourceMessageId, … }) or null. Never throws. */
+async function postOrderDetails(payload, fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return null;
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/order-details`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-pulse-os-secret': osSecret() },
+      body: JSON.stringify(payload),
+    });
+    const json = await response.json().catch(() => null);
+    return response.ok && !json?.error ? (json?.data ?? json) : null;
+  } catch (err) {
+    console.error('[Pulse][T-Fiber] order details failed:', err?.message || err);
+    return null;
+  }
+}
+
 async function postTfiberDiscordProof(payload, fetchImpl = fetch) {
   if (!isFiberSalesOsConfigured()) {
     return {
@@ -128,6 +146,7 @@ module.exports = {
   postTfiberDiscordProof,
   postBlitzMove,
   fetchAccessRoster,
+  postOrderDetails,
   postDiscordLink,
   postInviteCodes,
   postRosterCheck,

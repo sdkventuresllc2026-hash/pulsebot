@@ -122,6 +122,7 @@ function onboardingDm({ name, channelId, tfiber }) {
     '**Log a deal:** post your speed there, like 1g, 2g or 2x 1g.',
     tfiber ? `**Proof:** in the same post, add ${TFIBER_PROOF_SHOT}.` : null,
     tfiber ? '**Orientation:** [fibersales.co/orientation](https://www.fibersales.co/orientation)' : null,
+    '**Training:** [fibersales.co/training](https://www.fibersales.co/training)',
     '**Deals and pay:** [fibersales.co](https://www.fibersales.co)',
   ].filter((x) => x !== null).join('\n');
 }
