@@ -76,3 +76,19 @@ test('"PrettyBoy_Will" suggests William Casebolt near the top', () => {
   active.push({ id: 'w', kind: 'manager', name: 'William Casebolt', discordUserId: null, since: '2026-09-20', invite: true });
   assert.equal(pickerOptions({ active }, ['PrettyBoy_Will', 'pretty_boywill'])[0].label, 'William Casebolt');
 });
+
+test('onboardingDm: T-Fiber gets proof + orientation; other carriers only channel, how to log, pay', () => {
+  const { onboardingDm } = require('./join-match');
+  assert.equal(onboardingDm({ name: 'Otis Wipf', channelId: '1', tfiber: true }), [
+    "**You're all set, Otis.**",
+    '',
+    '**Your channel:** <#1>',
+    '**Log a deal:** post your speed there, like 1g, 2g or 2x 1g.',
+    '**Proof:** in the same post, add a screenshot from your T-Mobile order dashboard showing the TMO ID.',
+    '**Orientation:** [fibersales.co/orientation](https://www.fibersales.co/orientation)',
+    '**Deals and pay:** [fibersales.co](https://www.fibersales.co)',
+  ].join('\n'));
+  const bs = onboardingDm({ name: 'Naji Woods', channelId: '2', tfiber: false });
+  assert.doesNotMatch(bs, /Proof|Orientation/);
+  assert.ok(bs.startsWith("**You're all set, Naji.**"));
+});

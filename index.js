@@ -185,6 +185,14 @@ async function seatFromBlitzBoard(guild) {
   for (const p of fresh) st.noCard[p.discordUserId] = new Date().toISOString();
   joinMatch.save(st);
   if (fresh.length) await notifyLog(guild, ['📋 On Discord but on no blitz card, so no market channel yet. Add them to a blitz on fibersales.co and the channel opens on its own.', ...fresh.map((p) => `• **${p.name}**`)].join('\n'));
+  // One onboarding DM, the first time someone new (joined in the last 14 days) lands in a team channel.
+  for (const s of out.seatedPeople) {
+    if (!s.channelId || Date.now() - s.joinedAt > 14 * 86_400_000 || joinMatch.load().onboarded?.[s.userId]) continue;
+    const member = guild.members.cache.get(s.userId);
+    const text = joinMatch.onboardingDm({ name: realName(s.userId, member?.displayName), channelId: s.channelId, tfiber: s.tfiber });
+    const ok = await member?.send({ content: text }).then(() => true).catch(() => false);
+    const st2 = joinMatch.load(); st2.onboarded = st2.onboarded || {}; st2.onboarded[s.userId] = ok ? new Date().toISOString() : 'failed'; joinMatch.save(st2);
+  }
   return out;
 }
 
@@ -240,6 +248,8 @@ async function closeWhoIs(guild, memberId, text, { onlyIfOpen = false } = {}) {
   if (msg && !(onlyIfOpen && !msg.content.startsWith('❓'))) await msg.edit({ content: text, components: [], allowedMentions: { parse: [] } }).catch(() => null);
 }
 
+const WELCOME_DM = '**Welcome to FiberSales.**\nTap Set My Name and enter your full name. Your channel opens right after.';
+
 /** How long a welcome DM gets to be answered before the #pulse-log prompt (2026-10-16). */
 const DM_ANSWER_MS = 24 * 60 * 60 * 1000;
 
@@ -271,7 +281,7 @@ async function runWhoIsPass(guild) {
     if (!st0.dmed[m.id]) {
       const user = list.get(m.id)?.user;
       const ok = user ? await user.send({
-        content: "Welcome to FiberSales. Tap Set My Name and enter your full name so we can open your market channel.",
+        content: WELCOME_DM,
         components: [setNameRow()],
       }).then(() => true).catch(() => false) : false;
       st0.dmed[m.id] = ok ? new Date().toISOString() : 'failed';
@@ -3565,31 +3575,11 @@ client.on('guildMemberAdd', async (member) => {
       }
     }
 
-    const welcome = member.guild.channels.cache.find((c) => c.name === WELCOME_CHANNEL && c.isTextBased?.());
-    if (!welcome) {
-      // Silence here meant nobody could onboard and nobody knew. Say it where leadership will see.
-      console.error(`[Pulse] #${WELCOME_CHANNEL} not found — ${member.user.username} received no welcome.`);
-      await notifyLog(member.guild, `⚠ <@${member.id}> joined but **#${WELCOME_CHANNEL} was not found**, so they got no onboarding prompt. Create the channel or they cannot be set up.`);
-      return;
-    }
-    const perms = welcome.permissionsFor(member.guild.members.me);
-    if (!perms?.has(PermissionsBitField.Flags.SendMessages)) {
-      console.error(`[Pulse] No SendMessages in #${WELCOME_CHANNEL} — ${member.user.username} received no welcome.`);
-      await notifyLog(member.guild, `⚠ <@${member.id}> joined but Pulse cannot post in **#${WELCOME_CHANNEL}**. Grant Send Messages there.`);
-      return;
-    }
-
-    // The button is attached to THIS message, not to a pinned panel elsewhere. Previously the text
-    // said "the button above" while every new join pushed that panel further up the channel — so
-    // for the second joiner onward the instruction was simply wrong.
-    await welcome.send({
-      content: [
-        `Welcome to FiberSales, <@${member.id}>.`,
-        'Tap Set My Name and enter your full name. Your market channel opens right after.',
-      ].join('\n'),
-      components: [setNameRow()],
-      allowedMentions: { users: [member.id] },
-    });
+    // Owner 2026-10-19: no names in #welcome, ever. Set My Name goes by DM right away; if their DMs are
+    // closed, the pinned button in #welcome (visible only to people not set up yet) still works.
+    const ok = await member.send({ content: WELCOME_DM, components: [setNameRow()] }).then(() => true).catch(() => false);
+    const st = joinMatch.load(); st.dmed = st.dmed || {}; st.dmed[member.id] = ok ? new Date().toISOString() : 'failed'; joinMatch.save(st);
+    if (!ok) await notifyLog(member.guild, `⚠ <@${member.id}> joined and their DMs are closed. They can use the Set My Name button pinned in #welcome.`);
   } catch (err) {
     console.error('[Pulse] Welcome message failed:', err.message || err);
   }
@@ -3954,8 +3944,8 @@ client.on('interactionCreate', async (interaction) => {
         content: nicknameSet
           ? [`Thanks. You'll show up as ${nickname}.`,
              clash ? `\n${clash.displayName} already uses that name. A manager will sort it out.` : '',
-             unlocked ? '\nYou\'re set up. Your market channel opens as soon as you\'re on a blitz.'
-                      : '\nA manager will confirm who you are, then your market channel opens.'].join('')
+             unlocked ? '\nYou\'re set up. Your team channel opens as soon as you\'re on a blitz.'
+                      : '\nA manager will confirm who you are, then your team channel opens.'].join('')
           : `Thanks, ${nickname}. A manager will update your name. Nothing else needed from you.`,
       }).catch(() => {});
 

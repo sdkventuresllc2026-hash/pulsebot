@@ -49,7 +49,7 @@ function noCardPeople(guild, roster) {
 
 async function seatAll(guild, roster, { managerRoleId, log = console.log } = {}) {
   const seats = blitzByDiscordId(roster);
-  const out = { seated: 0, lines: [], missingChats: new Set(), noCard: noCardPeople(guild, roster) };
+  const out = { seated: 0, lines: [], seatedPeople: [], missingChats: new Set(), noCard: noCardPeople(guild, roster) };
   for (const [userId, blitz] of seats) {
     const member = await guild.members.fetch(userId).catch(() => null);
     if (!member) continue; // not in the server yet; picked up on a later pass
@@ -72,6 +72,8 @@ async function seatAll(guild, roster, { managerRoleId, log = console.log } = {})
       await marketAssignments.reconcileMemberMarketRoles(guild, userId);
       out.seated++;
       out.lines.push(`💬 ${member.displayName} → #${blitz} channel (on the ${blitz} blitz)`);
+      const mk = exactMarket(blitz);
+      out.seatedPeople.push({ userId, joinedAt: member.joinedTimestamp || 0, channelId: (mk?.channelIds || [])[0] || null, tfiber: /t[-\s]?fiber|t[-\s]?mobile|tmo/i.test(mk?.isp || '') });
     } catch (err) {
       log(`[seat] ${member.displayName} → ${blitz}: ${err?.message || err}`);
     }

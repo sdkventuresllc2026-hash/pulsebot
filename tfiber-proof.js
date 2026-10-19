@@ -148,7 +148,7 @@ function formatTfiberProofLine(result) {
       ? `Proof received. Saved to fibersales.co. ${detailText()}`
       : '-# Proof received. Saved to fibersales.co.';
   }
-  if (result.status === 'NEEDS_SCREENSHOT') return 'Proof needed: post the order confirmation screenshot here or DM Pulse within 48 hours.';
+  if (result.status === 'NEEDS_SCREENSHOT') return 'Proof needed: post a screenshot from your T-Mobile order dashboard showing the TMO ID. Here or in a DM to Pulse, within 48 hours.';
   if (result.status === 'UNLINKED_USER') return 'Proof held: your Discord is not linked to fibersales.co yet. A manager will fix it.';
   if (result.status === 'NEEDS_REVIEW') return 'Proof needs review: reply with the TMO order number or post a clearer screenshot.';
   if (result.status === 'SYNC_DISABLED') return 'Proof saved in Pulse.';
@@ -174,7 +174,7 @@ function pendingJumpLink(pending) {
 function pendingNeeds(pending) {
   return pending?.proofStatus === 'NEEDS_REVIEW'
     ? 'the T-Mobile order number (TMO…), plus a clearer screenshot if you have one'
-    : 'the order confirmation screenshot';
+    : 'a screenshot from your T-Mobile order dashboard showing the TMO ID';
 }
 
 function describePendingProof(pending, { tz } = {}) {
@@ -199,7 +199,7 @@ function formatTfiberReminderDm(type, pendings, { tz } = {}) {
     ? `Final reminder: ${many ? `these ${list.length} T-Fiber deals expire` : 'this T-Fiber deal expires'} in about 4 hours.`
     : `T-Fiber proof needed for ${many ? `these ${list.length} deals` : 'this deal'}.`;
   const lines = list.map((p, i) => `${many ? `${i + 1}) ` : ''}${describePendingProof(p, { tz })} · needs ${pendingNeeds(p)} · expires ${formatWhen(p.expiresAt, tz)}`);
-  return [header, ...lines, '', 'Reply here with the screenshot and the T-Mobile order number (TMO…) in the same message.'].join('\n');
+  return [header, ...lines, '', 'Reply here with the screenshot.'].join('\n');
 }
 
 /** Admin view (`pulse proofs`): everything open, grouped by rep, oldest first. */

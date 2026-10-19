@@ -154,9 +154,9 @@ const pendingFixture = (over = {}) => ({
 test('reminder names the deal: plan, channel, ET time, jump link, what is needed', () => {
   const text = formatTfiberReminderDm('end_of_day', [pendingFixture()], { tz: 'America/New_York' });
   assert.match(text, /T-Fiber 2 Gig · <#c1> · posted Mon, 8\/24, 5:57 PM → https:\/\/discord\.com\/channels\/g\/c1\/m1/);
-  assert.match(text, /needs the order confirmation screenshot/);
+  assert.match(text, /needs a screenshot from your T-Mobile order dashboard showing the TMO ID/);
   assert.match(text, /expires Wed, 8\/26, 5:57 PM/);
-  assert.match(text, /Reply here with the screenshot and the T-Mobile order number/);
+  assert.match(text, /Reply here with the screenshot./);
   assert.doesNotMatch(text, /^1\)/m); // single deal: no numbering
 });
 

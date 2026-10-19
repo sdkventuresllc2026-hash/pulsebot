@@ -108,6 +108,24 @@ function whoToAsk(members, linkedIds, asked, now) {
   return members.filter((m) => !m.isBot && !m.hasMember && !m.protected && !linkedIds.has(m.id) && !asked[m.id] && now - m.joinedAt >= ASK_AFTER_MS && now - m.joinedAt <= 7 * 24 * 60 * 60 * 1000);
 }
 
+/** The screenshot T-Fiber proof needs, worded the same everywhere a rep reads it (owner 2026-10-19). */
+const TFIBER_PROOF_SHOT = 'a screenshot from your T-Mobile order dashboard showing the TMO ID';
+
+/** The one onboarding DM, sent the first time a new person lands in their team channel (owner 2026-10-19).
+ *  Only what day one needs; proof + orientation only where the carrier needs them (orientation is T-Fiber). */
+function onboardingDm({ name, channelId, tfiber }) {
+  const first = String(name || '').trim().split(/\s+/)[0];
+  return [
+    `**You're all set${first ? `, ${first}` : ''}.**`,
+    '',
+    `**Your channel:** <#${channelId}>`,
+    '**Log a deal:** post your speed there, like 1g, 2g or 2x 1g.',
+    tfiber ? `**Proof:** in the same post, add ${TFIBER_PROOF_SHOT}.` : null,
+    tfiber ? '**Orientation:** [fibersales.co/orientation](https://www.fibersales.co/orientation)' : null,
+    '**Deals and pay:** [fibersales.co](https://www.fibersales.co)',
+  ].filter((x) => x !== null).join('\n');
+}
+
 /** Read-modify-write so a join that consumes a code mid-run is never overwritten by the mint pass. */
 function update(fn) { const s = load(); fn(s); save(s); return s; }
 
@@ -178,4 +196,4 @@ async function resolveJoin(guild) {
 
 const WHOIS_TYPE_ID = 'pulse:whoistype:';
 
-module.exports = { WHOIS_ID, WHOIS_TYPE_ID, ASK_AFTER_MS, load, save, unlinkedHumans, inviteHumans, squash, searchHumans, nameScore, usedCodes, pickerOptions, whoToAsk, mintPass, resolveJoin };
+module.exports = { WHOIS_ID, WHOIS_TYPE_ID, ASK_AFTER_MS, load, save, unlinkedHumans, inviteHumans, squash, searchHumans, nameScore, usedCodes, pickerOptions, whoToAsk, mintPass, resolveJoin, onboardingDm, TFIBER_PROOF_SHOT };
