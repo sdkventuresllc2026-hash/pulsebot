@@ -3573,6 +3573,7 @@ const onClientReady = async () => {
   bootstrapped = true;
   await bootstrap();
   replayOct19Hammond().catch((err) => console.error('[replay] oct19:', err?.message || err));
+  logOct20AlexLile300().catch((err) => console.error('[fix] oct20 alex:', err?.message || err));
   moveOnce('oct19-slidell', 'Baton Rouge', { newName: 'Slidell', city: 'Slidell', state: 'LA' }).catch((err) => console.error('[move]', err?.message || err));
 };
 
@@ -3592,6 +3593,20 @@ async function replayOct19Hammond() {
   }
   const st2 = joinMatch.load(); st2.replayed = { ...(st2.replayed || {}), oct19: new Date().toISOString() }; joinMatch.save(st2);
   console.log('[replay] oct19 hammond done');
+}
+/** ponytail: one-time (owner approved 2026-10-20). Alex Lile's 2nd screenshot (TMO2026101974X0Z, Fiber 300, 1006 Lovett
+ *  St) was glued onto his 2 Gig deal by the old code, so it never counted. Logs that one 300 deal on its own screenshot,
+ *  linked to the already-corrected OS order. logSingleDeal skips it if a deal already exists for that message. Delete
+ *  after Oct 22. */
+async function logOct20AlexLile300() {
+  const st = joinMatch.load();
+  if (st.fixed?.oct20AlexLile300) return;
+  const channel = await client.channels.fetch('1560397497011015721').catch(() => null);
+  const message = channel ? await channel.messages.fetch('1562132507003068608').catch(() => null) : null;
+  if (!message) return;
+  await logSingleDeal({ message, channel, speed: '300mb', proofLine: '-# Proof received. Saved to fibersales.co.', proof: { orderId: 'cmvgv958p000408kwwzb6l6ok', tmoOrderId: 'TMO2026101974X0Z', status: 'ORDER_CREATED' } });
+  const st2 = joinMatch.load(); st2.fixed = { ...(st2.fixed || {}), oct20AlexLile300: new Date().toISOString() }; joinMatch.save(st2);
+  console.log('[fix] oct20 Alex Lile 300 logged');
 }
 client.once('clientReady', onClientReady);
 client.once('ready', onClientReady);
