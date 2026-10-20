@@ -409,6 +409,19 @@ function rememberTfiberChannelScreenshot(message, channel) {
   });
 }
 
+/**
+ * ✅ on the screenshot itself whenever a typed deal ("1 gig" + screenshot, or a screenshot posted right before the
+ * text) got its proof saved. Owner 2026-10-20: 40 of 62 screenshots had only a reply, no ✅, because this path never
+ * reacted. Nothing to react to when the OS still says NEEDS_SCREENSHOT.
+ */
+async function reactProofScreenshot(channel, message, proofMessage, result) {
+  if (!result || result.status === 'NEEDS_SCREENSHOT' || result.ok === false) return;
+  const shotId = proofMessage?.pulseBufferedProofMessageId || (hasScreenshotAttachment(message) ? message.id : null);
+  if (!shotId) return;
+  const target = shotId === message.id ? message : await channel.messages.fetch(shotId).catch(() => null);
+  await target?.react('✅').catch(() => {});
+}
+
 function proofMessageForTfiberLog(message, channel) {
   if (hasScreenshotAttachment(message)) return message;
   const selection = tfiberChannelProofBuffer.consume({
@@ -1619,6 +1632,7 @@ async function handleTfiberProofChannelUpload(message, channel) {
     await message.react('✅').catch(() => {});
     return true;
   }
+  if (result?.ok !== false && result?.status !== 'NEEDS_SCREENSHOT') await message.react('✅').catch(() => {});
   await message.reply({ content: proofLine, allowedMentions: { parse: [] } }).catch(() => {});
   return true;
 }
@@ -1652,7 +1666,7 @@ async function handleUnclaimedScreenshot({ message, channel, hasScreenshot, tmoO
   const proofLine = formatTfiberProofLine(det?.found ? { ...result, missingFields: det.missingFields } : result) || 'Proof received.';
   const speed = speedFromPlan(enrichedPayload?.extracted?.planName);
   if (speed) {
-    await logSingleDeal({ message, channel, speed, proofLine });
+    await logSingleDeal({ message, channel, speed, proofLine, proof: { ...result, tmoOrderId } });
     if (result.orderId) await postOrderDetails({ discordUserId: message.author.id, orderId: result.orderId, plan: tfiberPlanForSpeed(speed) });
     return true;
   }
@@ -1679,7 +1693,7 @@ async function findPulseAnswer(channel, messageId) {
 
 /** One deal exactly like typing the speed: log, ✅ post, hype, boards. Edits Pulse's existing answer to
  *  this message instead of stacking a second one. (Screenshot-only posts, speed buttons, upgrades.) */
-async function logSingleDeal({ message, channel, speed, proofLine = null, existingPost = null }) {
+async function logSingleDeal({ message, channel, speed, proofLine = null, existingPost = null, proof = null }) {
   const member = message.member ?? (await message.guild.members.fetch(message.author.id).catch(() => null));
   const tz = getTimeZone();
   const now = new Date();
@@ -1693,10 +1707,16 @@ async function logSingleDeal({ message, channel, speed, proofLine = null, existi
       id: `${now.getTime()}_${userId}_0_${Math.random().toString(16).slice(2)}`, userId, displayName, username: message.author.username,
       speed, timestamp: now.toISOString(), date: fmtDateInTz(now, tz), channelId: channel.id, channelName: channel.name, blitzName,
       marketId: marketIdentity.marketId, marketName: marketIdentity.marketName, weekId: data.metadata.weekId,
+      // Owner 2026-10-20 (Alex Lile, Hammond): a deal logged FROM a screenshot already has its proof. Without these
+      // fields the next screenshot (a different order) was glued onto this deal by the recent-log fallback.
+      ...(hasScreenshotAttachment(message) ? { tfiberFromScreenshot: true, tfiberProofStatus: proof?.status || 'PROOF_ATTACHED' } : {}),
+      ...(proof ? { tfiberOsOrderId: proof.orderId || null, tfiberTmoOrderId: proof.tmoOrderId || null, tfiberProofId: proof.proofId || null } : {}),
     }),
   });
   if (appendResult.duplicateMessage) return false;
   const post = existingPost || (await findPulseAnswer(channel, message.id));
+  // Same ✅ as every other proof path (it was missing here, so screenshot-only deals showed a reply but no check).
+  if (appendResult?.ok) await message.react('✅').catch(() => {});
   return confirmSingleDealLog({
     appendResult, channel, userId, displayName, blitzName, speeds: [speed], now, tz, hasCustomerOnFile: false, extraConfirmationLine: proofLine,
     editConfirmation: (payload) => (post
@@ -3872,6 +3892,7 @@ async function onMessage(message) {
           now,
         });
         tfiberProofLine = formatTfiberProofLine(result);
+        await reactProofScreenshot(channel, message, proofMessage, result);
       }
 
       await confirmSingleDealLog({

@@ -122,3 +122,11 @@ test('selectRecentTfiberProofLog refuses multiple recent proof-missing logs', ()
   assert.equal(result.pending, null);
   assert.equal(result.reason, 'ambiguous_recent_logs');
 });
+
+test('selectRecentTfiberProofLog never glues a 2nd screenshot onto a deal logged from its own screenshot (Alex Lile 10/20)', () => {
+  const result = selectRecentTfiberProofLog([
+    { id: 'log-from-shot', userId: 'rep-1', speed: '2gig', channelId: 'chan-1', timestamp: '2026-10-20T15:56:25.000Z', tfiberFromScreenshot: true, tfiberProofStatus: 'PROOF_ATTACHED' },
+  ], { userId: 'rep-1', channelId: 'chan-1', messageTimestamp: Date.parse('2026-10-20T15:56:52.000Z'), windowMs: 2 * 60 * 1000 });
+  assert.equal(result.pending, null);
+  assert.equal(result.reason, 'none');
+});

@@ -171,6 +171,8 @@ function selectRecentTfiberProofLog(logs, {
     .filter((log) => log.userId === userId && log.channelId === channelId)
     .filter((log) => ['2gig', '1gig', '500mb', '300mb', '200mb'].includes(log.speed))
     .filter((log) => !log.tfiberOsOrderId)
+    // a deal that was logged from its own screenshot never takes another screenshot (2026-10-20 fix)
+    .filter((log) => !log.tfiberFromScreenshot)
     .filter((log) => !log.tfiberProofStatus || ['NEEDS_SCREENSHOT', 'NEEDS_REVIEW', 'UNLINKED_USER'].includes(log.tfiberProofStatus))
     .map((log) => ({ log, timestamp: Date.parse(log.timestamp || '') }))
     .filter((item) => Number.isFinite(item.timestamp))
