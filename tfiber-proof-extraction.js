@@ -290,7 +290,14 @@ async function enrichTfiberProofPayload(payload, { fetchImpl = fetch } = {}) {
   }
 }
 
+/** Distinct TMO order numbers read off the screenshots of one post. More than one = several deals in one message
+ *  (Sammy Lile 10/21: 4 orders in one post were skipped with no answer, because the merge just saw a conflict). */
+function orderIdsInPost(extracted) {
+  return [...new Set((extracted?.screenshots || []).map((item) => normalizeTmoOrderId(item.orderConfirmationNumber)).filter(Boolean))];
+}
+
 module.exports = {
+  orderIdsInPost,
   isTfiberProofExtractionConfigured,
   mergeTfiberExtractions,
   enrichTfiberProofPayload,

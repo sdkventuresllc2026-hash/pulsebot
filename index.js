@@ -316,6 +316,7 @@ const {
 } = require('./tfiber-proof-buffer');
 const {
   enrichTfiberProofPayload,
+  orderIdsInPost,
 } = require('./tfiber-proof-extraction');
 const {
   recordTfiberProofAttempt,
@@ -1591,6 +1592,12 @@ async function handleTfiberProofChannelUpload(message, channel) {
       hasScreenshot,
     });
     tmoOrderId = extractTmoOrderId(enrichedPayload?.tmoOrderId || enrichedPayload?.extracted?.orderConfirmationNumber);
+  }
+  // ponytail: several deals in one post get a "post them one at a time" answer, not a split. Splitting needs a
+  // per-order dedupe key in the bot log and the OS idempotency key (both are per message today).
+  if (orderIdsInPost(enrichedPayload?.extracted).length > 1) {
+    await message.reply({ content: 'That post has more than one order in it. Post each deal's screenshot on its own so every deal counts.', allowedMentions: { parse: [] } }).catch(() => {});
+    return true;
   }
 
   const selection = await selectPendingForUser(message.author.id, { tmoOrderId });

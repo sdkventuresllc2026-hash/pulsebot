@@ -88,3 +88,13 @@ test('ignores non-order screenshots from the Jacksonville channel', () => {
   assert.equal(merged.extracted.orderConfirmationNumber, null);
   assert.ok(merged.missingFields.includes('orderScreenshot'));
 });
+
+test('orderIdsInPost finds several deals in one post (Sammy Lile 10/21)', () => {
+  const { orderIdsInPost } = require('./tfiber-proof-extraction');
+  const shot = (id) => ({ extractionStatus: 'ORDER_DETAILS', orderConfirmationNumber: id });
+  const four = mergeTfiberExtractions([shot('TMO20261021ATGWJ'), shot('TMO20261020W58BY'), shot('TMO20261020CJAJO'), shot('TMO202610200NQ45')]);
+  assert.equal(orderIdsInPost(four.extracted).length, 4);
+  const one = mergeTfiberExtractions([shot('TMO20261020W58BY'), shot(null)]);
+  assert.equal(orderIdsInPost(one.extracted).length, 1);
+  assert.equal(orderIdsInPost(null).length, 0);
+});
