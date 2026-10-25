@@ -1596,7 +1596,7 @@ async function handleTfiberProofChannelUpload(message, channel) {
   // ponytail: several deals in one post get a "post them one at a time" answer, not a split. Splitting needs a
   // per-order dedupe key in the bot log and the OS idempotency key (both are per message today).
   if (orderIdsInPost(enrichedPayload?.extracted).length > 1) {
-    await message.reply({ content: 'That post has more than one order in it. Post each deal's screenshot on its own so every deal counts.', allowedMentions: { parse: [] } }).catch(() => {});
+    await message.reply({ content: "That post has more than one order in it. Post each deal's screenshot on its own so every deal counts.", allowedMentions: { parse: [] } }).catch(() => {});
     return true;
   }
 
@@ -3578,11 +3578,42 @@ let tfiberProofMaintenanceStarted = false;
 const onClientReady = async () => {
   if (bootstrapped) return;
   bootstrapped = true;
+  const readyAt = Date.now();
   await bootstrap();
   replayOct19Hammond().catch((err) => console.error('[replay] oct19:', err?.message || err));
   logOct20AlexLile300().catch((err) => console.error('[fix] oct20 alex:', err?.message || err));
   moveOnce('oct19-slidell', 'Baton Rouge', { newName: 'Slidell', city: 'Slidell', state: 'LA' }).catch((err) => console.error('[move]', err?.message || err));
+  replayOct24Outage(readyAt).catch((err) => console.error('[replay] oct24 outage:', err?.message || err));
 };
+
+/** ponytail: one-time replay (owner 2026-10-25). 181c715 shipped a syntax error (line 1599); Railway booted it
+ *  2026-10-24 21:14Z and the bot crash-looped until this fix, so every rep post in deal channels in that window was
+ *  never seen. Feeds them through onMessage oldest-first, up to the moment this boot went ready (later posts arrive
+ *  live). Nothing in the window was processed, so nothing double-logs. Runs once per data volume; delete after Nov 1. */
+async function replayOct24Outage(readyAt) {
+  const st = joinMatch.load();
+  if (st.replayed?.oct24Outage) return;
+  const from = Date.parse('2026-10-24T21:14:00Z');
+  let n = 0;
+  for (const guild of client.guilds.cache.values()) {
+    await guild.channels.fetch().catch(() => null);
+    for (const ch of guild.channels.cache.values()) {
+      if (!ch.isTextBased?.() || ch.isThread?.() || !isApprovedDealChannel(ch)) continue;
+      const msgs = [];
+      let before;
+      for (let i = 0; i < 5; i++) {
+        const page = await ch.messages.fetch({ limit: 100, ...(before ? { before } : {}) }).catch(() => null);
+        if (!page?.size) break;
+        msgs.push(...page.values()); before = page.last().id;
+        if (page.last().createdTimestamp < from) break;
+      }
+      const missed = msgs.filter((m) => !m.author.bot && m.createdTimestamp >= from && m.createdTimestamp < readyAt).sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+      for (const m of missed) { await onMessage(m); n++; }
+    }
+  }
+  const st2 = joinMatch.load(); st2.replayed = { ...(st2.replayed || {}), oct24Outage: new Date().toISOString() }; joinMatch.save(st2);
+  console.log(`[replay] oct24 outage done: ${n} messages`);
+}
 
 /** ponytail: one-time replay (owner 2026-10-19) of today's #hammond posts the old code skipped:
  *  screenshot-only deals (William, Gabriel, Hudson, Don), follow-up screenshots (Mark, Hudson),
