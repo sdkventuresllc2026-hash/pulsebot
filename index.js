@@ -2956,7 +2956,7 @@ async function runBlitzLifecycle(trigger) {
   const lines = [];
   for (const v of out.verdicts) {
     if (v.kind === 'archive') lines.push(...(await archiveMarketChat(guild, v)));
-    else if (v.kind === 'extend') lines.push(`⏳ **${v.name}** ended ${v.endDate} but the crew sold ${v.soldAfter} since. Extend it on fibersales.co/blitzes, or it archives once sales stop.`);
+    else if (v.kind === 'extend') lines.push(`⏳ **${v.name}** ended ${v.endDate} but the crew sold ${v.soldAfter} since. Extend it on fibersales.co/blitzes, or it archives 14 days after their last sale (${v.lastSale}).`);
   }
   if (lines.length) await notifyLog(guild, ['🗂️ Blitz lifecycle', ...lines].join('\n'));
   const ch = pulseLogChannel(guild);
