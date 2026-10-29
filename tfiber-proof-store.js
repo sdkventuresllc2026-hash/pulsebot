@@ -217,7 +217,8 @@ function recentScreenshotDeal(logs, { userId, channelId, nowMs, windowMs } = {})
     .filter((log) => log && !log.removed && log.userId === userId && log.channelId === channelId)
     .filter((log) => log.tfiberFromScreenshot && !log.tfiberTypedConfirmMessageId)
     .map((log) => ({ log, at: Date.parse(log.timestamp || '') }))
-    .filter(({ at }) => Number.isFinite(at) && nowMs >= at && nowMs - at <= windowMs)
+    // either side: the log is stamped when the OCR finishes, usually AFTER the Discord time of the "1g" typed right behind it
+    .filter(({ at }) => Number.isFinite(at) && Math.abs(nowMs - at) <= windowMs)
     .sort((a, b) => b.at - a.at)[0]?.log || null;
 }
 

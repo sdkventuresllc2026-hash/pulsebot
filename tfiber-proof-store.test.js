@@ -174,3 +174,10 @@ test('recentScreenshotDeal: a speed typed seconds after the screenshot already l
   assert.equal(q([shot], { nowMs: at + 10 * 60e3 }), null);
   assert.equal(q([{ ...shot, tfiberFromScreenshot: undefined }]), null);
 });
+
+test('recentScreenshotDeal: the "1g" typed 1 s after the screenshot is older than the deal the OCR logged 5 s later, and still confirms it', () => {
+  const shot = { id: 'shot', userId: 'rep-1', channelId: 'ch-1', speed: '1gig', timestamp: '2026-10-28T19:08:20.000Z', tfiberFromScreenshot: true };
+  const typedAt = Date.parse('2026-10-28T19:08:16.000Z');
+  assert.equal(recentScreenshotDeal([shot], { userId: 'rep-1', channelId: 'ch-1', nowMs: typedAt, windowMs: 120e3 }).id, 'shot');
+  assert.equal(recentScreenshotDeal([shot], { userId: 'rep-1', channelId: 'ch-1', nowMs: typedAt - 3 * 60e3, windowMs: 120e3 }), null);
+});
