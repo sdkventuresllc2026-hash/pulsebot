@@ -2917,22 +2917,21 @@ const MOVE_BTN = 'pulse:move:';
 /** The chat side of an archived card: its channel(s) go under ARCHIVE with an "Archived <date>." topic.
  *  Roles and members untouched (same as #pampa 10/28, #grand-rapids 10/15). */
 async function archiveMarketChat(guild, { name, location, why }) {
-  const lines = [`📦 **${name}**${location ? ` (${location})` : ''} archived: ${why}.`];
   const resolved = resolveMarket(name);
-  if (!resolved) { lines.push('ℹ️ No Discord market with that name, nothing to move.'); return lines; }
+  if (!resolved) return []; // no Discord market for this card (Pennsylvania, Grand Rapids Team 2): nothing to move
   const archive = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && /^archive$/i.test(c.name));
   const stamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+  const lines = [];
   for (const id of resolved.market.channelIds || []) {
     const ch = guild.channels.cache.get(id) || (await guild.channels.fetch(id).catch(() => null));
     if (!ch) continue;
     if (!archive) { lines.push(`⚠️ No ARCHIVE category, #${ch.name} left where it is.`); continue; }
-    if (ch.parentId !== archive.id) {
-      const ok = await ch.setParent(archive.id, { lockPermissions: false, reason: `blitz lifecycle: ${why}` }).then(() => true)
-        .catch((err) => { lines.push(`⚠️ Could not move #${ch.name}: ${err.message || err}`); return false; });
-      if (!ok) continue;
-    }
-    if (!/^Archived /.test(ch.topic || '')) await ch.setTopic(`Archived ${stamp}. ${String(ch.topic || '').split('. ')[0] || location || name}.`).catch(() => null);
-    lines.push(`✅ #${ch.name} is under ARCHIVE. History and people untouched.`);
+    if (ch.parentId === archive.id) continue; // already there (moved by hand earlier): stay silent
+    const ok = await ch.setParent(archive.id, { lockPermissions: false, reason: `blitz lifecycle: ${why}` }).then(() => true)
+      .catch((err) => { lines.push(`⚠️ Could not move #${ch.name}: ${err.message || err}`); return false; });
+    if (!ok) continue;
+    await ch.setTopic(`Archived ${stamp}. ${String(ch.topic || '').split('. ')[0] || location || name}.`).catch(() => null);
+    lines.push(`📦 **${name}**${location ? ` (${location})` : ''} archived: ${why}. #${ch.name} is under ARCHIVE, history and people untouched.`);
   }
   return lines;
 }
