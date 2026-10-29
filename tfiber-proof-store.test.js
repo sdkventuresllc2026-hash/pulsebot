@@ -130,3 +130,47 @@ test('selectRecentTfiberProofLog never glues a 2nd screenshot onto a deal logged
   assert.equal(result.pending, null);
   assert.equal(result.reason, 'none');
 });
+
+const { selectAdoptablePending, recentScreenshotDeal } = require('./tfiber-proof-store');
+const SHIFT = 6 * 3600e3;
+const stamped = (over, extra) => ({ ...pending(over), timestamp: over.createdAt, ...extra });
+
+test('selectAdoptablePending never hands a new screenshot to last night\'s request or to one that already got a screenshot (Caleb Head 10/29)', () => {
+  const nowMs = Date.parse('2026-10-29T15:22:05.000Z');
+  const lastNightReview = stamped({ logId: 'last-night', createdAt: '2026-10-28T22:37:22.000Z' }, { proofStatus: 'NEEDS_REVIEW' });
+  assert.equal(selectAdoptablePending([lastNightReview], { nowMs, maxAgeMs: SHIFT }).pending, null);
+  const lastNightNoShot = stamped({ logId: 'old', createdAt: '2026-10-28T22:37:22.000Z' }, { proofStatus: 'NEEDS_SCREENSHOT' });
+  assert.equal(selectAdoptablePending([lastNightNoShot], { nowMs, maxAgeMs: SHIFT }).pending, null);
+  const todayReview = stamped({ logId: 'today-review', createdAt: '2026-10-29T15:10:00.000Z' }, { proofStatus: 'NEEDS_REVIEW' });
+  assert.equal(selectAdoptablePending([todayReview], { nowMs, maxAgeMs: SHIFT }).pending, null);
+});
+
+test('selectAdoptablePending takes the one request from this shift still waiting on its first screenshot', () => {
+  const nowMs = Date.parse('2026-10-29T15:22:05.000Z');
+  const fresh = stamped({ logId: 'fresh', createdAt: '2026-10-29T15:10:00.000Z' }, { proofStatus: 'NEEDS_SCREENSHOT' });
+  const stale = stamped({ logId: 'stale', createdAt: '2026-10-28T22:37:22.000Z' }, { proofStatus: 'NEEDS_REVIEW' });
+  const picked = selectAdoptablePending([stale, fresh], { nowMs, maxAgeMs: SHIFT });
+  assert.equal(picked.pending.logId, 'fresh');
+  assert.equal(picked.reason, 'single_fresh_pending');
+  assert.equal(selectAdoptablePending([fresh, { ...fresh, logId: 'fresh-2' }], { nowMs, maxAgeMs: SHIFT }).reason, 'ambiguous_fresh_pending');
+});
+
+test('selectAdoptablePending: a reply to the deal post wins, however old the request', () => {
+  const nowMs = Date.parse('2026-10-29T15:22:05.000Z');
+  const stale = stamped({ logId: 'stale', createdAt: '2026-10-28T22:37:22.000Z' }, { proofStatus: 'NEEDS_REVIEW', messageId: 'm-1g' });
+  const picked = selectAdoptablePending([stale], { nowMs, maxAgeMs: SHIFT, replyToMessageId: 'm-1g' });
+  assert.equal(picked.pending.logId, 'stale');
+  assert.equal(picked.reason, 'replied_to_deal');
+});
+
+test('recentScreenshotDeal: a speed typed seconds after the screenshot already logged the deal confirms it, once', () => {
+  const shot = { id: 'shot', userId: 'rep-1', channelId: 'ch-1', speed: '1gig', timestamp: '2026-10-29T15:22:05.000Z', tfiberFromScreenshot: true };
+  const at = Date.parse('2026-10-29T15:22:11.000Z');
+  const q = (logs, over = {}) => recentScreenshotDeal(logs, { userId: 'rep-1', channelId: 'ch-1', nowMs: at, windowMs: 120e3, ...over });
+  assert.equal(q([shot]).id, 'shot');
+  assert.equal(q([shot], { userId: 'rep-2' }), null);
+  assert.equal(q([shot], { channelId: 'ch-2' }), null);
+  assert.equal(q([{ ...shot, tfiberTypedConfirmMessageId: 'm' }]), null);
+  assert.equal(q([shot], { nowMs: at + 10 * 60e3 }), null);
+  assert.equal(q([{ ...shot, tfiberFromScreenshot: undefined }]), null);
+});

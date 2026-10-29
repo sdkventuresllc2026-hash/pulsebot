@@ -189,6 +189,46 @@ function selectRecentTfiberProofLog(logs, {
   };
 }
 
+/**
+ * Where a channel screenshot goes when no open request carries its TMO id (owner 2026-10-29, Caleb Head, #michigan):
+ *  - a reply to a deal post (or to the "1g" under it) → that request, however old;
+ *  - else the rep's ONE open request from this shift (maxAgeMs) that is still waiting for its FIRST screenshot.
+ * A request that already got a screenshot (NEEDS_REVIEW) or one from an earlier shift is never adopted on time alone:
+ * that glued a new day's order onto a 17-hour-old "1g" and left the real "1g" six seconds later asking for a screenshot.
+ */
+function selectAdoptablePending(pendingItems, { nowMs, maxAgeMs, replyToMessageId = null } = {}) {
+  const open = (pendingItems || []).filter((item) => item && !item.reminders?.expiredAt);
+  if (replyToMessageId) {
+    const replied = open.find((item) => item.messageId && String(item.messageId) === String(replyToMessageId));
+    if (replied) return { pending: replied, reason: 'replied_to_deal' };
+  }
+  const fresh = open.filter((item) => {
+    const at = Date.parse(item.timestamp || item.createdAt || '');
+    return (item.proofStatus || 'NEEDS_SCREENSHOT') === 'NEEDS_SCREENSHOT' && Number.isFinite(at) && Math.abs(Number(nowMs) - at) <= Number(maxAgeMs);
+  });
+  if (fresh.length === 1) return { pending: fresh[0], reason: 'single_fresh_pending' };
+  return { pending: null, reason: fresh.length ? 'ambiguous_fresh_pending' : 'none' };
+}
+
+/** The rep's deal that their own screenshot logged moments ago in this channel and no typed speed has confirmed yet:
+ *  a "1g" typed right after it is that deal, not a second one (owner 2026-10-29). */
+function recentScreenshotDeal(logs, { userId, channelId, nowMs, windowMs } = {}) {
+  return (logs || [])
+    .filter((log) => log && !log.removed && log.userId === userId && log.channelId === channelId)
+    .filter((log) => log.tfiberFromScreenshot && !log.tfiberTypedConfirmMessageId)
+    .map((log) => ({ log, at: Date.parse(log.timestamp || '') }))
+    .filter(({ at }) => Number.isFinite(at) && nowMs >= at && nowMs - at <= windowMs)
+    .sort((a, b) => b.at - a.at)[0]?.log || null;
+}
+
+async function confirmScreenshotDealTyped(logId, messageId) {
+  await mutate((data) => {
+    const log = (data.logs || []).find((item) => item.id === logId);
+    if (log) log.tfiberTypedConfirmMessageId = String(messageId);
+    return data;
+  });
+}
+
 async function selectPendingForUser(userId, { tmoOrderId } = {}) {
   const data = await readLeaderboard();
   const state = ensureTfiberProofState(data);
@@ -308,10 +348,14 @@ async function waiveTfiberProofsForUser(userId, { waivedBy = null, now = new Dat
 
 module.exports = {
   ensureTfiberProofState,
+  pendingFromLog,
   recordTfiberProofAttempt,
   markTfiberProofResolved,
   selectPendingTfiberProof,
   selectRecentTfiberProofLog,
+  selectAdoptablePending,
+  recentScreenshotDeal,
+  confirmScreenshotDealTyped,
   selectPendingForUser,
   latestPendingForUser,
   listOpenPending,

@@ -314,6 +314,8 @@ const {
   createTfiberProofBuffer,
   messageWithBufferedProof,
 } = require('./tfiber-proof-buffer');
+// A bare screenshot may prove a "1g" typed earlier this shift with no screenshot yet; never one from an earlier shift.
+const TFIBER_PENDING_ADOPT_WINDOW_MS = 6 * 60 * 60 * 1000;
 const {
   enrichTfiberProofPayload,
   orderIdsInPost,
@@ -323,6 +325,11 @@ const {
   markTfiberProofResolved,
   selectPendingForUser,
   selectRecentTfiberProofLog,
+  selectAdoptablePending,
+  recentScreenshotDeal,
+  confirmScreenshotDealTyped,
+  ensureTfiberProofState,
+  pendingFromLog,
   collectDueTfiberProofActions,
   listOpenPending,
   listProofRemovedLogs,
@@ -1505,6 +1512,9 @@ async function submitTfiberProofForPending({ message, pending, hasScreenshot, en
     await recordTfiberProofAttempt({
       logEntry: {
         id: pending.logId,
+        // keep the deal post reachable: without this a NEEDS_REVIEW re-record dropped messageId, and the next
+        // proof could no longer fix the card in place (2026-10-29)
+        sourceMessageId: pending.messageId || null,
         userId: pending.userId,
         displayName: pending.displayName,
         username: pending.username,
@@ -1566,13 +1576,12 @@ async function submitStandaloneTfiberProofUpload({ message, channel, hasScreensh
   }
 }
 
-function channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId) {
-  if (tmoOrderId) return true;
-  const pendingAt = Date.parse(pending?.timestamp || pending?.createdAt || '');
-  if (!Number.isFinite(pendingAt)) return false;
-  const messageAt = message.createdTimestamp || Date.now();
-  const delta = messageAt - pendingAt;
-  return delta >= 0 && delta <= TFIBER_CHANNEL_PROOF_WINDOW_MS;
+/** The rep message a post replies to; a reply to Pulse's deal card resolves to the "1g" that card answers. */
+async function repliedRepMessageId(message, channel) {
+  if (!message.reference?.messageId) return null;
+  const ref = await channel.messages.fetch(message.reference.messageId).catch(() => null);
+  if (!ref) return null;
+  return ref.author?.id === client.user?.id ? (ref.reference?.messageId || null) : ref.id;
 }
 
 async function handleTfiberProofChannelUpload(message, channel) {
@@ -1601,7 +1610,17 @@ async function handleTfiberProofChannelUpload(message, channel) {
   }
 
   const selection = await selectPendingForUser(message.author.id, { tmoOrderId });
-  let pending = selection.pending;
+  // Only a TMO match takes the request outright. Otherwise: the deal post this replies to, or the rep's one request from
+  // this shift still waiting on its first screenshot (owner 2026-10-29: a 17-hour-old "1g" had been swallowing new deals).
+  let pending = selection.reason === 'matched_tmo' ? selection.pending : null;
+  if (!pending) {
+    const mine = (await listOpenPending().catch(() => [])).filter((item) => item.userId === message.author.id);
+    pending = selectAdoptablePending(mine, {
+      nowMs: message.createdTimestamp || Date.now(),
+      maxAgeMs: TFIBER_PENDING_ADOPT_WINDOW_MS,
+      replyToMessageId: await repliedRepMessageId(message, channel),
+    }).pending;
+  }
   if (!pending) {
     const data = await readLeaderboard().catch(() => null);
     const recent = selectRecentTfiberProofLog(data?.logs || [], {
@@ -1616,7 +1635,6 @@ async function handleTfiberProofChannelUpload(message, channel) {
     pending = recent.pending;
   }
   if (!pending) return handleUnclaimedScreenshot({ message, channel, hasScreenshot, tmoOrderId, enrichedPayload });
-  if (!channelProofUploadCloseEnoughForPending(message, pending, tmoOrderId)) return false;
 
   const result = await submitTfiberProofForPending({
     message,
@@ -1737,11 +1755,7 @@ async function handleTypedInstallTime(message, channel) {
   if (hasScreenshotAttachment(message) || extractTmoOrderId(message.content)) return false;
   const it = parseInstallTime(message.content, message.createdAt || new Date(), getTimeZone());
   if (!it?.date) return false;
-  let replyTo = null;
-  if (message.reference?.messageId) {
-    const ref = await channel.messages.fetch(message.reference.messageId).catch(() => null);
-    replyTo = ref?.author?.id === client.user?.id ? (ref.reference?.messageId || null) : (ref?.id || null);
-  }
+  const replyTo = await repliedRepMessageId(message, channel);
   // Not a reply: only a full date + window counts, so chatter like "see you the 21st" never moves an order.
   if (!it.window && !replyTo) return false;
   const det = await postOrderDetails({ discordUserId: message.author.id, currentMessageId: message.id, replyToMessageId: replyTo, installDate: it.date, installWindow: it.window, asOf: message.createdAt?.toISOString?.() });
@@ -3584,6 +3598,7 @@ const onClientReady = async () => {
   logOct20AlexLile300().catch((err) => console.error('[fix] oct20 alex:', err?.message || err));
   moveOnce('oct19-slidell', 'Baton Rouge', { newName: 'Slidell', city: 'Slidell', state: 'LA' }).catch((err) => console.error('[move]', err?.message || err));
   replayOct24Outage(readyAt).catch((err) => console.error('[replay] oct24 outage:', err?.message || err));
+  fixOct29CalebHead().catch((err) => console.error('[fix] oct29 caleb:', err?.message || err));
 };
 
 /** ponytail: one-time replay (owner 2026-10-25). 181c715 shipped a syntax error (line 1599); Railway booted it
@@ -3645,6 +3660,40 @@ async function logOct20AlexLile300() {
   await logSingleDeal({ message, channel, speed: '300mb', proofLine: '-# Proof received. Saved to fibersales.co.', proof: { orderId: 'cmvgv958p000408kwwzb6l6ok', tmoOrderId: 'TMO2026101974X0Z', status: 'ORDER_CREATED' } });
   const st2 = joinMatch.load(); st2.fixed = { ...(st2.fixed || {}), oct20AlexLile300: new Date().toISOString() }; joinMatch.save(st2);
   console.log('[fix] oct20 Alex Lile 300 logged');
+}
+
+/** ponytail: one-time (owner 2026-10-29). Caleb Head's #michigan screenshot (TMO20261029ZWNI1, 502 W Woodall St,
+ *  10:22 AM CT) was attached to his still-open 10/28 5:37 PM "1g" request; the "1g" he typed six seconds later became a
+ *  second deal with no proof. Puts the proof on today's deal, gives last night's deal its true state back (no TMO on
+ *  file, review open), and fixes today's deal card. Delete after Nov 5. */
+async function fixOct29CalebHead() {
+  const st = joinMatch.load();
+  if (st.fixed?.oct29CalebHead) return;
+  const TODAY = '1793287331449_373653162042720266_0_7977c41d7860f';
+  const LAST_NIGHT = '1793227042841_373653162042720266_0_bc0c56e874c668';
+  const ORDER = { status: 'ORDER_CREATED', orderId: 'cmvtoz3z4000008l5aexhshwf', tmoOrderId: 'TMO20261029ZWNI1', missingFields: ['installationDate', 'installationTimeWindow'] };
+  let channelId = null;
+  await mutate((data) => {
+    const state = ensureTfiberProofState(data);
+    const today = (data.logs || []).find((l) => l.id === TODAY);
+    const lastNight = (data.logs || []).find((l) => l.id === LAST_NIGHT);
+    if (!today || !lastNight) return data;
+    channelId = today.channelId;
+    Object.assign(today, { tfiberProofStatus: ORDER.status, tfiberOsOrderId: ORDER.orderId, tfiberTmoOrderId: ORDER.tmoOrderId, tfiberProofResolvedAt: new Date().toISOString(), tfiberProofExpiresAt: null });
+    delete state.pending[TODAY];
+    Object.assign(lastNight, { tfiberProofStatus: 'NEEDS_REVIEW', tfiberOsOrderId: null, tfiberTmoOrderId: null, tfiberProofId: null, tfiberProofResolvedAt: null });
+    state.pending[LAST_NIGHT] = pendingFromLog({
+      logEntry: { ...lastNight, sourceMessageId: '1565132399011176559' },
+      guildId: process.env.GUILD_ID || null,
+      channelId: lastNight.channelId,
+      result: { status: 'NEEDS_REVIEW' },
+      now: new Date(lastNight.timestamp),
+    });
+    return data;
+  });
+  if (channelId) await updateDealPostProofLine({ channelId, messageId: '1565385268192608338' }, formatTfiberProofLine(ORDER));
+  const st2 = joinMatch.load(); st2.fixed = { ...(st2.fixed || {}), oct29CalebHead: new Date().toISOString() }; joinMatch.save(st2);
+  console.log(`[fix] oct29 Caleb Head: ${channelId ? 'proof moved to today\'s deal' : 'logs not found, nothing changed'}`);
 }
 client.once('clientReady', onClientReady);
 client.once('ready', onClientReady);
@@ -3811,7 +3860,17 @@ async function replySlashHint(message, hintKey) {
     .catch(() => {});
 }
 
-client.on('messageCreate', (message) => onMessage(message));
+// Owner 2026-10-29 (Caleb Head, #michigan): his screenshot and the "1g" six seconds later were handled at the same time
+// and never met. One rep's messages run one at a time, oldest first, so the screenshot settles before the text.
+const perUserQueue = new Map();
+client.on('messageCreate', (message) => {
+  const key = message.author?.id || 'unknown';
+  const run = (perUserQueue.get(key) || Promise.resolve())
+    .then(() => onMessage(message))
+    .catch((err) => console.error('[Pulse] onMessage failed:', err?.message || err));
+  perUserQueue.set(key, run);
+  run.finally(() => { if (perUserQueue.get(key) === run) perUserQueue.delete(key); });
+});
 async function onMessage(message) {
   try {
     if (message.author.bot) return;
@@ -3917,6 +3976,17 @@ async function onMessage(message) {
 
     if (parsed.speeds.length === 1) {
       const speed = parsed.speeds[0];
+      if (isTfiberProofChannel && !messageHasScreenshot) {
+        // Owner 2026-10-29: the rep's screenshot came first and already logged this deal; the typed speed confirms it.
+        // (A speed WITH its own screenshot is always its own deal.)
+        const data = await readLeaderboard().catch(() => null);
+        const shotDeal = recentScreenshotDeal(data?.logs || [], { userId, channelId: channel.id, nowMs: message.createdTimestamp || Date.now(), windowMs: TFIBER_CHANNEL_PROOF_WINDOW_MS });
+        if (shotDeal) {
+          await confirmScreenshotDealTyped(shotDeal.id, message.id);
+          await message.react('✅').catch(() => {});
+          return;
+        }
+      }
       const replyKeys = logReplyKeys({ messageId: message.id });
       if (!tryClaimLogReply(replyKeys)) return;
 
