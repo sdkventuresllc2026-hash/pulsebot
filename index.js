@@ -20,6 +20,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
   PermissionsBitField,
+  ChannelType,
 } = require('discord.js');
 
 const { SPEEDS, SPEED_LABELS, COLORS, GAMIFICATION_CONFIG, SLASH_HINTS, PULSE_BUILD } = require('./constants');
@@ -106,6 +107,7 @@ const {
   ensureDefaultMarkets,
   deleteMarket,
   renameMarket,
+  resolveMarket,
   APPROVED_CHANNELS_PATH,
 } = require('./deal-channels');
 const { buildMarketAutocompleteChoices } = require('./market-autocomplete');
@@ -151,7 +153,7 @@ const {
   deriveLeaderboardMovement,
   buildLeaderboardContext,
 } = require('./gamification-engine');
-const { postTfiberDiscordProof, postBlitzMove, postRosterCheck } = require('./fiberSalesOsClient');
+const { postTfiberDiscordProof, postBlitzMove, postRosterCheck, postBlitzLifecycle } = require('./fiberSalesOsClient');
 const accessSync = require('./access-sync');
 const blitzSeat = require('./blitz-seat');
 const boardScope = require('./board-scope');
@@ -2910,6 +2912,68 @@ async function moveOnce(key, query, opts) {
   await notifyLog(guild, ['🚚 Crew moved', ...lines].join('\n'));
 }
 
+const MOVE_BTN = 'pulse:move:';
+
+/** The chat side of an archived card: its channel(s) go under ARCHIVE with an "Archived <date>." topic.
+ *  Roles and members untouched (same as #pampa 10/28, #grand-rapids 10/15). */
+async function archiveMarketChat(guild, { name, location, why }) {
+  const lines = [`📦 **${name}**${location ? ` (${location})` : ''} archived: ${why}.`];
+  const resolved = resolveMarket(name);
+  if (!resolved) { lines.push('ℹ️ No Discord market with that name, nothing to move.'); return lines; }
+  const archive = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && /^archive$/i.test(c.name));
+  const stamp = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+  for (const id of resolved.market.channelIds || []) {
+    const ch = guild.channels.cache.get(id) || (await guild.channels.fetch(id).catch(() => null));
+    if (!ch) continue;
+    if (!archive) { lines.push(`⚠️ No ARCHIVE category, #${ch.name} left where it is.`); continue; }
+    if (ch.parentId !== archive.id) {
+      const ok = await ch.setParent(archive.id, { lockPermissions: false, reason: `blitz lifecycle: ${why}` }).then(() => true)
+        .catch((err) => { lines.push(`⚠️ Could not move #${ch.name}: ${err.message || err}`); return false; });
+      if (!ok) continue;
+    }
+    if (!/^Archived /.test(ch.topic || '')) await ch.setTopic(`Archived ${stamp}. ${String(ch.topic || '').split('. ')[0] || location || name}.`).catch(() => null);
+    lines.push(`✅ #${ch.name} is under ARCHIVE. History and people untouched.`);
+  }
+  return lines;
+}
+
+/** Daily blitz lifecycle (owner 2026-10-29). The OS judges every card against its own carrier's orders and
+ *  archives the ones that are over; this is the Discord half. Archived card -> chat under ARCHIVE. Ended but
+ *  still selling -> one line for the owner. Crew clearly selling in another city -> a one-tap rename button,
+ *  never automatic (the owner declined and then asked for the same move on consecutive days). Once per ET day:
+ *  at boot, else the first tick after 9 AM ET. Results go to #pulse-log. */
+async function runBlitzLifecycle(trigger) {
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.toISOString().slice(0, 10);
+  const st = joinMatch.load();
+  if (st.lifecycleDay === day) return;
+  if (trigger !== 'boot' && et.getHours() !== 9) return;
+  const guild = client.guilds.cache.get(process.env.GUILD_ID) || client.guilds.cache.first();
+  if (!guild) return;
+  const out = await postBlitzLifecycle();
+  if (!out.ok) { if (!out.disabled) console.error(`[lifecycle] ${out.message || 'failed'}`); return; }
+  st.lifecycleDay = day; st.lifecycle = st.lifecycle || { proposed: {} }; joinMatch.save(st);
+  const lines = [];
+  for (const v of out.verdicts) {
+    if (v.kind === 'archive') lines.push(...(await archiveMarketChat(guild, v)));
+    else if (v.kind === 'extend') lines.push(`⏳ **${v.name}** ended ${v.endDate} but the crew sold ${v.soldAfter} since. Extend it on fibersales.co/blitzes, or it archives once sales stop.`);
+  }
+  if (lines.length) await notifyLog(guild, ['🗂️ Blitz lifecycle', ...lines].join('\n'));
+  const ch = pulseLogChannel(guild);
+  for (const v of out.verdicts.filter((x) => x.kind === 'move')) {
+    const key = `${v.name}>${v.city}, ${v.state}`;
+    if (Date.now() - Date.parse(st.lifecycle.proposed[key] || 0) < 7 * 86400000) continue; // asked this week already
+    st.lifecycle.proposed[key] = new Date().toISOString(); joinMatch.save(st);
+    if (!ch) continue;
+    await ch.send({
+      content: `🚚 **${v.name}** crew sold ${v.n} of ${v.total} this week in **${v.city}, ${v.state}**, not ${v.location || 'its card location'}.`,
+      components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`${MOVE_BTN}${v.name}|${v.city}|${v.state}`).setLabel(`Move ${v.name} to ${v.city}, ${v.state}`).setStyle(ButtonStyle.Primary))],
+      allowedMentions: { parse: [] },
+    }).catch((err) => console.error('[lifecycle] propose:', err.message || err));
+  }
+  console.log(`[lifecycle] ${trigger}: ${out.verdicts.length} verdicts, ${out.archived} archived`);
+}
+
 /** /market cleanup — retire markets whose channel is gone.
  *  A market with no resolvable channel cannot receive deals, but it still clutters autocomplete
  *  and /market list, which is what made "which market do I pick?" hard. Safe to delete: logs carry
@@ -3597,6 +3661,9 @@ const onClientReady = async () => {
   replayOct19Hammond().catch((err) => console.error('[replay] oct19:', err?.message || err));
   logOct20AlexLile300().catch((err) => console.error('[fix] oct20 alex:', err?.message || err));
   moveOnce('oct19-slidell', 'Baton Rouge', { newName: 'Slidell', city: 'Slidell', state: 'LA' }).catch((err) => console.error('[move]', err?.message || err));
+  // Owner 2026-10-29: the Slidell crew sells in Pensacola, FL (22 of 28 orders this week); then the daily lifecycle.
+  moveOnce('oct29-pensacola', 'Slidell', { newName: 'Pensacola', city: 'Pensacola', state: 'FL' }).catch((err) => console.error('[move]', err?.message || err))
+    .then(() => runBlitzLifecycle('boot')).catch((err) => console.error('[lifecycle] boot:', err?.message || err));
   replayOct24Outage(readyAt).catch((err) => console.error('[replay] oct24 outage:', err?.message || err));
   fixOct29CalebHead().catch((err) => console.error('[fix] oct29 caleb:', err?.message || err));
 };
@@ -3792,6 +3859,7 @@ async function bootstrap() {
       }
     };
     setInterval(runRosterCheck, 5 * 60 * 1000).unref?.();
+    setInterval(() => runBlitzLifecycle('tick').catch((err) => console.error('[lifecycle]', err?.message || err)), 5 * 60 * 1000).unref?.();
   }
 
   // Reconciliation writes desired state with permissionOverwrites.set(). Running it from an
@@ -4118,6 +4186,17 @@ client.on('interactionCreate', async (interaction) => {
     const proofLine = String(interaction.message.content || '').split('\n').find((l) => /^(-# )?Proof /.test(l)) || null;
     await logSingleDeal({ message: original, channel: interaction.channel, speed, proofLine, existingPost: interaction.message });
     await postOrderDetails({ discordUserId: original.author.id, replyToMessageId: original.id, plan: tfiberPlanForSpeed(speed) });
+    return;
+  }
+  // One-tap crew move from a lifecycle proposal (owner 2026-10-29): same path as /market rename.
+  if (interaction.isButton?.() && interaction.customId.startsWith(MOVE_BTN)) {
+    if (!canUseAdminMember(interaction.user.id, interaction.member)) { await interaction.reply({ content: 'Only the owner or a manager can move a crew.', ephemeral: true }).catch(() => {}); return; }
+    const [name, city, state] = interaction.customId.slice(MOVE_BTN.length).split('|');
+    await interaction.deferUpdate().catch(() => {});
+    let lines;
+    try { lines = await renameMarketEverywhere(interaction.guild, { query: name, newName: city, city, state, by: interaction.user.tag }); }
+    catch (err) { lines = [`⚠️ Could not move: ${err.message || err}`]; }
+    await interaction.message.edit({ content: `${interaction.message.content}\n${lines.join('\n')}`, components: [] }).catch(() => {});
     return;
   }
   if (interaction.isStringSelectMenu?.() && interaction.customId.startsWith(joinMatch.WHOIS_ID)) {

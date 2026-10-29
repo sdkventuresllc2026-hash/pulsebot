@@ -141,6 +141,22 @@ async function postRosterCheck(fetchImpl = fetch) {
   }
 }
 
+/** POST /api/internal/discord/blitz-lifecycle: the OS archives cards that are over and returns every verdict
+ *  (archive / extend / move) for the Discord half (owner 2026-10-29). */
+async function postBlitzLifecycle(fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true };
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/blitz-lifecycle`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-pulse-os-secret': osSecret() }, body: '{}',
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    return { ok: true, verdicts: json?.data?.verdicts || [], archived: json?.data?.archived || 0 };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+}
+
 module.exports = {
   isFiberSalesOsConfigured,
   postTfiberDiscordProof,
@@ -150,4 +166,5 @@ module.exports = {
   postDiscordLink,
   postInviteCodes,
   postRosterCheck,
+  postBlitzLifecycle,
 };
