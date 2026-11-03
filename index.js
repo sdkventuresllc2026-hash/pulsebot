@@ -1707,7 +1707,7 @@ const SPEED_BTN = 'pulse:speed:';
 function speedButtons(messageId) {
   const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
   return new ActionRowBuilder().addComponents(
-    [['1gig', '1 Gig'], ['2gig', '2 Gig'], ['300mb', '300 Mbps']].map(([key, label]) =>
+    [['1gig', '1 Gig'], ['2gig', '2 Gig'], ['5gig', '5 Gig'], ['300mb', '300 Mbps']].map(([key, label]) =>
       new ButtonBuilder().setCustomId(`${SPEED_BTN}${key}:${messageId}`).setLabel(label).setStyle(ButtonStyle.Secondary)),
   );
 }

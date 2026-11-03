@@ -55,7 +55,7 @@ function extractionPrompt({ rawText, index, total }) {
     'Capture the visible Dealer Code and dealer/operator label near "ASSISTED FLOW" when present. Do not decide whether the dealer code is correct; only return what is visible.',
     'Service address is the text under "Service address". Contact info usually appears as customer name, email, then phone; capture all visible contact facts: customer name, email address, and phone number.',
     'Installation date/time are only valid when the "Installation details" section is visible. If that section is below the fold or hidden by the browser bar, return null for install date/time.',
-    'The plan is under "Plans and equipment", for example "Fiber 1 Gig" or "Fiber 2 Gig". Return the plan name exactly as shown, or null if it is not visible.',
+    'The plan is under "Plans and equipment", for example "Fiber 1 Gig", "Fiber 2 Gig" or "Fiber 5 Gig". Return the plan name exactly as shown, or null if it is not visible.',
     'Promotions usually appear as bullets under "Discounts and promotions", such as AutoPay discount or one month free. Capture visible promo text exactly and do not invent dollar amounts.',
     'If the screenshot is a selfie/photo, generic text message, Kinetic review page, or anything that is not a T-Mobile Fiber order page, set extractionStatus to NOT_ORDER_SCREENSHOT and return null for all fields.',
     'Return only facts visibly present in the image or explicitly typed in the message context.',

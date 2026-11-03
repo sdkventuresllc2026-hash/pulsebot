@@ -10,6 +10,8 @@
 /** Plan text from the screenshot → the bot's speed key, or null when it can't tell. */
 function speedFromPlan(plan) {
   const t = String(plan || '').toLowerCase().replace(/\s+/g, ' ');
+  // No bare "5g" on purpose: "T-Mobile 5G Home Internet" is wireless and must never read as fiber.
+  if (/\b5\s?(gig|gb)\b|5,?000\s?mb/.test(t)) return '5gig';
   if (/\b2\s?(gig|gb|g)\b|2,?000\s?mb/.test(t)) return '2gig';
   if (/\b1\s?(gig|gb|g)\b|1,?000\s?mb/.test(t)) return '1gig';
   if (/\b500\s?(mbps|mb|m)\b/.test(t)) return '500mb';

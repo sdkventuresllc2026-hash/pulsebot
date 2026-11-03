@@ -6,6 +6,9 @@ const MON_OCT_19 = new Date('2026-10-19T18:00:00Z'); // Monday, 2 PM ET
 
 test('plan text on the screenshot → speed key', () => {
   assert.equal(speedFromPlan('T-Mobile Fiber 1 Gig'), '1gig');
+  assert.equal(speedFromPlan('Fiber 5 Gig'), '5gig');
+  assert.equal(speedFromPlan('5 GIG'), '5gig');
+  assert.equal(speedFromPlan('T-Mobile 5G Home Internet'), null);
   assert.equal(speedFromPlan('Fiber 2 Gig'), '2gig');
   assert.equal(speedFromPlan('2 GIG'), '2gig');
   assert.equal(speedFromPlan('Fiber 300 Mbps'), '300mb');

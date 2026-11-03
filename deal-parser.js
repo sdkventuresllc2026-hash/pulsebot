@@ -8,10 +8,13 @@ const { SPEEDS } = require('./constants');
 const MAX_COUNT_PER_TOKEN = 20;
 const MAX_DEALS_PER_MESSAGE = 50;
 
-const BARE_SPEED_NUM = new Set(['200', '300', '500', '1000', '2000']);
+const BARE_SPEED_NUM = new Set(['200', '300', '500', '1000', '2000', '5000']);
 
 /** @type {Record<string, RegExp>} */
 const SLICE = {
+  // 5 Gig (T-Mobile Fiber, Nov 2026). "5g" is accepted here because this is a rep's typed deal log in a
+  // fiber channel, same shorthand as 1g/2g; screenshot plan text (deal-details.js) never takes bare 5g.
+  '5gig': /^(5000\s*mbps|5000mbps|5000|5\s*gigs?|5gig|5\s*gbps|5gbps|5\s*gb|5gb|5g)$/i,
   '2gig': /^(2000\s*mbps|2000mbps|2000|2\s*gigs?|2gig|2\s*gbps|2gbps|2\s*gb|2gb|2g)$/i,
   '1gig': /^(1000\s*mbps|1000mbps|1000|1\s*gigs?|1gig|1\s*gbps|1gbps|1\s*gb|1gb|1g)$/i,
   '500mb': /^(500\s*(megs?|mbps|mbs|mb)|500mbps|500mbs|500mb|500m|500)$/i,
@@ -19,7 +22,7 @@ const SLICE = {
   '200mb': /^(200\s*(megs?|mbps|mbs|mb)|200mbps|200mbs|200mb|200m|200)$/i,
 };
 
-const SPEED_ORDER = ['2gig', '1gig', '500mb', '300mb', '200mb'];
+const SPEED_ORDER = ['5gig', '2gig', '1gig', '500mb', '300mb', '200mb'];
 
 function isBareSpeedToken(token) {
   return BARE_SPEED_NUM.has(String(token).toLowerCase());

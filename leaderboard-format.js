@@ -5,10 +5,11 @@ const { realName } = require('./real-names');
 
 const MARKDOWN_ESCAPE_RE = /([*_~`|\\])/g;
 const DEFAULT_TZ = 'America/New_York';
-const PHASE3_SPEED_ORDER = ['1gig', '2gig', '500mb', '300mb', '200mb'];
+const PHASE3_SPEED_ORDER = ['1gig', '2gig', '5gig', '500mb', '300mb', '200mb'];
 const PHASE3_SPEED_LABELS = {
   '1gig': '1 Gig',
   '2gig': '2 Gig',
+  '5gig': '5 Gig',
   '500mb': '500 Mbps',
   '300mb': '300 Mbps',
   '200mb': '200 Mbps',

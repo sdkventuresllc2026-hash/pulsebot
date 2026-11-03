@@ -10,6 +10,7 @@ const {
   proofExpiresAt,
   TFIBER_PROOF_EXPIRATION_HOURS,
   formatTfiberProofLine,
+  tfiberPlanForSpeed,
 } = require('./tfiber-proof');
 
 function attachmentMap(items) {
@@ -92,6 +93,10 @@ test('builds OS proof payload from a logged T-Fiber deal', () => {
   assert.equal(payload.hasScreenshot, true);
   assert.equal(payload.marketName, 'Charlotte T-Fiber Blitz');
   assert.equal(payload.plan, 'T-Fiber 1 Gig');
+});
+
+test('5 Gig logs carry the T-Fiber 5 Gig plan label', () => {
+  assert.equal(tfiberPlanForSpeed('5gig'), 'T-Fiber 5 Gig');
 });
 
 test('builds the right T-Fiber plan label for 2 Gig logs', () => {

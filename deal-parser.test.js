@@ -2,6 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseDealMessage, detectTextLogIntent, isQuickNaturalLog } = require('./deal-parser');
 
+test('5 Gig variants', () => {
+  for (const s of ['5g', '5G', '5 gb', '5gb', '5 gig', '5 gigs', '5gig', '5 gbps', '5000', '5000 mbps']) {
+    const r = parseDealMessage(s);
+    assert.equal(r.ok, true, s);
+    assert.deepEqual(r.speeds, ['5gig'], s);
+  }
+  assert.deepEqual(parseDealMessage('1g 5g 2g').speeds, ['1gig', '5gig', '2gig']);
+});
+
 test('2 Gig variants', () => {
   for (const s of ['2g', '2G', '2 gb', '2GB', '2gb', '2 gig', '2 gigs', '2gig', '2 gbps', '2gbps', '2000', '2000 mbps', '2000mbps']) {
     const r = parseDealMessage(s);

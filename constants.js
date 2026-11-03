@@ -4,10 +4,10 @@
  */
 
 /** Bump when deploying — if Discord logs don't match, an old bot is still running. */
-exports.PULSE_BUILD = '2026-05-21-v1.1';
+exports.PULSE_BUILD = '2026-11-03-5gig';
 
 /** Fixed speed choices (values must match slash-command choices). */
-exports.SPEEDS = Object.freeze(['200mb', '300mb', '500mb', '1gig', '2gig']);
+exports.SPEEDS = Object.freeze(['200mb', '300mb', '500mb', '1gig', '2gig', '5gig']);
 
 /** Human labels for embeds (keys = stored values). */
 exports.SPEED_LABELS = Object.freeze({
@@ -16,6 +16,7 @@ exports.SPEED_LABELS = Object.freeze({
   '500mb': '500MB',
   '1gig': '1GIG',
   '2gig': '2GIG',
+  '5gig': '5GIG',
 });
 
 exports.COLORS = Object.freeze({
@@ -72,6 +73,7 @@ exports.HYPE = Object.freeze({
     '500mb': ['500MB. Bread-and-butter money.', 'Half gig in the books.'],
     '1gig': ['1GIG logged. That’s real fiber.', '1GIG. Stop playing with him.'],
     '2gig': ['Big boy deal. 2GIG closed.', '2GIG. That’s a statement close.'],
+    '5gig': ['5GIG. Top of the menu, closed.', '5GIG on the board. That’s the big ticket.'],
   },
   firstOfDay: [
     'First blood today. Now make it a pattern.',

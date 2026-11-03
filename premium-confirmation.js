@@ -13,6 +13,7 @@ const SPEED_DISPLAY = Object.freeze({
   '500mb': '500 Mbps',
   '1gig': '1 Gig',
   '2gig': '2 Gig',
+  '5gig': '5 Gig',
 });
 
 function pick(pool) {

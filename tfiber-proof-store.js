@@ -169,7 +169,7 @@ function selectRecentTfiberProofLog(logs, {
   const candidates = (logs || [])
     .filter((log) => log && !log.removed)
     .filter((log) => log.userId === userId && log.channelId === channelId)
-    .filter((log) => ['2gig', '1gig', '500mb', '300mb', '200mb'].includes(log.speed))
+    .filter((log) => ['5gig', '2gig', '1gig', '500mb', '300mb', '200mb'].includes(log.speed))
     .filter((log) => !log.tfiberOsOrderId)
     // a deal that was logged from its own screenshot never takes another screenshot (2026-10-20 fix)
     .filter((log) => !log.tfiberFromScreenshot)
