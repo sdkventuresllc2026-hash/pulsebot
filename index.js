@@ -3663,6 +3663,8 @@ const onClientReady = async () => {
   // Owner 2026-10-29: the Slidell crew sells in Pensacola, FL (22 of 28 orders this week); then the daily lifecycle.
   moveOnce('oct29-pensacola', 'Slidell', { newName: 'Pensacola', city: 'Pensacola', state: 'FL' }).catch((err) => console.error('[move]', err?.message || err))
     .then(() => runBlitzLifecycle('boot')).catch((err) => console.error('[lifecycle] boot:', err?.message || err));
+  // Owner 2026-11-09: Pensacola is done; Alex's half of the crew moves to St. Cloud, FL (card already renamed in the OS).
+  moveOnce('nov09-st-cloud', 'Pensacola', { newName: 'St. Cloud', city: 'St. Cloud', state: 'FL' }).catch((err) => console.error('[move]', err?.message || err));
   replayOct24Outage(readyAt).catch((err) => console.error('[replay] oct24 outage:', err?.message || err));
   fixOct29CalebHead().catch((err) => console.error('[fix] oct29 caleb:', err?.message || err));
 };
