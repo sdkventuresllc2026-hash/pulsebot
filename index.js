@@ -3713,6 +3713,8 @@ const onClientReady = async () => {
   moveOnce('nov09-st-cloud', 'Pensacola', { newName: 'St. Cloud', city: 'St. Cloud', state: 'FL' }).catch((err) => console.error('[move]', err?.message || err))
     .then(() => createMarketOnce('nov09-asheboro', { marketName: 'Asheboro', city: 'Asheboro', state: 'NC' }))
     .then(() => createMarketOnce('nov09-st-charles', { marketName: 'St. Charles', city: 'St. Charles', state: 'IL' }))
+    // Owner 2026-11-09: the Benson crew sells only in Greensboro; card + chat become Greensboro (Jadin + Jacob added on the card).
+    .then(() => moveOnce('nov09-greensboro', 'Benson', { newName: 'Greensboro', city: 'Greensboro', state: 'NC' }))
     .catch((err) => console.error('[create-market]', err?.message || err));
   replayOct24Outage(readyAt).catch((err) => console.error('[replay] oct24 outage:', err?.message || err));
   fixOct29CalebHead().catch((err) => console.error('[fix] oct29 caleb:', err?.message || err));
