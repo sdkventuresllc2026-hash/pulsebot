@@ -2912,6 +2912,52 @@ async function moveOnce(key, query, opts) {
   await notifyLog(guild, ['🚚 Crew moved', ...lines].join('\n'));
 }
 
+/** Owner-approved new blitz chat, run once per data volume (2026-11-09: Asheboro + St. Charles). Same result as
+ *  /market create run in a fresh channel: market (name = blitz card name), role, channel under BLITZES locked to the
+ *  role from the first second (never inherits the category). An existing exact-name market's old chat is reopened
+ *  instead (history kept). The 15-min seat pass then puts everyone on the card into it. */
+async function createMarketOnce(key, { marketName, city, state, isp = 'T-Fiber' }) {
+  const st = joinMatch.load();
+  if (st.moved?.[key]) return;
+  const guild = client.guilds.cache.get(process.env.GUILD_ID) || client.guilds.cache.first();
+  if (!guild) return;
+  await guild.channels.fetch().catch(() => null);
+  const F = PermissionsBitField.Flags;
+  const blitzes = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && /^blitzes$/i.test(c.name));
+  const found = resolveMarket(marketName);
+  const market = found && found.matchedBy !== 'fuzzy' ? found.market : addMarket({ marketName, isp, createdBy: 'owner request' }).market;
+  updateMarket(market.marketId, { marketName, isp, city, state, active: true });
+  await ensureMarketRole(guild, resolveMarket(market.marketId).market);
+  const location = `${city}, ${state}`;
+  const topic = `${location} · ${isp}. Log a deal: post your speed, like 1g or 2g, with ${joinMatch.TFIBER_PROOF_SHOT}.`;
+  const lines = [];
+  let ch = null;
+  for (const id of resolveMarket(market.marketId).market.channelIds || []) {
+    ch = guild.channels.cache.get(id) || (await guild.channels.fetch(id).catch(() => null));
+    if (ch) break;
+  }
+  if (ch) {
+    if (blitzes && ch.parentId !== blitzes.id) await ch.setParent(blitzes.id, { lockPermissions: false, reason: `reopened for ${marketName} (owner request)` });
+    lines.push(`✅ Reopened #${ch.name} for **${marketName}** (${location}), history kept.`);
+  } else {
+    ch = await guild.channels.create({
+      name: market.marketId, type: ChannelType.GuildText, parent: blitzes?.id, topic,
+      permissionOverwrites: [
+        { id: guild.roles.everyone.id, deny: [F.ViewChannel] },
+        { id: client.user.id, allow: [F.ViewChannel, F.SendMessages, F.ReadMessageHistory, F.ManageChannels, F.ManageRoles, F.ManageMessages] },
+      ],
+      reason: `New blitz ${marketName} (owner request)`,
+    });
+    connectChannelToMarket({ channel: ch, marketId: market.marketId, connectedBy: 'owner request' });
+    lines.push(`✅ Created #${ch.name} for **${marketName}** (${location}).`);
+  }
+  await applyMarketChannelLock(ch, resolveMarket(market.marketId).market, guild, client.user.id, marketAccessOpts());
+  await ch.setTopic(topic).catch(() => null);
+  const st2 = joinMatch.load(); st2.moved = { ...(st2.moved || {}), [key]: new Date().toISOString() }; joinMatch.save(st2);
+  await seatFromBlitzBoard(guild).catch((err) => lines.push(`⚠️ Seat pass failed: ${err.message || err}`));
+  await notifyLog(guild, ['🆕 New blitz chat', ...lines].join('\n'));
+}
+
 const MOVE_BTN = 'pulse:move:';
 
 /** The chat side of an archived card: its channel(s) go under ARCHIVE with an "Archived <date>." topic.
@@ -3664,7 +3710,10 @@ const onClientReady = async () => {
   moveOnce('oct29-pensacola', 'Slidell', { newName: 'Pensacola', city: 'Pensacola', state: 'FL' }).catch((err) => console.error('[move]', err?.message || err))
     .then(() => runBlitzLifecycle('boot')).catch((err) => console.error('[lifecycle] boot:', err?.message || err));
   // Owner 2026-11-09: Pensacola is done; Alex's half of the crew moves to St. Cloud, FL (card already renamed in the OS).
-  moveOnce('nov09-st-cloud', 'Pensacola', { newName: 'St. Cloud', city: 'St. Cloud', state: 'FL' }).catch((err) => console.error('[move]', err?.message || err));
+  moveOnce('nov09-st-cloud', 'Pensacola', { newName: 'St. Cloud', city: 'St. Cloud', state: 'FL' }).catch((err) => console.error('[move]', err?.message || err))
+    .then(() => createMarketOnce('nov09-asheboro', { marketName: 'Asheboro', city: 'Asheboro', state: 'NC' }))
+    .then(() => createMarketOnce('nov09-st-charles', { marketName: 'St. Charles', city: 'St. Charles', state: 'IL' }))
+    .catch((err) => console.error('[create-market]', err?.message || err));
   replayOct24Outage(readyAt).catch((err) => console.error('[replay] oct24 outage:', err?.message || err));
   fixOct29CalebHead().catch((err) => console.error('[fix] oct29 caleb:', err?.message || err));
 };
