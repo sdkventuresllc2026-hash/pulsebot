@@ -3715,6 +3715,9 @@ const onClientReady = async () => {
     .then(() => createMarketOnce('nov09-st-charles', { marketName: 'St. Charles', city: 'St. Charles', state: 'IL' }))
     // Owner 2026-11-09: the Benson crew sells only in Greensboro; card + chat become Greensboro (Jadin + Jacob added on the card).
     .then(() => moveOnce('nov09-greensboro', 'Benson', { newName: 'Greensboro', city: 'Greensboro', state: 'NC' }))
+    // Owner 2026-11-11: DLO's crew gets its own chat; card renamed "Jacksonville NC" so the old July Florida
+    // "Jacksonville" chat (Caleb + Henry's crew) stays separate.
+    .then(() => createMarketOnce('nov11-jacksonville-nc', { marketName: 'Jacksonville NC', city: 'Jacksonville', state: 'NC' }))
     .catch((err) => console.error('[create-market]', err?.message || err));
   replayOct24Outage(readyAt).catch((err) => console.error('[replay] oct24 outage:', err?.message || err));
   fixOct29CalebHead().catch((err) => console.error('[fix] oct29 caleb:', err?.message || err));
