@@ -87,7 +87,7 @@ async function fetchAccessRoster(fetchImpl = fetch) {
     if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
     const active = json?.data?.active || [];
     require('./real-names').setFromRoster(active);
-    return { ok: true, active, inactive: json?.data?.inactive || [] };
+    return { ok: true, active, inactive: json?.data?.inactive || [], doorsSyncedAt: json?.data?.doorsSyncedAt ?? null };
   } catch (err) {
     return { ok: false, message: err?.message || String(err) };
   }

@@ -162,6 +162,7 @@ function resolveDateContext(period, now = new Date(), tz = process.env.TZ || DEF
   return 'All-Time';
 }
 
+const BOARD_LINK = '[Full board with photos and knocks on fibersales.co](https://www.fibersales.co/leaderboard)';
 const MAX_CONTENT = 1900; // Discord hard cap is 2000 chars per message
 
 /** "Jadin Kent leads by 28" / "Tied at the top: A, B" / null when nothing to say. */
@@ -217,7 +218,9 @@ function formatLeaderboard({ scope, period, rows, total, market, dateContext, qu
 
   const reps = allRows.length ? ` · ${allRows.length} rep${allRows.length === 1 ? '' : 's'}` : '';
   const leader = leaderLine(safeRows);
-  const footer = [`**${total} deal${total === 1 ? '' : 's'}**${reps}${leader ? ` · ${leader}` : ''}`];
+  // Owner 2026-11-12: reps screenshot this board instead of opening the site, so every board points to the
+  // fibersales.co one (faces, every rep, live).
+  const footer = [`**${total} deal${total === 1 ? '' : 's'}**${reps}${leader ? ` · ${leader}` : ''}`, BOARD_LINK];
 
   // ponytail: shrink rows until under Discord's limit; the overflow note absorbs what's cut.
   let shown = safeRows.length;
@@ -290,6 +293,7 @@ function formatPhase3Master(rows, totalDeals, periodLabel, quarterHeader, dateHe
 }
 
 module.exports = {
+  BOARD_LINK,
   escapeMarkdown,
   displayRepName,
   rankLabel,

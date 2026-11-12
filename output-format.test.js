@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { assertCleanOutput } = require('./message-format');
 const { formatQuarterStatus, formatQuarterHeader } = require('./day-quarters');
 const { buildPremiumDealConfirmation } = require('./premium-confirmation');
-const { formatLeaderboard, resolveDateContext } = require('./leaderboard-format');
+const { formatLeaderboard, resolveDateContext, BOARD_LINK } = require('./leaderboard-format');
 
 const SAMPLE_ROWS = [
   { userId: '1', displayName: 'Henny Sells', total: 6, market: 'Virginia' },
@@ -48,6 +48,7 @@ test('formatLeaderboard daily: one title line, quarter line, numbered list with 
       '4. Parker Call · 2',
       '',
       '**17 deals** · 4 reps · Henny Sells leads by 1',
+      BOARD_LINK,
     ].join('\n'),
   );
 });
@@ -63,7 +64,7 @@ test('formatLeaderboard monthly drops "This Month" and names a tie', () => {
   });
   assert.equal(out.split('\n')[0], '🏆 **Virginia · October 2026**');
   assert.equal(out.split('\n')[1], '');
-  assert.match(out, /· Tied at the top: Henny Sells, Caleb Head$/);
+  assert.match(out, /· Tied at the top: Henny Sells, Caleb Head$/m);
 });
 
 test('formatLeaderboard header is one line (no grey date: it indents on mobile)', () => {
@@ -83,7 +84,7 @@ test('formatLeaderboard all markets shows each market', () => {
 
 test('formatLeaderboard renders empty state', () => {
   const out = formatLeaderboard({ scope: 'market', period: 'weekly', rows: [], total: 0, market: 'Greenville', dateContext: 'This Week · May 18–24' });
-  assert.equal(out, ['🏆 **Greenville · This Week**', '', 'No deals logged yet.', '', '**0 deals**'].join('\n'));
+  assert.equal(out, ['🏆 **Greenville · This Week**', '', 'No deals logged yet.', '', '**0 deals**', BOARD_LINK].join('\n'));
 });
 
 test('formatLeaderboard escapes and trims long names, numbers after the podium', () => {

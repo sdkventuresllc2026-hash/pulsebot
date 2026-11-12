@@ -156,6 +156,7 @@ const {
 const { postTfiberDiscordProof, postBlitzMove, postRosterCheck, postBlitzLifecycle } = require('./fiberSalesOsClient');
 const accessSync = require('./access-sync');
 const blitzSeat = require('./blitz-seat');
+const doorBoard = require('./door-board');
 const boardScope = require('./board-scope');
 
 /** Owner sees every market on /master and /markets; everyone else sees their leaderboard group. */
@@ -3914,6 +3915,43 @@ async function bootstrap() {
       }
     };
     setInterval(runRosterCheck, 5 * 60 * 1000).unref?.();
+    // Crew door board (owner 2026-11-12): 8:30 PM ET, each blitz chat gets its crew's Canvass doors for today, zeros
+    // included. The OS starts an evening Canvass sync at ~7:45 PM ET; stale counts post nothing (log line instead).
+    // ponytail: in-memory once-a-day guard, so a redeploy between 8:30 and 9 PM posts twice; persist it if that bites.
+    // DOOR_BOARD_TO_CHATS false = preview: every crew's board goes to the log channel only, until Danny OKs the real lists.
+    const DOOR_BOARD_TO_CHATS = false;
+    let lastDoorBoardDay = '';
+    const runDoorBoard = async () => {
+      const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const day = et.toISOString().slice(0, 10);
+      if (et.getHours() !== 20 || et.getMinutes() < 30 || lastDoorBoardDay === day) return;
+      const roster = await fetchAccessRoster();
+      if (!roster.ok) { console.error(`[doors] roster: ${roster.message || roster.status}`); return; } // retried in 5 min
+      lastDoorBoardDay = day;
+      for (const guild of client.guilds.cache.values()) {
+        // The owner never shows on a crew's door board.
+        const ownerIds = new Set(guild.members.cache.filter((m) => m.roles.cache.some((r) => r.name === 'Owner')).map((m) => m.id));
+        const active = roster.active.filter((p) => !(p.discordUserId && ownerIds.has(p.discordUserId)) && !/^(seungeon|danny)\b/i.test(p.name || ''));
+        if (!doorBoard.syncIsFresh(roster.doorsSyncedAt)) {
+          await notifyLog(guild, '🚪 No door board tonight: the Canvass counts did not update this evening.');
+          continue;
+        }
+        for (const [blitz, rows] of doorBoard.doorRowsByBlitz(active)) {
+          const found = resolveMarket(blitz);
+          if (!found || found.matchedBy === 'fuzzy') continue; // blitz name = chat name, exact only (same as seating)
+          let ch = null;
+          for (const id of found.market.channelIds || []) {
+            ch = guild.channels.cache.get(id) || (await guild.channels.fetch(id).catch(() => null));
+            if (ch) break;
+          }
+          if (!ch) continue;
+          const text = doorBoard.formatDoorBoard(found.market.marketName || blitz, rows);
+          if (!DOOR_BOARD_TO_CHATS) { await notifyLog(guild, `👀 Door board preview for #${ch.name} (not posted to the crew yet)\n\n${text}`); continue; }
+          await ch.send({ embeds: [asCard(text)] }).catch((err) => console.error(`[doors] #${ch.name}: ${err?.message || err}`));
+        }
+      }
+    };
+    setInterval(runDoorBoard, 5 * 60 * 1000).unref?.();
     setInterval(() => runBlitzLifecycle('tick').catch((err) => console.error('[lifecycle]', err?.message || err)), 5 * 60 * 1000).unref?.();
   }
 
