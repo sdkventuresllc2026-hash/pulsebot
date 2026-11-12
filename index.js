@@ -3919,7 +3919,7 @@ async function bootstrap() {
     // included. The OS starts an evening Canvass sync at ~7:45 PM ET; stale counts post nothing (log line instead).
     // ponytail: in-memory once-a-day guard, so a redeploy between 8:30 and 9 PM posts twice; persist it if that bites.
     // DOOR_BOARD_TO_CHATS false = preview: every crew's board goes to the log channel only, until Danny OKs the real lists.
-    const DOOR_BOARD_TO_CHATS = false;
+    const DOOR_BOARD_TO_CHATS = true; // owner turned it on 2026-11-12
     let lastDoorBoardDay = '';
     const runDoorBoard = async () => {
       const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));

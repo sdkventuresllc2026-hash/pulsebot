@@ -27,12 +27,15 @@ function doorRowsByBlitz(active) {
 function formatDoorBoard(crewName, rows) {
   const total = rows.reduce((n, r) => n + r.doors, 0);
   const body = rows.map((r, i) => (i < 3 && r.doors > 0 ? `${rankLabel(i)} **${r.name}** · **${r.doors}**` : `${rankLabel(i)} ${r.name} · ${r.doors}`));
+  // Same tail as the deal boards: "· Caleb Head leads by 23" once someone has doors.
+  const [a, b] = rows;
+  const lead = a && b && a.doors > 0 ? (a.doors === b.doors ? ' · Tied at the top' : ` · ${a.name} leads by ${a.doors - b.doors}`) : '';
   return [
-    `🚪 ${crewName} doors today`,
+    `🚪 **${crewName} · Doors today**`,
     '',
     ...body,
     '',
-    `**${total} door${total === 1 ? '' : 's'}** · ${rows.length} rep${rows.length === 1 ? '' : 's'}`,
+    `**${total} door${total === 1 ? '' : 's'}** · ${rows.length} rep${rows.length === 1 ? '' : 's'}${lead}`,
     BOARD_LINK,
   ].join('\n');
 }

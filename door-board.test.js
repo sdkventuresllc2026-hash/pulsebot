@@ -19,13 +19,13 @@ test('groups by blitz, keeps zeros, drops people not in Canvass, one row per hum
 test('formats like the approved mock', () => {
   const out = formatDoorBoard('Greensboro', [{ name: 'Caleb Head', doors: 84 }, { name: 'Jadin Kent', doors: 61 }, { name: 'Brandon Peeks', doors: 0 }]);
   assert.equal(out, [
-    '🚪 Greensboro doors today',
+    '🚪 **Greensboro · Doors today**',
     '',
     '1. **Caleb Head** · **84**',
     '2. **Jadin Kent** · **61**',
     '3. Brandon Peeks · 0',
     '',
-    '**145 doors** · 3 reps',
+    '**145 doors** · 3 reps · Caleb Head leads by 23',
     BOARD_LINK,
   ].join('\n'));
 });
