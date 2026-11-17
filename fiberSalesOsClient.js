@@ -157,8 +157,24 @@ async function postBlitzLifecycle(fetchImpl = fetch) {
   }
 }
 
+/** Starts the Canvass door sync on GitHub through the OS (owner 2026-11-16: near-live doors). Takes ~2 min to land. */
+async function kickCanvassSync(fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true };
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/cron/kick-github-syncs?only=canvass`, {
+      method: 'POST', headers: { 'x-pulse-os-secret': osSecret() },
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+}
+
 module.exports = {
   isFiberSalesOsConfigured,
+  kickCanvassSync,
   postTfiberDiscordProof,
   postBlitzMove,
   fetchAccessRoster,

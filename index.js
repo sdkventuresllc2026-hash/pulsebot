@@ -153,7 +153,7 @@ const {
   deriveLeaderboardMovement,
   buildLeaderboardContext,
 } = require('./gamification-engine');
-const { postTfiberDiscordProof, postBlitzMove, postRosterCheck, postBlitzLifecycle } = require('./fiberSalesOsClient');
+const { postTfiberDiscordProof, postBlitzMove, postRosterCheck, postBlitzLifecycle, kickCanvassSync } = require('./fiberSalesOsClient');
 const accessSync = require('./access-sync');
 const blitzSeat = require('./blitz-seat');
 const doorBoard = require('./door-board');
@@ -3915,6 +3915,18 @@ async function bootstrap() {
       }
     };
     setInterval(runRosterCheck, 5 * 60 * 1000).unref?.();
+    // Near-live doors (owner 2026-11-16): start the Canvass sync hourly noon to 7 PM ET and at 8:10 PM (door-board.js).
+    const canvassKicked = new Set();
+    const runCanvassKick = async () => {
+      const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const slot = doorBoard.canvassSyncSlot({ day: et.toISOString().slice(0, 10), hour: et.getHours(), minute: et.getMinutes() }, canvassKicked);
+      if (!slot) return;
+      canvassKicked.add(slot);
+      const out = await kickCanvassSync();
+      if (!out.ok && !out.disabled) console.error(`[doors] canvass kick ${slot}: ${out.message}`);
+      else if (out.ok) console.log(`[doors] canvass sync started (${slot})`);
+    };
+    setInterval(() => runCanvassKick().catch((err) => console.error(`[doors] ${err?.message || err}`)), 5 * 60 * 1000).unref?.();
     // Crew door board (owner 2026-11-12): 8:30 PM ET, each blitz chat gets its crew's Canvass doors for today, zeros
     // included. The OS starts an evening Canvass sync at ~7:45 PM ET; stale counts post nothing (log line instead).
     // ponytail: in-memory once-a-day guard, so a redeploy between 8:30 and 9 PM posts twice; persist it if that bites.

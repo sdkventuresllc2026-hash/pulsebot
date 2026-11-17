@@ -36,3 +36,17 @@ test('stale counts are not posted', () => {
   assert.equal(syncIsFresh('2026-11-11T16:20:00Z', now), false);
   assert.equal(syncIsFresh(null, now), false);
 });
+
+test('canvassSyncSlot: hourly noon to 7 PM, 8:10 PM, once per slot', () => {
+  const { canvassSyncSlot } = require('./door-board');
+  const done = new Set();
+  const at = (hour, minute = 0) => canvassSyncSlot({ day: '2026-11-16', hour, minute }, done);
+  assert.equal(at(11, 55), null);
+  assert.equal(at(12, 0), '2026-11-16 12');
+  done.add('2026-11-16 12');
+  assert.equal(at(12, 30), null, 'once per hour');
+  assert.equal(at(19, 5), '2026-11-16 19');
+  assert.equal(at(20, 5), null, '8 PM hour waits for 8:10');
+  assert.equal(at(20, 12), '2026-11-16 20:10');
+  assert.equal(at(21, 0), null, 'the OS 9 PM run covers the night');
+});

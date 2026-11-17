@@ -44,4 +44,16 @@ function formatDoorBoard(crewName, rows) {
 const MAX_SYNC_AGE_MS = 3 * 60 * 60 * 1000;
 const syncIsFresh = (syncedAt, now = Date.now()) => Boolean(syncedAt) && now - Date.parse(syncedAt) <= MAX_SYNC_AGE_MS;
 
-module.exports = { doorRowsByBlitz, formatDoorBoard, syncIsFresh };
+/**
+ * Near-live doors (owner 2026-11-16): which Canvass sync slot is due at this ET time, or null. Hourly noon to 7 PM, plus
+ * 8:10 PM so the 8:30 board counts the whole day (the OS's own evening runs land ~7:18 and ~9:05 PM since the clock change).
+ * ~9 GitHub runs a day at ~3 billed minutes. `et` = { day: 'YYYY-MM-DD', hour, minute }; `done` = slots already kicked.
+ */
+function canvassSyncSlot(et, done) {
+  let slot = null;
+  if (et.hour >= 12 && et.hour <= 19) slot = `${et.day} ${et.hour}`;
+  else if (et.hour === 20 && et.minute >= 10) slot = `${et.day} 20:10`;
+  return slot && !done.has(slot) ? slot : null;
+}
+
+module.exports = { doorRowsByBlitz, formatDoorBoard, syncIsFresh, canvassSyncSlot };
