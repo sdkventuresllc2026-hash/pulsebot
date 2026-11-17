@@ -19,7 +19,12 @@ function doorRowsByBlitz(active) {
     byBlitz.set(p.blitz, crew);
   }
   const out = new Map();
-  for (const [blitz, crew] of byBlitz) out.set(blitz, [...crew.values()].sort((a, b) => b.doors - a.doors || a.name.localeCompare(b.name)));
+  for (const [blitz, crew] of byBlitz) {
+    const rows = [...crew.values()].sort((a, b) => b.doors - a.doors || a.name.localeCompare(b.name));
+    // Nobody pinned = a crew that is off or does not use Canvass. Post nothing (owner 2026-11-17: a nightly wall of zeros
+    // in Michigan and Greensboro teaches people to ignore the board).
+    if (rows.some((r) => r.doors > 0)) out.set(blitz, rows);
+  }
   return out;
 }
 

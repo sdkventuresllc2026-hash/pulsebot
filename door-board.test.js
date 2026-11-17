@@ -16,6 +16,17 @@ test('groups by blitz, keeps zeros, drops people not in Canvass, one row per hum
   assert.deepEqual(rows.get('Greensboro'), [{ name: 'Caleb Head', doors: 84 }, { name: 'Brandon Peeks', doors: 0 }]);
 });
 
+test('a crew where nobody pinned gets no board', () => {
+  const rows = doorRowsByBlitz([
+    { name: 'Ben Oelker', human: 'ben oelker', blitz: 'Michigan', doorsToday: 0 },
+    { name: 'Parker Call', human: 'parker call', blitz: 'Michigan', doorsToday: 0 },
+    { name: 'Elijah Boyd', human: 'elijah boyd', blitz: 'Saint Cloud', doorsToday: 69 },
+    { name: 'Tavon White', human: 'tavon white', blitz: 'Saint Cloud', doorsToday: 0 },
+  ]);
+  assert.deepEqual([...rows.keys()], ['Saint Cloud']);
+  assert.equal(rows.get('Saint Cloud').length, 2); // zeros still show on a crew that knocked
+});
+
 test('formats like the approved mock', () => {
   const out = formatDoorBoard('Greensboro', [{ name: 'Caleb Head', doors: 84 }, { name: 'Jadin Kent', doors: 61 }, { name: 'Brandon Peeks', doors: 0 }]);
   assert.equal(out, [
