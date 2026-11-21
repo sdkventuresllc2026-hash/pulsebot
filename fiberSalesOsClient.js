@@ -172,7 +172,21 @@ async function kickCanvassSync(fetchImpl = fetch) {
   }
 }
 
+/** Open housing requests to nudge (owner 2026-11-20): [{ discordUserId, text }]. Never throws. */
+async function fetchHousingNudges(fetchImpl = fetch) {
+  if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true };
+  try {
+    const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/housing-nudges`, { headers: { 'x-pulse-os-secret': osSecret() } });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    return { ok: true, nudges: json?.data?.nudges || [] };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+}
+
 module.exports = {
+  fetchHousingNudges,
   isFiberSalesOsConfigured,
   kickCanvassSync,
   postTfiberDiscordProof,

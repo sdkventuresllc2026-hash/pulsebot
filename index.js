@@ -3984,6 +3984,23 @@ async function bootstrap() {
       }
     };
     setInterval(runDoorBoard, 5 * 60 * 1000).unref?.();
+    // Owner 2026-11-20: 9 AM ET DM to each manager with an open housing request (text built and approved in the OS).
+    // ponytail: in-memory once-a-day guard like the door board; a redeploy between 9 and 9:05 can DM twice.
+    let lastHousingNudgeDay = '';
+    const runHousingNudges = async () => {
+      const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const day = et.toISOString().slice(0, 10);
+      if (et.getHours() !== 9 || lastHousingNudgeDay === day) return;
+      const out = await require('./fiberSalesOsClient').fetchHousingNudges();
+      if (!out.ok) { if (!out.disabled) console.error(`[housing-nudge] ${out.message}`); return; } // retried in 5 min
+      lastHousingNudgeDay = day;
+      for (const n of out.nudges) {
+        const user = await client.users.fetch(n.discordUserId).catch(() => null);
+        if (user) await user.send(n.text).catch((err) => console.error(`[housing-nudge] ${n.discordUserId}: ${err?.message || err}`));
+      }
+      console.log(`[housing-nudge] sent ${out.nudges.length}`);
+    };
+    setInterval(() => runHousingNudges().catch((err) => console.error('[housing-nudge]', err?.message || err)), 5 * 60 * 1000).unref?.();
     setInterval(() => runBlitzLifecycle('tick').catch((err) => console.error('[lifecycle]', err?.message || err)), 5 * 60 * 1000).unref?.();
   }
 
