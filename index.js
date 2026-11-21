@@ -3956,6 +3956,9 @@ async function bootstrap() {
             ch = guild.channels.cache.get(id) || (await guild.channels.fetch(id).catch(() => null));
             if (ch) break;
           }
+          // Market saved with no channel (11/20: Jacksonville NC's chat was still filed under the old Michigan market):
+          // fall back to the chat named after the crew, same "blitz name = chat name" rule as seating.
+          if (!ch) ch = guild.channels.cache.find((c) => c.isTextBased?.() && c.name === normalizeMarketId(blitz)) || null;
           if (!ch) continue;
           const text = doorBoard.formatDoorBoard(found.market.marketName || blitz, rows);
           if (!DOOR_BOARD_TO_CHATS) { await notifyLog(guild, `👀 Door board preview for #${ch.name} (not posted to the crew yet)\n\n${text}`); continue; }
