@@ -2917,6 +2917,22 @@ async function moveOnce(key, query, opts) {
  *  /market create run in a fresh channel: market (name = blitz card name), role, channel under BLITZES locked to the
  *  role from the first second (never inherits the category). An existing exact-name market's old chat is reopened
  *  instead (history kept). The 15-min seat pass then puts everyone on the card into it. */
+/** Owner 2026-11-20, once per data volume: #jacksonville-nc was still filed under the old Michigan market, so its board said
+ *  "Michigan" and the Jacksonville NC market had no chat. Move the chat to Jacksonville NC and lock it to that crew. */
+async function connectChannelOnce(key, channelId, marketId) {
+  const st = joinMatch.load();
+  if (st.moved?.[key]) return;
+  const guild = client.guilds.cache.get(process.env.GUILD_ID) || client.guilds.cache.first();
+  if (!guild) return;
+  const ch = guild.channels.cache.get(channelId) || (await guild.channels.fetch(channelId).catch(() => null));
+  if (!ch) return notifyLog(guild, `⚠️ Chat move ${key}: channel not found, nothing changed.`);
+  const { market, removedFrom } = connectChannelToMarket({ channel: ch, marketId, connectedBy: 'owner request' });
+  const lock = await applyMarketChannelLock(ch, market, guild, client.user.id, marketAccessOpts()).catch((err) => ({ ok: false, err }));
+  const st2 = joinMatch.load(); st2.moved = { ...(st2.moved || {}), [key]: new Date().toISOString() }; joinMatch.save(st2);
+  await seatFromBlitzBoard(guild).catch(() => null);
+  await notifyLog(guild, [`🔗 #${ch.name} now belongs to **${market.marketName}**${removedFrom ? ` (was ${removedFrom})` : ''}.`, lock?.ok ? 'Locked to the crew role.' : `⚠️ Lock failed: ${lock?.err?.message || 'unknown'}`].join(' '));
+}
+
 async function createMarketOnce(key, { marketName, city, state, isp = 'T-Fiber' }) {
   const st = joinMatch.load();
   if (st.moved?.[key]) return;
@@ -3706,6 +3722,7 @@ const onClientReady = async () => {
   await bootstrap();
   replayOct19Hammond().catch((err) => console.error('[replay] oct19:', err?.message || err));
   logOct20AlexLile300().catch((err) => console.error('[fix] oct20 alex:', err?.message || err));
+  connectChannelOnce('nov20-jacksonville-nc', '1570120883211870280', 'jacksonville-nc').catch((err) => console.error('[move]', err?.message || err));
   moveOnce('oct19-slidell', 'Baton Rouge', { newName: 'Slidell', city: 'Slidell', state: 'LA' }).catch((err) => console.error('[move]', err?.message || err));
   // Owner 2026-10-29: the Slidell crew sells in Pensacola, FL (22 of 28 orders this week); then the daily lifecycle.
   moveOnce('oct29-pensacola', 'Slidell', { newName: 'Pensacola', city: 'Pensacola', state: 'FL' }).catch((err) => console.error('[move]', err?.message || err))
