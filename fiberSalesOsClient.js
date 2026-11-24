@@ -78,8 +78,23 @@ async function postBlitzMove({ market, name, location }, fetchImpl = fetch) {
   }
 }
 
+// Owner 2026-11-24 (Vercel CPU pause): seven timers asked the OS for the same roster every 3 to 15 minutes. One shared copy,
+// at most 5 minutes old, serves them all. A link (postDiscordLink) clears it; Set My Name / who-is taps pass { fresh: true }.
+const ROSTER_TTL_MS = 5 * 60 * 1000;
+let rosterCache = { at: 0, value: null, inflight: null };
+function clearAccessRosterCache() { rosterCache = { at: 0, value: null, inflight: null }; }
+
 /** Who is active / inactive on the org chart, with Discord ids (access sync, 2026-10-15). Never throws. */
-async function fetchAccessRoster(fetchImpl = fetch) {
+async function fetchAccessRoster(fetchImpl = fetch, { fresh = false } = {}) {
+  if (fetchImpl !== fetch) return fetchAccessRosterNow(fetchImpl); // tests: never cached
+  if (!fresh && rosterCache.value && Date.now() - rosterCache.at < ROSTER_TTL_MS) return rosterCache.value;
+  if (!fresh && rosterCache.inflight) return rosterCache.inflight;
+  const p = fetchAccessRosterNow(fetchImpl).then((v) => { if (v.ok) rosterCache = { at: Date.now(), value: v, inflight: null }; else rosterCache.inflight = null; return v; });
+  rosterCache.inflight = p;
+  return p;
+}
+
+async function fetchAccessRosterNow(fetchImpl) {
   if (!isFiberSalesOsConfigured()) return { ok: false, disabled: true, status: 'SYNC_DISABLED' };
   try {
     const response = await fetchImpl(`${osBaseUrl()}/api/internal/discord/access`, { headers: { 'x-pulse-os-secret': osSecret() } });
@@ -105,6 +120,7 @@ async function postDiscordLink({ discordUserId, name, person, matchedBy }, fetch
     });
     const json = await response.json().catch(() => null);
     if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
+    clearAccessRosterCache(); // the roster just changed (a new Discord link)
     return { ok: true, ...(json?.data || {}) };
   } catch (err) {
     return { ok: false, message: err?.message || String(err) };
@@ -192,6 +208,7 @@ module.exports = {
   postTfiberDiscordProof,
   postBlitzMove,
   fetchAccessRoster,
+  clearAccessRosterCache,
   postOrderDetails,
   postDiscordLink,
   postInviteCodes,

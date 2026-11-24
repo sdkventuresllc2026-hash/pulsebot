@@ -118,7 +118,7 @@ async function reconcileAccess(guild, opts = {}) {
 
 /** One person, right after "Set My Name" or /market add. */
 async function reconcileOne(guild, userId, opts = {}) {
-  const roster = await fetchAccessRoster(opts.fetchImpl);
+  const roster = await fetchAccessRoster(opts.fetchImpl, { fresh: true });
   if (!roster.ok) return null;
   const memberRole = guild.roles.cache.find((r) => r.name === MEMBER_ROLE);
   const member = await guild.members.fetch(userId).catch(() => null);

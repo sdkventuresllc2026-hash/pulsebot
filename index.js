@@ -4367,7 +4367,7 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isModalSubmit?.() && interaction.customId.startsWith(joinMatch.WHOIS_TYPE_ID)) {
     const memberId = interaction.customId.slice(joinMatch.WHOIS_TYPE_ID.length);
     await interaction.deferReply({ ephemeral: true }).catch(() => {});
-    const roster = await fetchAccessRoster();
+    const roster = await fetchAccessRoster(undefined, { fresh: true });
     const hits = roster.ok ? joinMatch.searchHumans(roster, interaction.fields.getTextInputValue('q')) : [];
     if (!hits.length) { await interaction.editReply({ content: 'Nobody on fibersales.co by that name who still needs Discord. Check the spelling, or approve them on fibersales.co first.' }).catch(() => {}); return; }
     if (hits.length === 1) {
@@ -4481,7 +4481,7 @@ client.on('interactionCreate', async (interaction) => {
       // Matched = nothing for a manager to do. Not matched = the one-tap picker (no commands).
       let posted = false;
       if (!unlocked && !(joinMatch.load().messages || {})[interaction.user.id]) {
-        const roster = await fetchAccessRoster();
+        const roster = await fetchAccessRoster(undefined, { fresh: true });
         posted = roster.ok ? await askWhoIs(guild, interaction.user.id, roster).catch(() => false) : false;
         if (posted) { const st = joinMatch.load(); st.asked[interaction.user.id] = new Date().toISOString(); joinMatch.save(st); }
       }
