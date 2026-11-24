@@ -151,7 +151,7 @@ async function postBlitzLifecycle(fetchImpl = fetch) {
     });
     const json = await response.json().catch(() => null);
     if (!response.ok || json?.error) return { ok: false, message: json?.error || `HTTP ${response.status}` };
-    return { ok: true, verdicts: json?.data?.verdicts || [], archived: json?.data?.archived || 0 };
+    return { ok: true, verdicts: json?.data?.verdicts || [], archived: json?.data?.archived || 0, activeCards: Array.isArray(json?.data?.activeCards) ? json.data.activeCards : null };
   } catch (err) {
     return { ok: false, message: err?.message || String(err) };
   }

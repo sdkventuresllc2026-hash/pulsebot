@@ -110,6 +110,7 @@ const {
   resolveMarket,
   APPROVED_CHANNELS_PATH,
 } = require('./deal-channels');
+const { liveCardForChat } = require('./archive-guard');
 const { buildMarketAutocompleteChoices } = require('./market-autocomplete');
 const {
   buildChannelAutocompleteChoices,
@@ -2979,7 +2980,7 @@ const MOVE_BTN = 'pulse:move:';
 
 /** The chat side of an archived card: its channel(s) go under ARCHIVE with an "Archived <date>." topic.
  *  Roles and members untouched (same as #pampa 10/28, #grand-rapids 10/15). */
-async function archiveMarketChat(guild, { name, location, why }) {
+async function archiveMarketChat(guild, { name, location, why }, activeCards = null) {
   const resolved = resolveMarket(name);
   if (!resolved) return []; // no Discord market for this card (Pennsylvania, Grand Rapids Team 2): nothing to move
   const archive = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && /^archive$/i.test(c.name));
@@ -2990,6 +2991,8 @@ async function archiveMarketChat(guild, { name, location, why }) {
     if (!ch) continue;
     if (!archive) { lines.push(`⚠️ No ARCHIVE category, #${ch.name} left where it is.`); continue; }
     if (ch.parentId === archive.id) continue; // already there (moved by hand earlier): stay silent
+    const liveCard = liveCardForChat({ channelName: ch.name, channelId: ch.id, archivingMarketId: resolved.market.marketId, markets: listMarkets(), activeCards });
+    if (liveCard) { lines.push(`⚠️ Kept #${ch.name} where it is: the **${liveCard}** card is still active (it was also filed under ${name}).`); continue; }
     const ok = await ch.setParent(archive.id, { lockPermissions: false, reason: `blitz lifecycle: ${why}` }).then(() => true)
       .catch((err) => { lines.push(`⚠️ Could not move #${ch.name}: ${err.message || err}`); return false; });
     if (!ok) continue;
@@ -3017,7 +3020,7 @@ async function runBlitzLifecycle(trigger) {
   st.lifecycleDay = day; st.lifecycle = st.lifecycle || { proposed: {} }; joinMatch.save(st);
   const lines = [];
   for (const v of out.verdicts) {
-    if (v.kind === 'archive') lines.push(...(await archiveMarketChat(guild, v)));
+    if (v.kind === 'archive') lines.push(...(await archiveMarketChat(guild, v, out.activeCards)));
     else if (v.kind === 'extend') lines.push(`⏳ **${v.name}** ended ${v.endDate} but the crew sold ${v.soldAfter} since. Extend it on fibersales.co/blitzes, or it archives on ${v.archivesOn} if they stop selling.`);
   }
   if (lines.length) await notifyLog(guild, ['🗂️ Blitz lifecycle', ...lines].join('\n'));
